@@ -1,0 +1,215 @@
+# OTA Cheshire Management Platform - Project Backlog
+
+**Last Updated:** June 23, 2026
+
+---
+
+# High Priority
+
+## Authentication & User System
+
+### Account Creation
+- [ ] Parent account creation workflow
+- [ ] Adult (18+) self-registration workflow
+- [ ] Parent-managed student accounts for minors
+- [ ] User approval and role assignment system
+
+### Authentication
+- [ ] Login functionality
+- [ ] Google Sign-In integration
+- [ ] Password reset functionality
+
+### Core Screens
+- [ ] Schedule page
+- [ ] Curriculum page
+- [ ] Notifications page
+- [ ] Profile page
+
+### Data Models
+- [ ] Student model
+- [ ] Parent model
+- [ ] Belt progression model
+- [ ] Class scheduling model
+- [ ] Notification model
+
+---
+
+# Medium Priority
+
+## Family Dashboard
+
+### Parent Dashboard
+Create a dedicated family dashboard for parents who do not train.
+
+Each child card should display:
+- Student name
+- Current belt
+- Next class
+- Sticker progress (if applicable)
+- Unread notification count
+
+Additional requirements:
+- [ ] Child cards open student dashboard when tapped
+- [ ] Dynamic display based on belt progression system
+
+---
+
+## Profile Switching
+
+### Parent + Student Accounts
+Support profile switching for users who are both parents and students.
+
+Examples:
+- Parent View
+- Student View
+- Child 1
+- Child 2
+
+Tasks:
+- [ ] Profile selector in dashboard header
+- [ ] Dynamic dashboard updates when switching profiles
+
+---
+
+## Dynamic Class Information
+
+### Next Class Countdown
+
+Example:
+
+> Starts in 2 hours 15 minutes
+
+Tasks:
+- [ ] Calculate countdown automatically
+- [ ] Update in real time as class approaches
+
+---
+
+# Low Priority
+
+## Dashboard Improvements
+
+### Belt Progress Card Refinement
+
+Current Design:
+- Current Belt
+- Next Rank
+- Sticker Progress
+
+Future Improvements:
+- [ ] Increase visual emphasis on progression
+- [ ] Make progress bar the primary focus
+- [ ] Improve readability
+
+Example:
+
+```text
+Blue Belt → Blue-Red Belt
+
+██████░░░░
+
+2 / 4 Stickers
+```
+
+---
+
+### Academy Updates Enhancements
+
+- [ ] Make announcements individually tappable
+- [ ] Open full announcement details
+- [ ] Support richer announcement cards
+- [ ] Highlight urgent announcements
+
+---
+
+### Header Personalization
+
+Potential additions:
+- Cheshire Location
+- Next Belt Goal
+- Student achievements
+- Dynamic greetings
+
+Examples:
+
+- Blue Belt • Cheshire Location
+- Next Goal: Blue-Red Belt
+
+Tasks:
+- [ ] Redesign student information section
+- [ ] Add additional contextual information
+
+---
+
+## UI Polish
+
+### Martial Arts Brush Stroke Backgrounds
+
+Current Status:
+- Welcome, Login, and Signup screens use smooth abstract shapes.
+
+Future Improvement:
+- [ ] Replace with SVG-based martial arts brush stroke graphics
+- [ ] Use Stack + Positioned SVG assets
+- [ ] Maintain OTA branding and visual consistency
+
+Priority:
+Low
+
+Reason:
+Purely visual enhancement that does not affect functionality.
+
+---
+
+# Completed
+
+## Welcome Screen
+- [x] OTA branding implemented
+- [x] Login button
+- [x] Sign Up button
+- [x] Material 3 design
+- [x] Responsive layout
+
+## Authentication Screens
+- [x] Login Screen UI
+- [x] Signup Screen UI
+- [x] Navigation between screens
+
+## Student Dashboard (MVP)
+- [x] Personalized greeting
+- [x] Next class card
+- [x] Belt progress card
+- [x] Academy updates section
+- [x] Quick actions grid
+- [x] Bottom navigation bar
+
+---
+
+# Future Features (Ideas)
+
+## Communication
+- Parent ↔ OTA messaging
+- Student ↔ OTA messaging
+- Announcement system
+
+## Curriculum
+- Belt-specific curriculum access
+- Technique videos
+- Testing requirements
+
+## Scheduling
+- Personalized schedule recommendations
+- Class reminders
+- Event registration
+
+## Administration
+- Student database access for masters
+- Promotion tracking
+- Attendance tracking
+- Location management
+
+## Long-Term
+- Multi-location support
+- Tournament management
+- Digital testing records
+- Achievement tracking

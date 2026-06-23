@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'routes.dart';
+import 'screens/student_dashboard_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/welcome_screen.dart';
@@ -23,9 +24,10 @@ class OTAApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      initialRoute: OtaRoutes.welcome,
+      initialRoute: OtaRoutes.dashboard,
       routes: {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
+        OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
         OtaRoutes.login: (_) => const LoginScreen(),
         OtaRoutes.signup: (_) => const SignupScreen(),
       },
