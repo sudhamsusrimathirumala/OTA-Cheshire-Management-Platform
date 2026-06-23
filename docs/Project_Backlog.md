@@ -21,6 +21,9 @@
 
 ### Core Screens
 - [ ] Schedule page
+    - Time-scaled class blocks based on duration
+    - Support up to two overlapping classes
+    - Google Calendar-inspired day timeline layout
 - [ ] Curriculum page
 - [ ] Notifications page
 - [ ] Profile page

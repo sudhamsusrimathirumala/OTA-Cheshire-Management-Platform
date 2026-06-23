@@ -365,7 +365,7 @@ class _NotificationsCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Academy Updates',
+                  'OTA Updates',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: OtaColors.ink,
                     fontWeight: FontWeight.w800,
