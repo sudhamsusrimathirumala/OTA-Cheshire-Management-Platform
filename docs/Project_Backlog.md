@@ -131,7 +131,7 @@ Future Improvements:
 Example:
 
 ```text
-Blue Belt → Blue-Red Belt
+Blue → Blue-Red
 
 ██████░░░░
 
@@ -159,8 +159,8 @@ Potential additions:
 
 Examples:
 
-- Blue Belt • Cheshire Location
-- Next Goal: Blue-Red Belt
+- Blue • Cheshire Location
+- Next Goal: Blue-Red
 
 Tasks:
 - [ ] Redesign student information section

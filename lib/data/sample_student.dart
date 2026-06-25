@@ -4,11 +4,11 @@ import '../models/student.dart';
 const sampleStudent = Student(
   id: 'student_sudhamsu',
   name: 'Sudhamsu',
-  belt: 'Red-Black Belt',
+  belt: 'Red-Black',
   age: 17,
   stickerCount: 1,
   stickersRequired: 3,
-  nextRank: 'Black Belt',
+  nextRank: 'Black',
 );
 
 const sampleParent = Parent(
