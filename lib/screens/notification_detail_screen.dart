@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/notification_item.dart';
 import '../theme/ota_colors.dart';
-import '../widgets/notifications/notification_card.dart';
+import '../utils/notification_formatters.dart';
 
 class NotificationDetailScreen extends StatelessWidget {
   const NotificationDetailScreen({required this.notification, super.key});
