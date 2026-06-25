@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../data/sample_notifications.dart';
+import '../data/sample_schedule.dart';
+import '../data/sample_student.dart';
+import '../models/class_session.dart';
+import '../models/notification_item.dart';
+import '../models/student.dart';
 import '../theme/ota_colors.dart';
+import '../widgets/ota_bottom_nav_bar.dart';
 
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({super.key});
 
-  static const _notifications = [
-    'Summer Camp Registration Open',
-    'Tournament Registration Due Friday',
-    'Schedule Change for Wednesday',
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final student = sampleStudent;
+    final notifications = sampleNotifications;
+    final nextClass = sampleNextClassForDashboard();
+
     return Scaffold(
       backgroundColor: OtaColors.blush,
       body: SafeArea(
@@ -27,13 +32,13 @@ class StudentDashboardScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _DashboardHeader(),
+                        _DashboardHeader(student: student),
                         const SizedBox(height: 22),
-                        const _NextClassCard(),
+                        _NextClassCard(nextClass: nextClass),
                         const SizedBox(height: 16),
-                        const _BeltProgressCard(),
+                        _BeltProgressCard(student: student),
                         const SizedBox(height: 16),
-                        _NotificationsCard(notifications: _notifications),
+                        _NotificationsCard(notifications: notifications),
                         const SizedBox(height: 24),
                         Text(
                           'Quick Actions',
@@ -54,47 +59,17 @@ class StudentDashboardScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        indicatorColor: OtaColors.softRed,
-        backgroundColor: OtaColors.white,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            selectedIcon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.calendar_month_outlined),
-            selectedIcon: Icon(Icons.calendar_month_rounded),
-            label: 'Schedule',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
-            selectedIcon: Icon(Icons.menu_book_rounded),
-            label: 'Curriculum',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.notifications_outlined),
-            selectedIcon: Icon(Icons.notifications_rounded),
-            label: 'Notifications',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
-        onDestinationSelected: (index) {
-          // TODO: Navigate to dashboard sections when those screens are ready.
-        },
+      bottomNavigationBar: const OtaBottomNavBar(
+        selectedDestination: OtaBottomNavDestination.dashboard,
       ),
     );
   }
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader();
+  const _DashboardHeader({required this.student});
+
+  final Student student;
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +80,7 @@ class _DashboardHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Good Evening, Sudhamsu',
+                'Good Evening, ${student.name}',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: OtaColors.ink,
                   fontWeight: FontWeight.w900,
@@ -114,7 +89,7 @@ class _DashboardHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Blue Belt Student',
+                '${student.belt} Student',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: OtaColors.mutedText,
                   fontWeight: FontWeight.w600,
@@ -140,8 +115,8 @@ class _DashboardHeader extends StatelessWidget {
             ],
           ),
           alignment: Alignment.center,
-          child: const Text(
-            'S',
+          child: Text(
+            student.initials,
             style: TextStyle(
               color: OtaColors.white,
               fontSize: 22,
@@ -155,7 +130,9 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _NextClassCard extends StatelessWidget {
-  const _NextClassCard();
+  const _NextClassCard({required this.nextClass});
+
+  final ClassSession? nextClass;
 
   @override
   Widget build(BuildContext context) {
@@ -206,7 +183,9 @@ class _NextClassCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    'Teen & Black Belt Class',
+                    nextClass == null
+                        ? 'No Class Scheduled'
+                        : '${nextClass!.className} Class',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: OtaColors.white,
                       fontWeight: FontWeight.w900,
@@ -234,7 +213,7 @@ class _NextClassCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        '6:40 PM',
+                        nextClass?.startLabel ?? '--',
                         style: Theme.of(context).textTheme.headlineMedium
                             ?.copyWith(
                               color: OtaColors.white,
@@ -262,7 +241,9 @@ class _NextClassCard extends StatelessWidget {
 }
 
 class _BeltProgressCard extends StatelessWidget {
-  const _BeltProgressCard();
+  const _BeltProgressCard({required this.student});
+
+  final Student student;
 
   @override
   Widget build(BuildContext context) {
@@ -290,14 +271,14 @@ class _BeltProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 20),
-          const Row(
+          Row(
             children: [
               Expanded(
-                child: _RankStat(label: 'Current Belt', value: 'Blue Belt'),
+                child: _RankStat(label: 'Current Belt', value: student.belt),
               ),
-              SizedBox(width: 14),
+              const SizedBox(width: 14),
               Expanded(
-                child: _RankStat(label: 'Next Rank', value: 'Blue-Red Belt'),
+                child: _RankStat(label: 'Next Rank', value: student.nextRank),
               ),
             ],
           ),
@@ -313,7 +294,7 @@ class _BeltProgressCard extends StatelessWidget {
                 ),
               ),
               Text(
-                '2 / 4 Stickers',
+                '${student.stickerCount} / ${student.stickersRequired} Stickers',
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: OtaColors.maroon,
                   fontWeight: FontWeight.w900,
@@ -325,7 +306,7 @@ class _BeltProgressCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
-              value: 0.5,
+              value: student.stickerCount / student.stickersRequired,
               minHeight: 12,
               backgroundColor: OtaColors.softRed,
               color: OtaColors.actionRed,
@@ -333,7 +314,7 @@ class _BeltProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            'Two more stickers until your next rank review.',
+            '${student.stickersRequired - student.stickerCount} more stickers until your next rank review.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
@@ -347,7 +328,7 @@ class _BeltProgressCard extends StatelessWidget {
 class _NotificationsCard extends StatelessWidget {
   const _NotificationsCard({required this.notifications});
 
-  final List<String> notifications;
+  final List<NotificationItem> notifications;
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +363,7 @@ class _NotificationsCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  '${notifications.length} new',
+                  '${notifications.where((item) => !item.isRead).length} new',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: OtaColors.white,
                     fontWeight: FontWeight.w800,
@@ -393,7 +374,7 @@ class _NotificationsCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           for (final notification in notifications) ...[
-            _NotificationRow(title: notification),
+            _NotificationRow(title: notification.title),
             if (notification != notifications.last) const SizedBox(height: 12),
           ],
         ],

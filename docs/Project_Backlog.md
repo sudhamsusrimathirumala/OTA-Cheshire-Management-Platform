@@ -88,6 +88,30 @@ Tasks:
 
 ---
 
+---
+
+# Technical Debt
+
+## Schedule Screen Refactor
+
+Current Status:
+- schedule_screen.dart is currently a large monolithic file.
+
+Future Improvements:
+- [ ] Extract schedule widgets into lib/widgets/schedule/
+- [ ] Move mock schedule data into lib/data/
+- [ ] Move schedule models into lib/models/
+- [ ] Reduce schedule_screen.dart size
+- [ ] Preserve existing functionality and appearance
+
+Priority:
+Low
+
+Reason:
+The current implementation is functional. Refactoring should occur after the major application screens and features have stabilized.
+
+---
+
 # Low Priority
 
 ## Dashboard Improvements

@@ -94,17 +94,46 @@ This project aims to create a single platform where students, parents, instructo
 ## Project Structure
 
 ```text
+assets/
+└── images/
+    └── ota_logo.png
+
 lib/
-├── screens/
-├── widgets/
+├── data/
+│   ├── sample_notifications.dart
+│   ├── sample_schedule.dart
+│   └── sample_student.dart
 ├── models/
-├── services/
+│   ├── class_session.dart
+│   ├── notification_item.dart
+│   ├── parent.dart
+│   └── student.dart
+├── screens/
+│   ├── curriculum_screen.dart
+│   ├── login_screen.dart
+│   ├── notifications_screen.dart
+│   ├── profile_screen.dart
+│   ├── schedule_screen.dart
+│   ├── signup_screen.dart
+│   ├── student_dashboard_screen.dart
+│   └── welcome_screen.dart
 ├── theme/
-└── main.dart
+│   └── ota_colors.dart
+├── widgets/
+│   ├── ota_action_button.dart
+│   ├── ota_auth_switch_link.dart
+│   ├── ota_auth_text_field.dart
+│   ├── ota_bottom_nav_bar.dart
+│   ├── ota_branded_scaffold.dart
+│   └── ota_logo_mark.dart
+├── main.dart
+└── routes.dart
 
 docs/
-├── PROJECT_BACKLOG.md
-└── DEVELOPMENT_LOG.md
+└── Project_Backlog.md
+
+test/
+└── widget_test.dart
 ```
 
 ---
