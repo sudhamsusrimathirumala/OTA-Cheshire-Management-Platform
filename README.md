@@ -71,7 +71,7 @@ This project aims to create a single platform where students, parents, instructo
 - Student Dashboard UI
 - Schedule/Calendar UI
 - Curriculum UI planning
-- Notifications placeholder screen
+- Notifications UI
 - Profile placeholder screen
 - Reusable bottom navigation
 - Navigation structure for primary app destinations
@@ -86,7 +86,6 @@ This project aims to create a single platform where students, parents, instructo
 
 - Application Documentation
 - System Design
-- Notification center UI planning
 - Profile UI planning
 
 ### Planned
@@ -113,15 +112,18 @@ lib/
 ├── data/
 │   ├── sample_notifications.dart
 │   ├── sample_schedule.dart
-│   └── sample_student.dart
+│   ├── sample_student.dart
+│   └── sample_curriculum.dart
 ├── models/
 │   ├── class_session.dart
+│   ├── curriculum_requirement.dart
 │   ├── notification_item.dart
 │   ├── parent.dart
 │   └── student.dart
 ├── screens/
 │   ├── curriculum_screen.dart
 │   ├── login_screen.dart
+│   ├── notification_detail_screen.dart
 │   ├── notifications_screen.dart
 │   ├── profile_screen.dart
 │   ├── schedule_screen.dart
@@ -131,6 +133,8 @@ lib/
 ├── theme/
 │   └── ota_colors.dart
 ├── widgets/
+│   ├── notifications/
+│   │   └── notification_card.dart
 │   ├── ota_action_button.dart
 │   ├── ota_auth_switch_link.dart
 │   ├── ota_auth_text_field.dart

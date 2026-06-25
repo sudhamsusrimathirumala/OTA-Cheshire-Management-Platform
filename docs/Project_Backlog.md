@@ -25,7 +25,7 @@
     - Support up to two overlapping classes
     - Google Calendar-inspired day timeline layout
 - [ ] Curriculum page
-- [ ] Notifications page
+- [x] Notifications page
 - [ ] Profile page
 
 ### Data Models
@@ -142,10 +142,23 @@ Blue → Blue-Red
 
 ### Academy Updates Enhancements
 
+- [x] Support richer announcement cards
+- [x] Highlight urgent announcements
 - [ ] Make announcements individually tappable
 - [ ] Open full announcement details
-- [ ] Support richer announcement cards
-- [ ] Highlight urgent announcements
+- [ ] Add attachments, links, and deep-link destinations
+
+---
+
+## Notification Priority System
+
+- [ ] Notification priority is selected by an admin when creating a notification.
+- [ ] Priority should be stored as part of the notification data.
+- [ ] Suggested levels:
+  - General
+  - Important
+  - Critical
+- [ ] User-facing notification cards should visually reflect priority.
 
 ---
 

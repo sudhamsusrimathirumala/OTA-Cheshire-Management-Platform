@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
@@ -24,7 +25,7 @@ void main() {
     expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
     expect(find.text('Teen & Black Belt Class'), findsOneWidget);
     expect(find.text('Black'), findsOneWidget);
-    expect(find.text('Summer Camp Registration Open'), findsOneWidget);
+    expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Message OTA'));
@@ -66,7 +67,10 @@ void main() {
 
     await tester.tap(find.text('Notifications'));
     await tester.pumpAndSettle();
-    expect(find.text('Notifications Page Coming Soon'), findsOneWidget);
+    expect(
+      find.text('Stay up to date with academy news and announcements.'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
@@ -93,5 +97,43 @@ void main() {
 
     expect(find.text('Blue-Red Belt'), findsOneWidget);
     expect(find.text('Advanced transition sequence'), findsOneWidget);
+  });
+
+  testWidgets('notifications screen filters announcements', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+
+    expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
+    expect(find.text('Unread'), findsWidgets);
+    expect(find.text('Important'), findsWidgets);
+
+    await tester.tap(find.text('Important').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reminder: Belt Testing This Saturday'), findsOneWidget);
+    expect(find.text('Academy Closed for Independence Day'), findsNothing);
+
+    await tester.tap(find.text('Unread').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parent Meeting Next Thursday'), findsOneWidget);
+    expect(find.text('New Curriculum Videos Available'), findsNothing);
+  });
+
+  testWidgets('tapping a notification opens detail screen', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+
+    await tester.tap(find.text('Tournament Registration Closes Friday'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notification Detail'), findsOneWidget);
+    expect(find.text('Critical'), findsWidgets);
+    expect(find.text('Tournament'), findsWidgets);
+    expect(find.text('Message'), findsOneWidget);
+    expect(find.text('Future Resources'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Notifications'), findsWidgets);
   });
 }

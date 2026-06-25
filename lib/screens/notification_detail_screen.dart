@@ -1,0 +1,317 @@
+import 'package:flutter/material.dart';
+
+import '../models/notification_item.dart';
+import '../theme/ota_colors.dart';
+import '../widgets/notifications/notification_card.dart';
+
+class NotificationDetailScreen extends StatelessWidget {
+  const NotificationDetailScreen({required this.notification, super.key});
+
+  final NotificationItem notification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: OtaColors.blush,
+      appBar: AppBar(
+        backgroundColor: OtaColors.blush,
+        foregroundColor: OtaColors.ink,
+        elevation: 0,
+        title: const Text('Notification Detail'),
+      ),
+      body: SafeArea(
+        top: false,
+        child: CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              sliver: SliverToBoxAdapter(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _NotificationHeroCard(notification: notification),
+                        const SizedBox(height: 16),
+                        _NotificationMessageCard(notification: notification),
+                        const SizedBox(height: 16),
+                        const _FutureReadyLinksCard(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NotificationHeroCard extends StatelessWidget {
+  const _NotificationHeroCard({required this.notification});
+
+  final NotificationItem notification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: notification.isImportant
+                      ? OtaColors.maroon
+                      : OtaColors.navy,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  notification.category.icon,
+                  color: OtaColors.white,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _DetailBadge(label: notification.category.label),
+                        _DetailBadge(
+                          label: notification.priority.label,
+                          priority: notification.priority,
+                        ),
+                        if (notification.requiresAction)
+                          const _DetailBadge(label: 'Action Needed'),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      notification.title,
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: OtaColors.ink,
+                            fontWeight: FontWeight.w900,
+                            height: 1.14,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                color: OtaColors.mutedText,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                notification.timestamp.displayLabel,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationMessageCard extends StatelessWidget {
+  const _NotificationMessageCard({required this.notification});
+
+  final NotificationItem notification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Message',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            notification.body,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w600,
+              height: 1.48,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FutureReadyLinksCard extends StatelessWidget {
+  const _FutureReadyLinksCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Future Resources',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 14),
+          const _FutureResourceRow(
+            icon: Icons.attach_file_rounded,
+            label: 'Attachments',
+          ),
+          const SizedBox(height: 10),
+          const _FutureResourceRow(
+            icon: Icons.event_rounded,
+            label: 'Event or schedule links',
+          ),
+          const SizedBox(height: 10),
+          const _FutureResourceRow(
+            icon: Icons.menu_book_rounded,
+            label: 'Curriculum links',
+          ),
+          const SizedBox(height: 10),
+          const _FutureResourceRow(
+            icon: Icons.open_in_new_rounded,
+            label: 'External resources',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FutureResourceRow extends StatelessWidget {
+  const _FutureResourceRow({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: OtaColors.maroon, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            label,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        Text(
+          'Coming later',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: OtaColors.mutedText,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DetailBadge extends StatelessWidget {
+  const _DetailBadge({required this.label, this.priority});
+
+  final String label;
+  final NotificationPriority? priority;
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = switch (priority) {
+      NotificationPriority.critical => OtaColors.actionRed,
+      NotificationPriority.important => OtaColors.maroon,
+      _ => OtaColors.softRed,
+    };
+    final foregroundColor =
+        priority == null || priority == NotificationPriority.general
+        ? OtaColors.ink
+        : OtaColors.white;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: OtaColors.navy.withValues(alpha: 0.08)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: foregroundColor,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
