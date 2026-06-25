@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
@@ -74,7 +75,7 @@ void main() {
 
     await tester.tap(find.text('Profile'));
     await tester.pumpAndSettle();
-    expect(find.text('Profile Page Coming Soon'), findsOneWidget);
+    expect(find.text('Student Information'), findsOneWidget);
 
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
@@ -135,5 +136,23 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Notifications'), findsWidgets);
+  });
+
+  testWidgets('profile screen displays student and account settings', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+
+    expect(find.text('Sudhamsu'), findsWidgets);
+    expect(find.text('Red-Black Belt • OTA Cheshire'), findsOneWidget);
+    expect(find.text('Student Information'), findsOneWidget);
+    expect(find.text('Belt & Promotion'), findsOneWidget);
+    expect(find.text('Family & Account'), findsOneWidget);
+    expect(find.text('OTA Parent'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Sign Out'));
+
+    expect(find.text('Settings & Actions'), findsOneWidget);
+    expect(find.text('Sign Out'), findsOneWidget);
   });
 }

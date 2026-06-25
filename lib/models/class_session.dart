@@ -8,6 +8,7 @@ class ClassSession {
     required this.endTime,
     required this.eligibleBelts,
     required this.description,
+    this.eligibilityNote,
     this.isPreferred = false,
   });
 
@@ -17,6 +18,7 @@ class ClassSession {
   final DateTime endTime;
   final List<String> eligibleBelts;
   final String description;
+  final String? eligibilityNote;
   final bool isPreferred;
 
   int get startMinutes => startTime.hour * 60 + startTime.minute;
@@ -29,7 +31,11 @@ class ClassSession {
 
   String get timeRangeLabel => '$startLabel - ${_formatTimeOfDay(endTime)}';
 
-  String get eligibilityLabel => eligibleBelts.join(', ');
+  String get eligibilityLabel =>
+      eligibilityNote ??
+      (eligibleBelts.isEmpty
+          ? 'Instructor placement required'
+          : eligibleBelts.join(', '));
 
   DateTime startDateTime(DateTime date) {
     return DateTime(

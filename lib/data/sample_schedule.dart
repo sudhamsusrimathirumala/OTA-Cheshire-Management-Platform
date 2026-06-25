@@ -7,8 +7,9 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       'Little Tiger (Age 3-5)',
       16,
       0,
-      ['Little Tiger'],
+      const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
+      eligibilityNote: 'Ages 3-5',
     ),
     _session(
       'mon_level_1',
@@ -66,8 +67,9 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       'Little Tiger (Age 3-5)',
       17,
       10,
-      ['Little Tiger'],
+      const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
+      eligibilityNote: 'Ages 3-5',
     ),
     _session(
       'tue_level_3',
@@ -98,8 +100,9 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       'Adult',
       19,
       40,
-      ['Adult Student'],
+      const [],
       'Adult training focused on practical technique, conditioning, and confidence.',
+      eligibilityNote: 'Adult students',
     ),
   ],
   DateTime.wednesday: [
@@ -199,8 +202,9 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       'Adult',
       19,
       40,
-      ['Adult Student'],
+      const [],
       'Adult training focused on practical technique, conditioning, and confidence.',
+      eligibilityNote: 'Adult students',
     ),
   ],
   DateTime.friday: [
@@ -209,8 +213,9 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       'Little Tiger (Age 3-5)',
       16,
       40,
-      ['Little Tiger'],
+      const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
+      eligibilityNote: 'Ages 3-5',
     ),
     _session(
       'fri_black_belt',
@@ -253,6 +258,7 @@ ClassSession _session(
   List<String> eligibleBelts,
   String description, {
   bool isPreferred = false,
+  String? eligibilityNote,
 }) {
   final startTime = DateTime(2026, 6, 22, hour, minute);
 
@@ -263,6 +269,7 @@ ClassSession _session(
     endTime: startTime.add(const Duration(minutes: 40)),
     eligibleBelts: eligibleBelts,
     description: description,
+    eligibilityNote: eligibilityNote,
     isPreferred: isPreferred,
   );
 }

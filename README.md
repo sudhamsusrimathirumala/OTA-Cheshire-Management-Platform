@@ -70,15 +70,16 @@ This project aims to create a single platform where students, parents, instructo
 - Signup Screen UI
 - Student Dashboard UI
 - Schedule/Calendar UI
-- Curriculum UI planning
+- Curriculum UI
 - Notifications UI
-- Profile placeholder screen
+- Notification Detail UI
+- Profile UI
 - Reusable bottom navigation
 - Navigation structure for primary app destinations
 - Application Theme System
 - OTA brand color system
 - Basic app models
-- Mock student, schedule, and notification data
+- Mock student, schedule, curriculum, and notification data
 - Cheshire OTA belt structure cleanup
 - Project Architecture Planning
 
@@ -86,7 +87,6 @@ This project aims to create a single platform where students, parents, instructo
 
 - Application Documentation
 - System Design
-- Profile UI planning
 
 ### Planned
 
@@ -132,9 +132,13 @@ lib/
 │   └── welcome_screen.dart
 ├── theme/
 │   └── ota_colors.dart
+├── utils/
+│   └── notification_formatters.dart
 ├── widgets/
 │   ├── notifications/
 │   │   └── notification_card.dart
+│   ├── profile/
+│   │   └── profile_section.dart
 │   ├── ota_action_button.dart
 │   ├── ota_auth_switch_link.dart
 │   ├── ota_auth_text_field.dart

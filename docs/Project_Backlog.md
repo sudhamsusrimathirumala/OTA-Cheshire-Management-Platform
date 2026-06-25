@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** June 23, 2026
+**Last Updated:** June 25, 2026
 
 ---
 
@@ -20,20 +20,20 @@
 - [ ] Password reset functionality
 
 ### Core Screens
-- [ ] Schedule page
+- [x] Schedule page
     - Time-scaled class blocks based on duration
     - Support up to two overlapping classes
     - Google Calendar-inspired day timeline layout
-- [ ] Curriculum page
+- [x] Curriculum page
 - [x] Notifications page
-- [ ] Profile page
+- [x] Profile page
 
 ### Data Models
-- [ ] Student model
-- [ ] Parent model
+- [x] Student model
+- [x] Parent model
 - [ ] Belt progression model
-- [ ] Class scheduling model
-- [ ] Notification model
+- [x] Class scheduling model
+- [x] Notification model
 
 ---
 
@@ -99,16 +99,50 @@ Current Status:
 
 Future Improvements:
 - [ ] Extract schedule widgets into lib/widgets/schedule/
-- [ ] Move mock schedule data into lib/data/
-- [ ] Move schedule models into lib/models/
+- [x] Move mock schedule data into lib/data/
+- [x] Move schedule models into lib/models/
 - [ ] Reduce schedule_screen.dart size
 - [ ] Preserve existing functionality and appearance
+- [ ] Model age/audience-based class eligibility separately from belt eligibility before production personalization
 
 Priority:
 Low
 
 Reason:
 The current implementation is functional. Refactoring should occur after the major application screens and features have stabilized.
+
+---
+
+## Curriculum Screen Refactor
+
+Current Status:
+- curriculum_screen.dart is functional and still readable, but it is growing as curriculum sections are added.
+
+Future Improvements:
+- [ ] Extract curriculum section widgets into lib/widgets/curriculum/ if the screen grows further
+- [ ] Keep mock curriculum data in lib/data/ until real data integration begins
+
+Priority:
+Low
+
+Reason:
+The current screen is stable. Extraction can wait until real curriculum content, videos, and belt-specific requirements are better defined.
+
+---
+
+## Pre-Backend Readiness
+
+Future Improvements:
+- [ ] Decide the production app launch flow before authentication is added
+- [ ] Define parent/student profile switching behavior before Firebase integration
+- [ ] Centralize repeated card and surface styling tokens if UI duplication continues to grow
+- [ ] Keep notification attachments, links, and deep-link targets as UI placeholders until backend models are designed
+
+Priority:
+Medium
+
+Reason:
+These decisions should happen before backend work so Firebase data shape and navigation behavior do not have to be reworked later.
 
 ---
 
@@ -144,8 +178,8 @@ Blue → Blue-Red
 
 - [x] Support richer announcement cards
 - [x] Highlight urgent announcements
-- [ ] Make announcements individually tappable
-- [ ] Open full announcement details
+- [x] Make announcements individually tappable
+- [x] Open full announcement details
 - [ ] Add attachments, links, and deep-link destinations
 
 ---
@@ -153,12 +187,12 @@ Blue → Blue-Red
 ## Notification Priority System
 
 - [ ] Notification priority is selected by an admin when creating a notification.
-- [ ] Priority should be stored as part of the notification data.
-- [ ] Suggested levels:
+- [x] Priority should be stored as part of the notification data.
+- [x] Suggested levels:
   - General
   - Important
   - Critical
-- [ ] User-facing notification cards should visually reflect priority.
+- [x] User-facing notification cards should visually reflect priority.
 
 ---
 
@@ -222,6 +256,13 @@ Purely visual enhancement that does not affect functionality.
 - [x] Academy updates section
 - [x] Quick actions grid
 - [x] Bottom navigation bar
+
+## Profile Screen
+- [x] Student identity header
+- [x] Student information section
+- [x] Belt and promotion rows
+- [x] Family and account section
+- [x] Settings-style action rows
 
 ---
 
