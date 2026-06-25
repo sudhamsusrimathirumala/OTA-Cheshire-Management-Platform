@@ -70,7 +70,7 @@ This project aims to create a single platform where students, parents, instructo
 - Signup Screen UI
 - Student Dashboard UI
 - Schedule/Calendar UI
-- Curriculum placeholder screen
+- Curriculum UI planning
 - Notifications placeholder screen
 - Profile placeholder screen
 - Reusable bottom navigation
@@ -86,7 +86,6 @@ This project aims to create a single platform where students, parents, instructo
 
 - Application Documentation
 - System Design
-- Curriculum UI planning
 - Notification center UI planning
 - Profile UI planning
 
