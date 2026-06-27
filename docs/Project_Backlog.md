@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** June 25, 2026
+**Last Updated:** June 27, 2026
 
 ---
 
@@ -165,9 +165,9 @@ Future Improvements:
 Example:
 
 ```text
-Blue → Blue-Red
+Blue -> Blue-Red
 
-██████░░░░
+######----
 
 2 / 4 Stickers
 ```
@@ -206,7 +206,7 @@ Potential additions:
 
 Examples:
 
-- Blue • Cheshire Location
+- Blue - Cheshire Location
 - Next Goal: Blue-Red
 
 Tasks:
@@ -256,6 +256,35 @@ Purely visual enhancement that does not affect functionality.
 - [x] Academy updates section
 - [x] Quick actions grid
 - [x] Bottom navigation bar
+
+## Schedule Screen
+- [x] Google Calendar-inspired day timeline
+- [x] Date navigation and date picker
+- [x] Current-time indicator
+- [x] Time-scaled class blocks
+- [x] Overlapping class support
+- [x] Eligibility highlighting
+- [x] Class detail bottom sheet
+
+## Curriculum Screen
+- [x] Belt selection dropdown
+- [x] Belt-specific mock curriculum data
+- [x] Forms section with video placeholder
+- [x] One-step sparring section
+- [x] Wood-breaking section
+- [x] Physical challenge section
+
+## Notifications Screen
+- [x] Announcement list
+- [x] Filter chips
+- [x] Read/unread visual states
+- [x] Priority badges
+- [x] Notification detail navigation
+
+## Notification Detail Screen
+- [x] Full notification title, category, priority, timestamp, and body
+- [x] Important and critical priority styling
+- [x] Future-ready placeholder resource sections
 
 ## Profile Screen
 - [x] Student identity header

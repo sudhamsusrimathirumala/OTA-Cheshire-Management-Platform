@@ -105,54 +105,54 @@ This project aims to create a single platform where students, parents, instructo
 
 ```text
 assets/
-└── images/
-    └── ota_logo.png
+`-- images/
+    `-- ota_logo.png
 
 lib/
-├── data/
-│   ├── sample_notifications.dart
-│   ├── sample_schedule.dart
-│   ├── sample_student.dart
-│   └── sample_curriculum.dart
-├── models/
-│   ├── class_session.dart
-│   ├── curriculum_requirement.dart
-│   ├── notification_item.dart
-│   ├── parent.dart
-│   └── student.dart
-├── screens/
-│   ├── curriculum_screen.dart
-│   ├── login_screen.dart
-│   ├── notification_detail_screen.dart
-│   ├── notifications_screen.dart
-│   ├── profile_screen.dart
-│   ├── schedule_screen.dart
-│   ├── signup_screen.dart
-│   ├── student_dashboard_screen.dart
-│   └── welcome_screen.dart
-├── theme/
-│   └── ota_colors.dart
-├── utils/
-│   └── notification_formatters.dart
-├── widgets/
-│   ├── notifications/
-│   │   └── notification_card.dart
-│   ├── profile/
-│   │   └── profile_section.dart
-│   ├── ota_action_button.dart
-│   ├── ota_auth_switch_link.dart
-│   ├── ota_auth_text_field.dart
-│   ├── ota_bottom_nav_bar.dart
-│   ├── ota_branded_scaffold.dart
-│   └── ota_logo_mark.dart
-├── main.dart
-└── routes.dart
+|-- data/
+|   |-- sample_curriculum.dart
+|   |-- sample_notifications.dart
+|   |-- sample_schedule.dart
+|   `-- sample_student.dart
+|-- models/
+|   |-- class_session.dart
+|   |-- curriculum_requirement.dart
+|   |-- notification_item.dart
+|   |-- parent.dart
+|   `-- student.dart
+|-- screens/
+|   |-- curriculum_screen.dart
+|   |-- login_screen.dart
+|   |-- notification_detail_screen.dart
+|   |-- notifications_screen.dart
+|   |-- profile_screen.dart
+|   |-- schedule_screen.dart
+|   |-- signup_screen.dart
+|   |-- student_dashboard_screen.dart
+|   `-- welcome_screen.dart
+|-- theme/
+|   `-- ota_colors.dart
+|-- utils/
+|   `-- notification_formatters.dart
+|-- widgets/
+|   |-- notifications/
+|   |   `-- notification_card.dart
+|   |-- profile/
+|   |   `-- profile_section.dart
+|   |-- ota_action_button.dart
+|   |-- ota_auth_switch_link.dart
+|   |-- ota_auth_text_field.dart
+|   |-- ota_bottom_nav_bar.dart
+|   |-- ota_branded_scaffold.dart
+|   `-- ota_logo_mark.dart
+|-- main.dart
+`-- routes.dart
 
 docs/
-└── Project_Backlog.md
+`-- Project_Backlog.md
 
 test/
-└── widget_test.dart
+`-- widget_test.dart
 ```
 
 ---
