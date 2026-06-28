@@ -2,6 +2,7 @@ class Student {
   const Student({
     required this.id,
     required this.name,
+    required this.locationId,
     required this.belt,
     required this.age,
     required this.stickerCount,
@@ -11,6 +12,7 @@ class Student {
 
   final String id;
   final String name;
+  final String locationId;
   final String belt;
   final int age;
   final int stickerCount;

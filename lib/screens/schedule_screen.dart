@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../data/sample_schedule.dart';
-import '../data/sample_student.dart';
 import '../models/class_session.dart';
+import '../models/student_profile.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -39,12 +39,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   bool get _isViewingToday =>
       DateUtils.isSameDay(_selectedDate, DateTime.now());
 
+  StudentProfile get _student => appDataService.selectedStudentProfile;
+
   List<ClassSession> get _selectedDayClasses =>
-      sampleSummerSchedule[_selectedDate.weekday] ?? const [];
+      appDataService.scheduleForWeekday(_selectedDate.weekday);
 
   ClassSession? get _nextEligibleClass {
     final classes = _selectedDayClasses.where((session) {
-      if (!session.isEligibleFor(sampleStudent)) {
+      if (!session.isEligibleFor(_student)) {
         return false;
       }
 
@@ -195,6 +197,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           hourHeight: _hourHeight,
                           timelineGutterWidth: _timelineGutterWidth,
                           eventGap: _eventGap,
+                          student: _student,
+                          nextEligibleSession: _nextEligibleClass,
                           onClassTap: _showClassDetails,
                         ),
                 ),
@@ -210,7 +214,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _showClassDetails(ClassSession session) {
-    final isEligible = session.isEligibleFor(sampleStudent);
+    final isEligible = session.isEligibleFor(_student);
     final timeLabel = session.timeRangeLabel;
 
     showModalBottomSheet<void>(
@@ -407,6 +411,8 @@ class _ScheduleTimeline extends StatelessWidget {
     required this.hourHeight,
     required this.timelineGutterWidth,
     required this.eventGap,
+    required this.student,
+    required this.nextEligibleSession,
     required this.onClassTap,
   });
 
@@ -417,6 +423,8 @@ class _ScheduleTimeline extends StatelessWidget {
   final double hourHeight;
   final double timelineGutterWidth;
   final double eventGap;
+  final StudentProfile student;
+  final ClassSession? nextEligibleSession;
   final ValueChanged<ClassSession> onClassTap;
 
   @override
@@ -463,6 +471,8 @@ class _ScheduleTimeline extends StatelessWidget {
                       timelineGutterWidth: timelineGutterWidth,
                       hourHeight: hourHeight,
                       eventGap: eventGap,
+                      student: student,
+                      nextEligibleSession: nextEligibleSession,
                       onTap: () => onClassTap(positionedEvent.session),
                     ),
                   if (isViewingToday)
@@ -535,6 +545,8 @@ class _PositionedClassBlock extends StatelessWidget {
     required this.timelineGutterWidth,
     required this.hourHeight,
     required this.eventGap,
+    required this.student,
+    required this.nextEligibleSession,
     required this.onTap,
   });
 
@@ -544,6 +556,8 @@ class _PositionedClassBlock extends StatelessWidget {
   final double timelineGutterWidth;
   final double hourHeight;
   final double eventGap;
+  final StudentProfile student;
+  final ClassSession? nextEligibleSession;
   final VoidCallback onTap;
 
   @override
@@ -558,9 +572,9 @@ class _PositionedClassBlock extends StatelessWidget {
         (positionedEvent.column * (columnWidth + eventGap));
     final top = (session.startMinutes / 60) * hourHeight;
     final height = (session.durationMinutes / 60) * hourHeight;
-    final isEligible = session.isEligibleFor(sampleStudent);
+    final isEligible = session.isEligibleFor(student);
     final isPast = session.endDateTime(selectedDate).isBefore(DateTime.now());
-    final isNext = session == _findNextEligibleSession(selectedDate);
+    final isNext = session == nextEligibleSession;
 
     return Positioned(
       top: top + 4,
@@ -902,31 +916,6 @@ int _overlapColumn(ClassSession session, List<ClassSession> sessions) {
 
 bool _sessionsOverlap(ClassSession a, ClassSession b) {
   return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
-}
-
-ClassSession? _findNextEligibleSession(DateTime selectedDate) {
-  final sessions =
-      (sampleSummerSchedule[selectedDate.weekday] ?? const <ClassSession>[])
-          .where((session) => session.isEligibleFor(sampleStudent))
-          .toList()
-        ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-
-  if (sessions.isEmpty) {
-    return null;
-  }
-
-  if (!DateUtils.isSameDay(selectedDate, DateTime.now())) {
-    return sessions.first;
-  }
-
-  final now = DateTime.now();
-  for (final session in sessions) {
-    if (session.startDateTime(selectedDate).isAfter(now)) {
-      return session;
-    }
-  }
-
-  return null;
 }
 
 double _currentTimeTop(double hourHeight) {

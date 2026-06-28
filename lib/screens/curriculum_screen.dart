@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/sample_curriculum.dart';
 import '../models/curriculum_requirement.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -16,7 +16,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
   String _selectedBelt = 'White';
 
   CurriculumRequirement get _selectedCurriculum =>
-      sampleCurriculum[_selectedBelt] ?? sampleCurriculum.values.first;
+      appDataService.curriculumForBelt(_selectedBelt);
 
   @override
   Widget build(BuildContext context) {
@@ -51,7 +51,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
                           title: 'Forms',
                           icon: Icons.sports_martial_arts_rounded,
                           description:
-                              'Review forms, stance transitions, and practice sequences for ${beltDisplayLabel(curriculum.belt)}.',
+                              'Review forms, stance transitions, and practice sequences for ${appDataService.beltDisplayLabel(curriculum.belt)}.',
                           items: curriculum.formItems,
                           showVideoPlaceholder: true,
                         ),
@@ -194,10 +194,10 @@ class _CurriculumHeader extends StatelessWidget {
               ),
             ),
             items: [
-              for (final belt in curriculumBeltOrder)
+              for (final belt in appDataService.curriculumBeltOrder)
                 DropdownMenuItem(
                   value: belt,
-                  child: Text(beltDisplayLabel(belt)),
+                  child: Text(appDataService.beltDisplayLabel(belt)),
                 ),
             ],
             onChanged: onBeltChanged,

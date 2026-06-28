@@ -29,8 +29,11 @@
 - [x] Profile page
 
 ### Data Models
+- [x] User account model
+- [x] Student profile model
 - [x] Student model
-- [x] Parent model
+- [x] Parent role represented by UserAccount
+- [x] Location ID field on backend-relevant models
 - [ ] Belt progression model
 - [x] Class scheduling model
 - [x] Notification model
@@ -133,8 +136,13 @@ The current screen is stable. Extraction can wait until real curriculum content,
 ## Pre-Backend Readiness
 
 Future Improvements:
+- [x] Add AppDataService interface between UI and mock data
+- [x] Add MockAppDataService as the active data source
+- [x] Keep UI personalization driven by the selected student profile
 - [ ] Decide the production app launch flow before authentication is added
 - [ ] Define parent/student profile switching behavior before Firebase integration
+- [ ] Add a no-linked-student-profile UI state for newly approved accounts
+- [ ] Replace MockAppDataService with FirebaseAppDataService when Firestore is introduced
 - [ ] Centralize repeated card and surface styling tokens if UI duplication continues to grow
 - [ ] Keep notification attachments, links, and deep-link targets as UI placeholders until backend models are designed
 
@@ -298,8 +306,8 @@ Purely visual enhancement that does not affect functionality.
 # Future Features (Ideas)
 
 ## Communication
-- Parent ↔ OTA messaging
-- Student ↔ OTA messaging
+- Parent <-> OTA messaging
+- Student <-> OTA messaging
 - Announcement system
 
 ## Curriculum

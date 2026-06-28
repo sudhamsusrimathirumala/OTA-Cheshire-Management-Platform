@@ -1,9 +1,10 @@
-import 'student.dart';
+import 'student_profile.dart';
 
 class ClassSession {
   ClassSession({
     required this.id,
     required this.className,
+    required this.locationId,
     required this.startTime,
     required this.endTime,
     required this.eligibleBelts,
@@ -14,6 +15,7 @@ class ClassSession {
 
   final String id;
   final String className;
+  final String locationId;
   final DateTime startTime;
   final DateTime endTime;
   final List<String> eligibleBelts;
@@ -57,7 +59,7 @@ class ClassSession {
     );
   }
 
-  bool isEligibleFor(Student student) {
+  bool isEligibleFor(StudentProfile student) {
     return eligibleBelts.contains(student.belt);
   }
 }

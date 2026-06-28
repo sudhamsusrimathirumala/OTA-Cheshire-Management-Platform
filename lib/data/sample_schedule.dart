@@ -1,4 +1,5 @@
 import '../models/class_session.dart';
+import 'sample_constants.dart';
 
 final sampleSummerSchedule = <int, List<ClassSession>>{
   DateTime.monday: [
@@ -244,12 +245,6 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
   ],
 };
 
-ClassSession? sampleNextClassForDashboard() {
-  return sampleSummerSchedule[DateTime.monday]?.firstWhere(
-    (session) => session.className == 'Teen & Black Belt',
-  );
-}
-
 ClassSession _session(
   String id,
   String className,
@@ -265,6 +260,7 @@ ClassSession _session(
   return ClassSession(
     id: id,
     className: className,
+    locationId: otaCheshireLocationId,
     startTime: startTime,
     endTime: startTime.add(const Duration(minutes: 40)),
     eligibleBelts: eligibleBelts,

@@ -1,5 +1,6 @@
 class CurriculumRequirement {
   const CurriculumRequirement({
+    required this.locationId,
     required this.belt,
     required this.formItems,
     required this.oneStepItems,
@@ -7,6 +8,7 @@ class CurriculumRequirement {
     required this.physicalChallengeItems,
   });
 
+  final String locationId;
   final String belt;
   final List<String> formItems;
   final List<String> oneStepItems;
