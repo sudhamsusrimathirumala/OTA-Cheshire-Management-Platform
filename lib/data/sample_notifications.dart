@@ -1,8 +1,10 @@
 import '../models/notification_item.dart';
+import 'sample_constants.dart';
 
 final sampleNotifications = [
   NotificationItem(
     id: 'summer_camp_registration',
+    locationId: otaCheshireLocationId,
     title: 'Summer Camp Registration Now Open',
     summary: 'Reserve your spot before summer camp spaces fill up.',
     body:
@@ -15,6 +17,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'tournament_registration',
+    locationId: otaCheshireLocationId,
     title: 'Tournament Registration Closes Friday',
     summary: 'Submit tournament registration forms by Friday evening.',
     body:
@@ -27,6 +30,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'wednesday_schedule_change',
+    locationId: otaCheshireLocationId,
     title: 'Wednesday Schedule Updated',
     summary:
         'Wednesday evening classes will follow the adjusted summer schedule.',
@@ -39,6 +43,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'belt_testing_reminder',
+    locationId: otaCheshireLocationId,
     title: 'Reminder: Belt Testing This Saturday',
     summary:
         'Eligible students should arrive 15 minutes early in full uniform.',
@@ -52,6 +57,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'independence_day_closure',
+    locationId: otaCheshireLocationId,
     title: 'Academy Closed for Independence Day',
     summary: 'OTA will be closed July 4 for Independence Day.',
     body:
@@ -62,6 +68,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'curriculum_videos_available',
+    locationId: otaCheshireLocationId,
     title: 'New Curriculum Videos Available',
     summary: 'New practice video placeholders are ready in Curriculum.',
     body:
@@ -72,6 +79,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'recent_belt_promotions',
+    locationId: otaCheshireLocationId,
     title: 'Congratulations to Recent Belt Promotions',
     summary: 'Celebrate the students who advanced at the latest OTA testing.',
     body:
@@ -82,6 +90,7 @@ final sampleNotifications = [
   ),
   NotificationItem(
     id: 'parent_meeting',
+    locationId: otaCheshireLocationId,
     title: 'Parent Meeting Next Thursday',
     summary: 'Join us for summer programming and event updates.',
     body:

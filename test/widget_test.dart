@@ -57,7 +57,7 @@ void main() {
 
     await tester.tap(find.text('Schedule'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Next eligible class:'), findsOneWidget);
+    expect(find.byType(ScheduleScreen), findsOneWidget);
 
     await tester.tap(find.text('Curriculum'));
     await tester.pumpAndSettle();

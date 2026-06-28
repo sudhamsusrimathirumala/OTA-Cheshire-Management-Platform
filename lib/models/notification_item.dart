@@ -14,6 +14,7 @@ enum NotificationPriority { general, important, critical }
 class NotificationItem {
   const NotificationItem({
     required this.id,
+    required this.locationId,
     required this.title,
     required this.summary,
     required this.body,
@@ -25,6 +26,7 @@ class NotificationItem {
   });
 
   final String id;
+  final String locationId;
   final String title;
   final String summary;
   final String body;

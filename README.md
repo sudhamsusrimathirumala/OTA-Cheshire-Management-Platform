@@ -79,6 +79,8 @@ This project aims to create a single platform where students, parents, instructo
 - Application Theme System
 - OTA brand color system
 - Basic app models
+- User account and student profile data separation
+- App data service abstraction with mock implementation
 - Mock student, schedule, curriculum, and notification data
 - Cheshire OTA belt structure cleanup
 - Project Architecture Planning
@@ -111,6 +113,7 @@ assets/
 lib/
 |-- data/
 |   |-- sample_curriculum.dart
+|   |-- sample_constants.dart
 |   |-- sample_notifications.dart
 |   |-- sample_schedule.dart
 |   `-- sample_student.dart
@@ -118,8 +121,9 @@ lib/
 |   |-- class_session.dart
 |   |-- curriculum_requirement.dart
 |   |-- notification_item.dart
-|   |-- parent.dart
-|   `-- student.dart
+|   |-- student.dart
+|   |-- student_profile.dart
+|   `-- user_account.dart
 |-- screens/
 |   |-- curriculum_screen.dart
 |   |-- login_screen.dart
@@ -130,6 +134,10 @@ lib/
 |   |-- signup_screen.dart
 |   |-- student_dashboard_screen.dart
 |   `-- welcome_screen.dart
+|-- services/
+|   |-- app_data_service.dart
+|   |-- app_data_service_provider.dart
+|   `-- mock_app_data_service.dart
 |-- theme/
 |   `-- ota_colors.dart
 |-- utils/

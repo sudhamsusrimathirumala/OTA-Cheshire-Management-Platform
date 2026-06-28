@@ -1,4 +1,5 @@
 import '../models/curriculum_requirement.dart';
+import 'sample_constants.dart';
 
 const curriculumBeltOrder = [
   'White',
@@ -19,6 +20,7 @@ const curriculumBeltOrder = [
 
 const sampleCurriculum = <String, CurriculumRequirement>{
   'White': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'White',
     formItems: [
       'Taegeuk form placeholder',
@@ -35,6 +37,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: [],
   ),
   'White-Yellow': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'White-Yellow',
     formItems: ['Taegeuk form placeholder', 'Low block practice sequence'],
     oneStepItems: [
@@ -45,6 +48,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: [],
   ),
   'Yellow': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Yellow',
     formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
     oneStepItems: [
@@ -55,6 +59,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Push-up challenge placeholder'],
   ),
   'Yellow-Green': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Yellow-Green',
     formItems: [
       'Taegeuk form placeholder',
@@ -71,6 +76,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Push-up challenge placeholder'],
   ),
   'Green': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Green',
     formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
     oneStepItems: [
@@ -84,6 +90,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     ],
   ),
   'Green-Blue': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Green-Blue',
     formItems: ['Taegeuk form placeholder', 'Combination kicking sequence'],
     oneStepItems: [
@@ -94,6 +101,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Endurance challenge placeholder'],
   ),
   'Blue': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Blue',
     formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
     oneStepItems: [
@@ -110,6 +118,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     ],
   ),
   'Blue-Red': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Blue-Red',
     formItems: ['Taegeuk form placeholder', 'Advanced transition sequence'],
     oneStepItems: [
@@ -120,6 +129,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Endurance challenge placeholder'],
   ),
   'Red': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Red',
     formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
     oneStepItems: [
@@ -136,6 +146,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     ],
   ),
   'Red-Yellow': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Red-Yellow',
     formItems: [
       'Taegeuk form placeholder',
@@ -149,6 +160,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Endurance challenge placeholder'],
   ),
   'Red-Green': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Red-Green',
     formItems: ['Taegeuk form placeholder', 'Precision sequence placeholder'],
     oneStepItems: [
@@ -165,6 +177,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     ],
   ),
   'Red-Blue': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Red-Blue',
     formItems: [
       'Taegeuk form placeholder',
@@ -178,6 +191,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     physicalChallengeItems: ['Endurance challenge placeholder'],
   ),
   'Red-Black': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Red-Black',
     formItems: ['Taegeuk form placeholder', 'Black belt readiness sequence'],
     oneStepItems: [
@@ -194,6 +208,7 @@ const sampleCurriculum = <String, CurriculumRequirement>{
     ],
   ),
   'Black': CurriculumRequirement(
+    locationId: otaCheshireLocationId,
     belt: 'Black',
     formItems: [
       'Black belt form placeholder',

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../data/sample_student.dart';
-import '../models/parent.dart';
-import '../models/student.dart';
+import '../models/student_profile.dart';
+import '../models/user_account.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
@@ -12,8 +12,8 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const student = sampleStudent;
-    const parent = sampleParent;
+    final student = appDataService.selectedStudentProfile;
+    final account = appDataService.currentUserAccount;
 
     return Scaffold(
       backgroundColor: OtaColors.blush,
@@ -29,13 +29,13 @@ class ProfileScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const _ProfileIdentityHeader(student: student),
+                        _ProfileIdentityHeader(student: student),
                         const SizedBox(height: 24),
                         _StudentInformationSection(student: student),
                         const SizedBox(height: 22),
                         _BeltPromotionSection(student: student),
                         const SizedBox(height: 22),
-                        _FamilyAccountSection(parent: parent),
+                        _FamilyAccountSection(account: account),
                         const SizedBox(height: 22),
                         const _SettingsActionsSection(),
                       ],
@@ -57,7 +57,7 @@ class ProfileScreen extends StatelessWidget {
 class _ProfileIdentityHeader extends StatelessWidget {
   const _ProfileIdentityHeader({required this.student});
 
-  final Student student;
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
@@ -131,7 +131,7 @@ class _ProfileIdentityHeader extends StatelessWidget {
 class _StudentInformationSection extends StatelessWidget {
   const _StudentInformationSection({required this.student});
 
-  final Student student;
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +172,7 @@ class _StudentInformationSection extends StatelessWidget {
 class _BeltPromotionSection extends StatelessWidget {
   const _BeltPromotionSection({required this.student});
 
-  final Student student;
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
@@ -205,14 +205,14 @@ class _BeltPromotionSection extends StatelessWidget {
 }
 
 class _FamilyAccountSection extends StatelessWidget {
-  const _FamilyAccountSection({required this.parent});
+  const _FamilyAccountSection({required this.account});
 
-  final Parent parent;
+  final UserAccount account;
 
   @override
   Widget build(BuildContext context) {
     final linkedProfileLabel =
-        '${parent.childIds.length} student ${parent.childIds.length == 1 ? 'profile' : 'profiles'}';
+        '${account.linkedStudentProfileIds.length} student ${account.linkedStudentProfileIds.length == 1 ? 'profile' : 'profiles'}';
 
     return ProfileSection(
       title: 'Family & Account',
@@ -220,7 +220,7 @@ class _FamilyAccountSection extends StatelessWidget {
         ProfileInfoRow(
           icon: Icons.family_restroom_rounded,
           label: 'Parent / Guardian',
-          value: parent.name,
+          value: account.displayName,
         ),
         ProfileInfoRow(
           icon: Icons.account_tree_rounded,
@@ -232,10 +232,10 @@ class _FamilyAccountSection extends StatelessWidget {
           label: 'Profile Switching',
           value: 'Coming later',
         ),
-        const ProfileInfoRow(
+        ProfileInfoRow(
           icon: Icons.verified_user_rounded,
           label: 'Account Status',
-          value: 'Approved',
+          value: account.approvalStatusLabel,
           showDivider: false,
         ),
       ],

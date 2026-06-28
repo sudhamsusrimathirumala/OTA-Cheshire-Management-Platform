@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../data/sample_notifications.dart';
-import '../data/sample_schedule.dart';
-import '../data/sample_student.dart';
 import '../models/class_session.dart';
 import '../models/notification_item.dart';
-import '../models/student.dart';
+import '../models/student_profile.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -14,9 +12,9 @@ class StudentDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final student = sampleStudent;
-    final notifications = sampleNotifications;
-    final nextClass = sampleNextClassForDashboard();
+    final student = appDataService.selectedStudentProfile;
+    final notifications = appDataService.notifications;
+    final nextClass = appDataService.nextClassForDashboard();
 
     return Scaffold(
       backgroundColor: OtaColors.blush,
@@ -69,7 +67,7 @@ class StudentDashboardScreen extends StatelessWidget {
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({required this.student});
 
-  final Student student;
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {
@@ -243,7 +241,7 @@ class _NextClassCard extends StatelessWidget {
 class _BeltProgressCard extends StatelessWidget {
   const _BeltProgressCard({required this.student});
 
-  final Student student;
+  final StudentProfile student;
 
   @override
   Widget build(BuildContext context) {

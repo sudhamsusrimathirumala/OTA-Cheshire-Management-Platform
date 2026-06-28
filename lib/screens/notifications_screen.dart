@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../data/sample_notifications.dart';
 import '../models/notification_item.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/notifications/notification_card.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -21,13 +21,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   List<NotificationItem> get _filteredNotifications {
     return switch (_selectedFilter) {
-      _NotificationFilter.all => sampleNotifications,
+      _NotificationFilter.all => appDataService.notifications,
       _NotificationFilter.unread =>
-        sampleNotifications
+        appDataService.notifications
             .where((notification) => !notification.isRead)
             .toList(),
       _NotificationFilter.important =>
-        sampleNotifications
+        appDataService.notifications
             .where((notification) => notification.isImportant)
             .toList(),
     };
@@ -52,7 +52,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _NotificationsHeader(
-                          unreadCount: sampleNotifications
+                          unreadCount: appDataService.notifications
                               .where((notification) => !notification.isRead)
                               .length,
                         ),
