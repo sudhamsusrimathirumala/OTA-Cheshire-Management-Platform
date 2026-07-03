@@ -13,7 +13,7 @@ class AdminScheduleScreen extends StatefulWidget {
 }
 
 class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
-  var _selectedWeekday = DateTime.sunday;
+  var _selectedWeekday = DateTime.now().weekday;
 
   @override
   Widget build(BuildContext context) {
@@ -606,7 +606,7 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
   @override
   void initState() {
     super.initState();
-    final today = DateTime(2026, 7, 1);
+    final today = DateUtils.dateOnly(DateTime.now());
     final classNames = _classNames;
     _startDate = today;
     _endDate = today.add(const Duration(days: 2));

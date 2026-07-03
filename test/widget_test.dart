@@ -154,8 +154,6 @@ void main() {
 
     expect(find.text('Add Class'), findsOneWidget);
     expect(find.text('Bulk Actions'), findsOneWidget);
-    expect(find.text('Sunday'), findsWidgets);
-    expect(find.text('No classes scheduled for this day.'), findsOneWidget);
 
     await tester.tap(find.text('Monday').first);
     await tester.pumpAndSettle();

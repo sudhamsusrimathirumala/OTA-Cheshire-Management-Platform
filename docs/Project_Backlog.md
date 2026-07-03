@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** June 27, 2026
+**Last Updated:** July 3, 2026
 
 ---
 
@@ -107,6 +107,8 @@ Future Improvements:
 - [ ] Reduce schedule_screen.dart size
 - [ ] Preserve existing functionality and appearance
 - [ ] Model age/audience-based class eligibility separately from belt eligibility before production personalization
+- [x] Default admin schedule views to `DateTime.now().weekday` instead of the temporary Sunday default
+- [x] Replace the bulk schedule sheet's hardcoded `DateTime(2026, 7, 1)` seed with `DateUtils.dateOnly(DateTime.now())`
 
 Priority:
 Low
