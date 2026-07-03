@@ -21,8 +21,9 @@ void main() {
     await tester.pumpWidget(const OTAApp());
 
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
-    expect(find.text('Admin Dashboard'), findsOneWidget);
-    expect(find.text('Manage Schedule'), findsOneWidget);
+    expect(find.text('OTA Cheshire Control Panel'), findsOneWidget);
+    expect(find.text("Today's Schedule"), findsOneWidget);
+    expect(find.text('Recent Admin Updates'), findsOneWidget);
   });
 
   testWidgets('welcome screen displays its primary actions', (tester) async {
@@ -101,23 +102,23 @@ void main() {
   testWidgets('admin navigation opens every admin destination', (tester) async {
     await tester.pumpWidget(const OTAApp());
 
-    await tester.tap(find.text('Students'));
+    await tester.tap(find.widgetWithText(TextButton, 'Students'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminStudentsScreen), findsOneWidget);
 
-    await tester.tap(find.text('Events'));
+    await tester.tap(find.widgetWithText(TextButton, 'Events'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminEventsScreen), findsOneWidget);
 
-    await tester.tap(find.text('Announcements'));
+    await tester.tap(find.widgetWithText(TextButton, 'Announcements'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminAnnouncementsScreen), findsOneWidget);
 
-    await tester.tap(find.text('Schedule'));
+    await tester.tap(find.widgetWithText(TextButton, 'Schedule'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminScheduleScreen), findsOneWidget);
 
-    await tester.tap(find.text('Dashboard'));
+    await tester.tap(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
   });

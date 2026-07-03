@@ -49,12 +49,30 @@ class OTAApp extends StatelessWidget {
         OtaRoutes.profile: (_) => const ProfileScreen(),
         OtaRoutes.login: (_) => const LoginScreen(),
         OtaRoutes.signup: (_) => const SignupScreen(),
-        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
-        OtaRoutes.adminStudents: (_) => const AdminStudentsScreen(),
-        OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
-        OtaRoutes.adminAnnouncements: (_) => const AdminAnnouncementsScreen(),
-        OtaRoutes.adminSchedule: (_) => const AdminScheduleScreen(),
       },
+      onGenerateRoute: _buildAdminRoute,
     );
   }
+}
+
+Route<dynamic>? _buildAdminRoute(RouteSettings settings) {
+  final WidgetBuilder? builder = switch (settings.name) {
+    OtaRoutes.adminDashboard => (_) => const AdminDashboardScreen(),
+    OtaRoutes.adminStudents => (_) => const AdminStudentsScreen(),
+    OtaRoutes.adminEvents => (_) => const AdminEventsScreen(),
+    OtaRoutes.adminAnnouncements => (_) => const AdminAnnouncementsScreen(),
+    OtaRoutes.adminSchedule => (_) => const AdminScheduleScreen(),
+    _ => null,
+  };
+
+  if (builder == null) {
+    return null;
+  }
+
+  return PageRouteBuilder<void>(
+    settings: settings,
+    pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+    transitionDuration: Duration.zero,
+    reverseTransitionDuration: Duration.zero,
+  );
 }

@@ -4,75 +4,354 @@ import '../../routes.dart';
 import '../../theme/ota_colors.dart';
 
 enum AdminNavDestination {
-  dashboard,
-  students,
-  events,
-  announcements,
-  schedule,
+  dashboard('Dashboard', OtaRoutes.adminDashboard, Icons.dashboard_outlined),
+  students('Students', OtaRoutes.adminStudents, Icons.groups_outlined),
+  events('Events', OtaRoutes.adminEvents, Icons.event_outlined),
+  announcements(
+    'Announcements',
+    OtaRoutes.adminAnnouncements,
+    Icons.campaign_outlined,
+  ),
+  schedule('Schedule', OtaRoutes.adminSchedule, Icons.calendar_month_outlined);
+
+  const AdminNavDestination(this.label, this.route, this.icon);
+
+  final String label;
+  final String route;
+  final IconData icon;
 }
 
-class AdminBottomNavBar extends StatelessWidget {
-  const AdminBottomNavBar({required this.selectedDestination, super.key});
+class AdminNavigationBar extends StatelessWidget {
+  const AdminNavigationBar({required this.selectedDestination, super.key});
 
   final AdminNavDestination selectedDestination;
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: selectedDestination.index,
-      indicatorColor: OtaColors.softRed,
-      backgroundColor: OtaColors.white,
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.dashboard_outlined),
-          selectedIcon: Icon(Icons.dashboard_rounded),
-          label: 'Dashboard',
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: OtaColors.white,
+        border: Border(bottom: BorderSide(color: Color(0xFFE1E4EA))),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x14111A36),
+            blurRadius: 10,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Row(
+          children: [
+            for (final destination in AdminNavDestination.values)
+              _AdminNavTab(
+                destination: destination,
+                isSelected: destination == selectedDestination,
+              ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.groups_outlined),
-          selectedIcon: Icon(Icons.groups_rounded),
-          label: 'Students',
+      ),
+    );
+  }
+}
+
+class AdminPageShell extends StatelessWidget {
+  const AdminPageShell({
+    required this.selectedDestination,
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    super.key,
+  });
+
+  final AdminNavDestination selectedDestination;
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFFAFB),
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _AdminTopHeader(),
+            AdminNavigationBar(selectedDestination: selectedDestination),
+            Expanded(
+              child: _AdminContentTransition(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1040),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _AdminPageTitle(title: title, subtitle: subtitle),
+                          const SizedBox(height: 18),
+                          child,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.event_outlined),
-          selectedIcon: Icon(Icons.event_rounded),
-          label: 'Events',
+      ),
+    );
+  }
+}
+
+class _AdminContentTransition extends StatefulWidget {
+  const _AdminContentTransition({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_AdminContentTransition> createState() =>
+      _AdminContentTransitionState();
+}
+
+class _AdminContentTransitionState extends State<_AdminContentTransition> {
+  var _isVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _isVisible = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _isVisible ? 1 : 0,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSlide(
+        offset: _isVisible ? Offset.zero : const Offset(0, 0.015),
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        child: widget.child,
+      ),
+    );
+  }
+}
+
+class AdminPlaceholderPage extends StatelessWidget {
+  const AdminPlaceholderPage({
+    required this.selectedDestination,
+    required this.title,
+    required this.description,
+    super.key,
+  });
+
+  final AdminNavDestination selectedDestination;
+  final String title;
+  final String description;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdminPageShell(
+      selectedDestination: selectedDestination,
+      title: title,
+      subtitle: description,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: OtaColors.white,
+          border: Border(
+            top: BorderSide(color: Color(0xFFE1E4EA)),
+            bottom: BorderSide(color: Color(0xFFE1E4EA)),
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.campaign_outlined),
-          selectedIcon: Icon(Icons.campaign_rounded),
-          label: 'Announcements',
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(width: 3, height: 32, color: OtaColors.maroon),
+              const SizedBox(width: 12),
+              Icon(selectedDestination.icon, color: OtaColors.maroon, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.calendar_month_outlined),
-          selectedIcon: Icon(Icons.calendar_month_rounded),
-          label: 'Schedule',
+      ),
+    );
+  }
+}
+
+// Kept as an alias so existing admin screens can migrate without route churn.
+typedef AdminBottomNavBar = AdminNavigationBar;
+
+class _AdminTopHeader extends StatelessWidget {
+  const _AdminTopHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: OtaColors.white,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1040),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: OtaColors.softRed,
+                  border: Border.all(color: const Color(0xFFE7C8CE)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(
+                  Icons.admin_panel_settings_outlined,
+                  color: OtaColors.maroon,
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Admin',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: OtaColors.ink,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'OTA Cheshire Control Panel',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: OtaColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: OtaColors.softRed,
+                  border: Border.all(color: const Color(0xFFE7C8CE)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'ota-cheshire',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminPageTitle extends StatelessWidget {
+  const _AdminPageTitle({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: OtaColors.ink,
+            fontWeight: FontWeight.w800,
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: OtaColors.mutedText,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ],
-      onDestinationSelected: (index) {
-        final destination = AdminNavDestination.values[index];
+    );
+  }
+}
 
-        if (destination == selectedDestination) {
-          return;
-        }
+class _AdminNavTab extends StatelessWidget {
+  const _AdminNavTab({required this.destination, required this.isSelected});
 
-        switch (destination) {
-          case AdminNavDestination.dashboard:
-            Navigator.of(
-              context,
-            ).pushReplacementNamed(OtaRoutes.adminDashboard);
-          case AdminNavDestination.students:
-            Navigator.of(context).pushReplacementNamed(OtaRoutes.adminStudents);
-          case AdminNavDestination.events:
-            Navigator.of(context).pushReplacementNamed(OtaRoutes.adminEvents);
-          case AdminNavDestination.announcements:
-            Navigator.of(
-              context,
-            ).pushReplacementNamed(OtaRoutes.adminAnnouncements);
-          case AdminNavDestination.schedule:
-            Navigator.of(context).pushReplacementNamed(OtaRoutes.adminSchedule);
-        }
-      },
+  final AdminNavDestination destination;
+  final bool isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: isSelected
+          ? null
+          : () {
+              Navigator.of(context).pushReplacementNamed(destination.route);
+            },
+      style: TextButton.styleFrom(
+        foregroundColor: isSelected ? OtaColors.maroon : OtaColors.ink,
+        disabledForegroundColor: OtaColors.maroon,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        backgroundColor: isSelected ? OtaColors.softRed : Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(destination.icon, size: 17),
+              const SizedBox(width: 6),
+              Text(destination.label),
+            ],
+          ),
+          const SizedBox(height: 8),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: 2,
+            width: isSelected ? 28 : 0,
+            color: OtaColors.maroon,
+          ),
+        ],
+      ),
     );
   }
 }
