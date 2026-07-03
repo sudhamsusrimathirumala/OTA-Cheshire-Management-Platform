@@ -1,4 +1,4 @@
-package com.example.ota_cheshire_management_platform
+package com.otamanagement.app
 
 import io.flutter.embedding.android.FlutterActivity
 

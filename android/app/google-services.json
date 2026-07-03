@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "835576059374",
+    "project_id": "ota-management-platform",
+    "storage_bucket": "ota-management-platform.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835576059374:android:abd14d2a4564a748822aff",
+        "android_client_info": {
+          "package_name": "com.otamanagement.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDg5pE2Q6rn-RGW1RoV5EJ1NS1PufDzTr0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
