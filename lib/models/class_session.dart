@@ -11,6 +11,8 @@ class ClassSession {
     required this.description,
     this.eligibilityNote,
     this.isPreferred = false,
+    this.isPublished = true,
+    this.resumesOn,
   });
 
   final String id;
@@ -22,6 +24,8 @@ class ClassSession {
   final String description;
   final String? eligibilityNote;
   final bool isPreferred;
+  final bool isPublished;
+  final DateTime? resumesOn;
 
   int get startMinutes => startTime.hour * 60 + startTime.minute;
 

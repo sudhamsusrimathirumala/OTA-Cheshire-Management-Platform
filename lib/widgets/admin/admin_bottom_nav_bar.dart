@@ -21,10 +21,50 @@ enum AdminNavDestination {
   final IconData icon;
 }
 
-class AdminNavigationBar extends StatelessWidget {
+class AdminNavigationBar extends StatefulWidget {
   const AdminNavigationBar({required this.selectedDestination, super.key});
 
   final AdminNavDestination selectedDestination;
+
+  @override
+  State<AdminNavigationBar> createState() => _AdminNavigationBarState();
+}
+
+class _AdminNavigationBarState extends State<AdminNavigationBar> {
+  static double _savedScrollOffset = 0;
+
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController(
+      initialScrollOffset: _savedScrollOffset,
+    )..addListener(_saveScrollOffset);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+
+      final maxScrollExtent = _scrollController.position.maxScrollExtent;
+      if (_savedScrollOffset > maxScrollExtent) {
+        _scrollController.jumpTo(maxScrollExtent);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_saveScrollOffset)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _saveScrollOffset() {
+    _savedScrollOffset = _scrollController.offset;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +81,7 @@ class AdminNavigationBar extends StatelessWidget {
         ],
       ),
       child: SingleChildScrollView(
+        controller: _scrollController,
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 4),
         child: Row(
@@ -48,7 +89,7 @@ class AdminNavigationBar extends StatelessWidget {
             for (final destination in AdminNavDestination.values)
               _AdminNavTab(
                 destination: destination,
-                isSelected: destination == selectedDestination,
+                isSelected: destination == widget.selectedDestination,
               ),
           ],
         ),

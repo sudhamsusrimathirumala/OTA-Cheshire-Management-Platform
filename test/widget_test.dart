@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
@@ -13,8 +14,31 @@ import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
+import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 
 void main() {
+  test(
+    'teen adult sparring is stored in mock data but hidden from active schedule',
+    () {
+      final rawFridaySchedule =
+          sampleSummerSchedule[DateTime.friday] ?? const [];
+      final storedClass = rawFridaySchedule.firstWhere(
+        (session) => session.id == 'fri_teen_adult_sparring',
+      );
+
+      expect(storedClass.className, 'Teen/Adult Sparring');
+      expect(storedClass.startLabel, '7:20 PM');
+      expect(storedClass.isPublished, isFalse);
+      expect(storedClass.resumesOn, DateTime(2026, 9, 5));
+      expect(
+        appDataService
+            .scheduleForWeekday(DateTime.friday)
+            .where((session) => session.id == 'fri_teen_adult_sparring'),
+        isEmpty,
+      );
+    },
+  );
+
   testWidgets('app launches the admin dashboard for development', (
     tester,
   ) async {
@@ -121,6 +145,63 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
+  });
+
+  testWidgets('admin schedule page displays class management controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: AdminScheduleScreen()));
+
+    expect(find.text('Add Class'), findsOneWidget);
+    expect(find.text('Bulk Actions'), findsOneWidget);
+    expect(find.text('Sunday'), findsWidgets);
+    expect(find.text('No classes scheduled for this day.'), findsOneWidget);
+
+    await tester.tap(find.text('Monday').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Little Tiger (Age 3-5)'), findsOneWidget);
+    expect(find.text('Active'), findsWidgets);
+    expect(find.text('Edit'), findsWidgets);
+    expect(find.text('Delete'), findsWidgets);
+
+    await tester.tap(find.text('Add Class'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Class name'), findsOneWidget);
+    expect(find.text('Save Mock Class'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bulk Actions'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Bulk Schedule Action'), findsOneWidget);
+    expect(find.text('Delete all classes in date range'), findsOneWidget);
+    expect(find.text('Apply Mock Bulk Delete'), findsOneWidget);
+  });
+
+  testWidgets('admin announcements page displays filters and mock form', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: AdminAnnouncementsScreen()),
+    );
+
+    expect(find.text('Create Announcement'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Draft'), findsWidgets);
+    expect(find.text('Sent'), findsWidgets);
+    expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
+    expect(find.text('Preview'), findsWidgets);
+
+    await tester.tap(find.text('Create Announcement'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Full message/body'), findsOneWidget);
+    expect(find.text('Audience'), findsOneWidget);
+    expect(find.text('Save Draft'), findsOneWidget);
+    expect(find.text('Send Mock Announcement'), findsOneWidget);
   });
 
   testWidgets('curriculum screen updates displayed belt content', (

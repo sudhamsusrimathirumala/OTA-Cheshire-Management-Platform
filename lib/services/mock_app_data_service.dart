@@ -43,7 +43,8 @@ class MockAppDataService implements AppDataService {
         entry.key: entry.value
             .where(
               (session) =>
-                  session.locationId == selectedStudentProfile.locationId,
+                  session.locationId == selectedStudentProfile.locationId &&
+                  session.isPublished,
             )
             .toList(growable: false),
     };

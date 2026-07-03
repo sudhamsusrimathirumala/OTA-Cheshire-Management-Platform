@@ -242,6 +242,17 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
       ['White', 'White-Yellow', 'Yellow', 'Yellow-Green', 'Green'],
       'Controlled sparring drills and movement practice for early-level students.',
     ),
+    _session(
+      'fri_teen_adult_sparring',
+      'Teen/Adult Sparring',
+      19,
+      20,
+      const [],
+      'Teen and adult sparring class focused on controlled match practice and ring strategy.',
+      eligibilityNote: 'Teen/adult students',
+      isPublished: false,
+      resumesOn: DateTime(2026, 9, 5),
+    ),
   ],
 };
 
@@ -254,6 +265,8 @@ ClassSession _session(
   String description, {
   bool isPreferred = false,
   String? eligibilityNote,
+  bool isPublished = true,
+  DateTime? resumesOn,
 }) {
   final startTime = DateTime(2026, 6, 22, hour, minute);
 
@@ -267,5 +280,7 @@ ClassSession _session(
     description: description,
     eligibilityNote: eligibilityNote,
     isPreferred: isPreferred,
+    isPublished: isPublished,
+    resumesOn: resumesOn,
   );
 }

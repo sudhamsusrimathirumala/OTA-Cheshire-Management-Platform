@@ -924,7 +924,7 @@ double _currentTimeTop(double hourHeight) {
 }
 
 String _formatFullDate(DateTime date) {
-  return '${_weekdayNames[date.weekday - 1]}, ${_monthNames[date.month - 1]} ${date.day}';
+  return '${_weekdayLabel(date.weekday)}, ${_monthNames[date.month - 1]} ${date.day}';
 }
 
 String _formatHour(int hour) {
@@ -941,15 +941,18 @@ String _formatHour(int hour) {
   return '${normalizedHour - 12} PM';
 }
 
-const _weekdayNames = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
+String _weekdayLabel(int weekday) {
+  return switch (weekday) {
+    DateTime.sunday => 'Sunday',
+    DateTime.monday => 'Monday',
+    DateTime.tuesday => 'Tuesday',
+    DateTime.wednesday => 'Wednesday',
+    DateTime.thursday => 'Thursday',
+    DateTime.friday => 'Friday',
+    DateTime.saturday => 'Saturday',
+    _ => 'Sunday',
+  };
+}
 
 const _monthNames = [
   'January',
