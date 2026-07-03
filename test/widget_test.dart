@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
+import 'package:ota_cheshire_management_platform/routes.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_events_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
@@ -9,6 +15,16 @@ import 'package:ota_cheshire_management_platform/screens/student_dashboard_scree
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 
 void main() {
+  testWidgets('app launches the admin dashboard for development', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const OTAApp());
+
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    expect(find.text('Admin Dashboard'), findsOneWidget);
+    expect(find.text('Manage Schedule'), findsOneWidget);
+  });
+
   testWidgets('welcome screen displays its primary actions', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: WelcomeScreen()));
 
@@ -53,7 +69,7 @@ void main() {
   testWidgets('bottom navigation opens every primary destination', (
     tester,
   ) async {
-    await tester.pumpWidget(const OTAApp());
+    await tester.pumpWidget(const _StudentNavigationTestApp());
 
     await tester.tap(find.text('Schedule'));
     await tester.pumpAndSettle();
@@ -80,6 +96,30 @@ void main() {
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
     expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
+  });
+
+  testWidgets('admin navigation opens every admin destination', (tester) async {
+    await tester.pumpWidget(const OTAApp());
+
+    await tester.tap(find.text('Students'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminStudentsScreen), findsOneWidget);
+
+    await tester.tap(find.text('Events'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminEventsScreen), findsOneWidget);
+
+    await tester.tap(find.text('Announcements'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminAnnouncementsScreen), findsOneWidget);
+
+    await tester.tap(find.text('Schedule'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminScheduleScreen), findsOneWidget);
+
+    await tester.tap(find.text('Dashboard'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
   });
 
   testWidgets('curriculum screen updates displayed belt content', (
@@ -155,4 +195,22 @@ void main() {
     expect(find.text('Settings & Actions'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
   });
+}
+
+class _StudentNavigationTestApp extends StatelessWidget {
+  const _StudentNavigationTestApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      initialRoute: OtaRoutes.dashboard,
+      routes: {
+        OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
+        OtaRoutes.schedule: (_) => const ScheduleScreen(),
+        OtaRoutes.curriculum: (_) => const CurriculumScreen(),
+        OtaRoutes.notifications: (_) => const NotificationsScreen(),
+        OtaRoutes.profile: (_) => const ProfileScreen(),
+      },
+    );
+  }
 }

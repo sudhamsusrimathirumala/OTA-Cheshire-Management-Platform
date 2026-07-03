@@ -7,4 +7,9 @@ abstract final class OtaRoutes {
   static const profile = '/profile';
   static const login = '/login';
   static const signup = '/signup';
+  static const adminDashboard = '/admin/dashboard';
+  static const adminStudents = '/admin/students';
+  static const adminEvents = '/admin/events';
+  static const adminAnnouncements = '/admin/announcements';
+  static const adminSchedule = '/admin/schedule';
 }

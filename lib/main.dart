@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
 import 'routes.dart';
+import 'screens/admin/admin_announcements_screen.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/admin/admin_events_screen.dart';
+import 'screens/admin/admin_schedule_screen.dart';
+import 'screens/admin/admin_students_screen.dart';
 import 'screens/curriculum_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
@@ -12,6 +17,10 @@ import 'screens/welcome_screen.dart';
 import 'theme/ota_colors.dart';
 
 void main() => runApp(const OTAApp());
+
+// TODO: Replace this mock launch switch with Firebase Auth and UserAccount.role
+// based routing when real authentication is added.
+const bool _launchAdminForDevelopment = true;
 
 class OTAApp extends StatelessWidget {
   const OTAApp({super.key});
@@ -28,7 +37,9 @@ class OTAApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      initialRoute: OtaRoutes.dashboard,
+      initialRoute: _launchAdminForDevelopment
+          ? OtaRoutes.adminDashboard
+          : OtaRoutes.dashboard,
       routes: {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
@@ -38,6 +49,11 @@ class OTAApp extends StatelessWidget {
         OtaRoutes.profile: (_) => const ProfileScreen(),
         OtaRoutes.login: (_) => const LoginScreen(),
         OtaRoutes.signup: (_) => const SignupScreen(),
+        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
+        OtaRoutes.adminStudents: (_) => const AdminStudentsScreen(),
+        OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
+        OtaRoutes.adminAnnouncements: (_) => const AdminAnnouncementsScreen(),
+        OtaRoutes.adminSchedule: (_) => const AdminScheduleScreen(),
       },
     );
   }
