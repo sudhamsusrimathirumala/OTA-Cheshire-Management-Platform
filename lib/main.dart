@@ -1,5 +1,7 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import 'firebase_options.dart';
 import 'routes.dart';
 import 'screens/admin/admin_announcements_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -16,7 +18,11 @@ import 'screens/student_dashboard_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'theme/ota_colors.dart';
 
-void main() => runApp(const OTAApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  runApp(const OTAApp());
+}
 
 // TODO: Replace this mock launch switch with Firebase Auth and UserAccount.role
 // based routing when real authentication is added.
