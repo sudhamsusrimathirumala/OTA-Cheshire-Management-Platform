@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** July 6, 2026
+**Last Updated:** July 7, 2026
 
 ---
 
@@ -38,6 +38,7 @@
 - [x] Class scheduling model
 - [x] Shared `classTypeId` on class sessions for future bulk schedule actions
 - [x] Notification model
+- [x] Academy event model
 
 ---
 
@@ -100,27 +101,37 @@ Current Status:
 - [x] Firebase is configured and initialized in the Flutter app
 - [x] Firestore seed collection constants and seed service exist
 - [x] Development-only Firestore seed entrypoints exist
-- [x] `FirebaseAppDataService` exists behind `const bool useFirebase = false`
+- [x] `FirebaseAppDataService` exists behind the provider switch
+- [x] `const bool useFirebase = true` is currently enabled for development/testing
 - [x] Schedule data can be read from Firestore `classSessions`
 - [x] Firebase schedule reads use `snapshots()` and notify schedule screens when data changes
-- [x] Non-schedule app data still delegates to `MockAppDataService`
+- [x] Announcements read live from Firestore `announcements`
+- [x] Student dashboard OTA Updates rebuild from live announcements
+- [x] Student dashboard Next Class rebuilds from live schedule data
+- [x] Admin Events reads live from Firestore `events`
+- [x] Admin Students reads all location student profiles from Firestore `studentProfiles`
+- [x] Mock fallback still exists through `MockAppDataService`
 
 Future Improvements:
-- [ ] Seed and validate production-like Firestore data before enabling Firebase mode
-- [ ] Confirm Firestore security rules for schedule reads
-- [ ] Flip `useFirebase` only after schedule seed data and rules are verified
+- [ ] Seed and validate production-like Firestore data for all read-enabled collections
+- [ ] Confirm Firestore security rules for schedule, announcements, events, and student profile reads
 - [ ] Replace mock users with Firebase Auth and Firestore-backed user records
-- [ ] Replace mock student profiles with Firestore-backed profiles
-- [ ] Replace mock announcements with Firestore-backed announcements
-- [ ] Replace mock events and resources with Firestore-backed collections
+- [ ] Resolve guardian user IDs to display names on Admin Students
+- [ ] Replace mock linked profile ownership with Firebase-backed user/profile relationships
+- [ ] Replace mock curriculum with Firestore-backed curriculum/resources
+- [ ] Build student/parent-facing Events page from Firestore events
+- [ ] Build student/parent-facing Resources page from Firestore resources
 - [ ] Add Firebase-backed admin schedule writes
 - [ ] Add Firebase-backed bulk schedule edit/delete actions using `classTypeId`
+- [ ] Add Firebase-backed admin announcement writes
+- [ ] Add Firebase-backed admin event writes
+- [ ] Add Firebase-backed admin student profile writes
 
 Priority:
 Medium
 
 Reason:
-The read path is now in place for schedule data, but the app should keep using mock data by default until seed data, Firestore rules, and admin write flows are ready.
+The major read paths are now in place, but authentication, security rules, profile ownership, and admin write flows still need production hardening before release.
 
 ---
 
@@ -174,10 +185,13 @@ Future Improvements:
 - [x] Keep UI personalization driven by the selected student profile
 - [x] Add Firebase schedule service behind a provider switch
 - [x] Make student and admin schedule pages rebuild from service notifications
+- [x] Add Firebase announcement stream and rebuild student notifications/dashboard/admin announcements
+- [x] Add Firebase admin events stream behind `AppDataService`
+- [x] Add Firebase admin student profile stream behind `AppDataService`
 - [ ] Decide the production app launch flow before authentication is added
 - [ ] Define parent/student profile switching behavior before Firebase integration
 - [ ] Add a no-linked-student-profile UI state for newly approved accounts
-- [ ] Replace remaining MockAppDataService methods after each Firestore read path is ready
+- [ ] Replace remaining MockAppDataService methods after each Firestore read/write path is ready
 - [ ] Centralize repeated card and surface styling tokens if UI duplication continues to grow
 - [ ] Keep notification attachments, links, and deep-link targets as UI placeholders until backend models are designed
 
@@ -335,6 +349,15 @@ Purely visual enhancement that does not affect functionality.
 - [x] Belt and promotion rows
 - [x] Family and account section
 - [x] Settings-style action rows
+
+## Admin Control Panel
+- [x] Admin dashboard control-panel layout
+- [x] Compact top admin navigation
+- [x] Admin schedule management page
+- [x] Admin announcements page
+- [x] Admin students directory page
+- [x] Admin events management page
+- [x] Live Firestore reads for admin schedule, announcements, events, and student directory
 
 ---
 

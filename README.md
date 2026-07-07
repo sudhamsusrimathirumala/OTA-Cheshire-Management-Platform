@@ -86,23 +86,28 @@ This project aims to create a single platform where students, parents, instructo
 - Development-only Firestore seed entrypoints
 - Firebase schedule data service behind a feature switch
 - Stream-based Firestore schedule cache for `classSessions`
+- Stream-based Firestore announcement cache for `announcements`
+- Stream-based Firestore admin event cache for `events`
+- Stream-based Firestore admin student directory cache for `studentProfiles`
 - Mock student, schedule, curriculum, and notification data
 - Cheshire OTA belt structure cleanup
 - Admin control panel foundation
+- Admin dashboard, schedule, announcements, students, and events pages
 - Project Architecture Planning
 
 ### In Progress
 
 - Application Documentation
 - System Design
-- Firebase data migration, starting with read-only schedule data
+- Firebase read-path migration through `FirebaseAppDataService`
 
 ### Planned
 
 - Authentication System
 - Firestore security rules and production data validation
 - Admin schedule writes, including bulk edit/delete actions
-- Firebase-backed users, student profiles, announcements, events, and resources
+- Firebase-backed users, guardian name resolution, profile switching, and admin write flows
+- Student/parent-facing events and resources
 - Full Curriculum System
 - Full Notification System
 - Family Dashboard
@@ -122,11 +127,13 @@ assets/
 lib/
 |-- data/
 |   |-- sample_curriculum.dart
+|   |-- sample_events.dart
 |   |-- sample_constants.dart
 |   |-- sample_notifications.dart
 |   |-- sample_schedule.dart
 |   `-- sample_student.dart
 |-- models/
+|   |-- academy_event.dart
 |   |-- class_session.dart
 |   |-- curriculum_requirement.dart
 |   |-- notification_item.dart
@@ -134,6 +141,12 @@ lib/
 |   |-- student_profile.dart
 |   `-- user_account.dart
 |-- screens/
+|   |-- admin/
+|   |   |-- admin_announcements_screen.dart
+|   |   |-- admin_dashboard_screen.dart
+|   |   |-- admin_events_screen.dart
+|   |   |-- admin_schedule_screen.dart
+|   |   `-- admin_students_screen.dart
 |   |-- curriculum_screen.dart
 |   |-- login_screen.dart
 |   |-- notification_detail_screen.dart
@@ -143,6 +156,7 @@ lib/
 |   |-- signup_screen.dart
 |   |-- student_dashboard_screen.dart
 |   `-- welcome_screen.dart
+|-- firebase_options.dart
 |-- services/
 |   |-- app_data_service.dart
 |   |-- app_data_service_provider.dart
@@ -157,6 +171,8 @@ lib/
 |-- utils/
 |   `-- notification_formatters.dart
 |-- widgets/
+|   |-- admin/
+|   |   `-- admin_bottom_nav_bar.dart
 |   |-- notifications/
 |   |   `-- notification_card.dart
 |   |-- profile/
@@ -185,17 +201,31 @@ tool/
 
 ## Current Data Layer State
 
-The production app still defaults to `MockAppDataService` through
+The app reads through `AppDataService`, which is selected in
 `lib/services/app_data_service_provider.dart`.
 
-`FirebaseAppDataService` exists behind `const bool useFirebase = false`. When
-enabled later, it listens to the Firestore `classSessions` collection with
-`snapshots()`, keeps an internal schedule cache, and notifies the student and
-admin schedule screens when Firestore schedule data changes.
+The current development switch is `const bool useFirebase = true`, so
+`FirebaseAppDataService` is active when Firebase is available. It keeps live
+Firestore stream caches for:
 
-All non-schedule data still delegates to `MockAppDataService`. Authentication,
-Firestore writes, admin schedule persistence, announcements, events, resources,
-users, and student profiles remain future work.
+- `classSessions` for student and admin schedule views
+- `announcements` for student notifications, dashboard OTA updates, and admin announcements
+- `events` for the admin events page
+- `studentProfiles` for the admin student directory
+
+The Firebase service uses `snapshots()`, handles empty or malformed documents
+without crashing, and notifies listening screens when Firestore data changes.
+If Firebase is unavailable during local tests, the service falls back to
+`MockAppDataService` data.
+
+The following areas still intentionally use mock/delegated behavior:
+
+- Firebase Auth and real user identity
+- Linked student profile ownership and profile switching
+- Guardian/user account name resolution
+- Curriculum and resources
+- Student/parent-facing events and resources pages
+- Admin writes for schedule, announcements, events, and student profiles
 
 ---
 

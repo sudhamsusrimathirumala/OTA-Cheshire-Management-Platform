@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/notification_item.dart';
 import '../models/student_profile.dart';
+import '../routes.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -39,13 +40,6 @@ class StudentDashboardScreen extends StatelessWidget {
                             const SizedBox(height: 16),
                             _BeltProgressCard(student: student),
                             const SizedBox(height: 16),
-                            _NotificationsCard(
-                              notifications: notifications,
-                              isLoading: appDataService.isAnnouncementsLoading,
-                              errorMessage:
-                                  appDataService.announcementsErrorMessage,
-                            ),
-                            const SizedBox(height: 24),
                             Text(
                               'Quick Actions',
                               style: Theme.of(context).textTheme.titleLarge
@@ -56,6 +50,13 @@ class StudentDashboardScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             const _QuickActionsGrid(),
+                            const SizedBox(height: 24),
+                            _NotificationsCard(
+                              notifications: notifications,
+                              isLoading: appDataService.isAnnouncementsLoading,
+                              errorMessage:
+                                  appDataService.announcementsErrorMessage,
+                            ),
                           ],
                         ),
                       ),
@@ -347,69 +348,82 @@ class _NotificationsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _DashboardCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const _IconBadge(
-                icon: Icons.notifications_active_rounded,
-                backgroundColor: OtaColors.navy,
-                iconColor: OtaColors.white,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'OTA Updates',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: OtaColors.ink,
-                    fontWeight: FontWeight.w800,
-                  ),
+      padding: EdgeInsets.zero,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(28),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(28),
+          onTap: () => Navigator.of(context).pushNamed(OtaRoutes.notifications),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const _IconBadge(
+                      icon: Icons.notifications_active_rounded,
+                      backgroundColor: OtaColors.navy,
+                      iconColor: OtaColors.white,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'OTA Updates',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: OtaColors.ink,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: OtaColors.actionRed,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${notifications.where((item) => !item.isRead).length} new',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(
+                              color: OtaColors.white,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: OtaColors.actionRed,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  '${notifications.where((item) => !item.isRead).length} new',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: OtaColors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
+                const SizedBox(height: 18),
+                if (isLoading)
+                  const _NotificationStatusRow(
+                    icon: Icons.sync_rounded,
+                    message: 'Loading OTA updates...',
+                    showProgress: true,
+                  )
+                else if (errorMessage != null)
+                  _NotificationStatusRow(
+                    icon: Icons.cloud_off_rounded,
+                    message: errorMessage!,
+                  )
+                else if (notifications.isEmpty)
+                  const _NotificationStatusRow(
+                    icon: Icons.notifications_none_rounded,
+                    message: 'No updates right now.',
+                  )
+                else
+                  for (final notification in notifications) ...[
+                    _NotificationRow(title: notification.title),
+                    if (notification != notifications.last)
+                      const SizedBox(height: 12),
+                  ],
+              ],
+            ),
           ),
-          const SizedBox(height: 18),
-          if (isLoading)
-            const _NotificationStatusRow(
-              icon: Icons.sync_rounded,
-              message: 'Loading OTA updates...',
-              showProgress: true,
-            )
-          else if (errorMessage != null)
-            _NotificationStatusRow(
-              icon: Icons.cloud_off_rounded,
-              message: errorMessage!,
-            )
-          else if (notifications.isEmpty)
-            const _NotificationStatusRow(
-              icon: Icons.notifications_none_rounded,
-              message: 'No updates right now.',
-            )
-          else
-            for (final notification in notifications) ...[
-              _NotificationRow(title: notification.title),
-              if (notification != notifications.last)
-                const SizedBox(height: 12),
-            ],
-        ],
+        ),
       ),
     );
   }
@@ -419,8 +433,16 @@ class _QuickActionsGrid extends StatelessWidget {
   const _QuickActionsGrid();
 
   static const _actions = [
-    _QuickActionData(Icons.calendar_month_rounded, 'View Schedule'),
-    _QuickActionData(Icons.menu_book_rounded, 'Curriculum'),
+    _QuickActionData(
+      Icons.calendar_month_rounded,
+      'View Schedule',
+      OtaRoutes.schedule,
+    ),
+    _QuickActionData(
+      Icons.menu_book_rounded,
+      'Curriculum',
+      OtaRoutes.curriculum,
+    ),
     _QuickActionData(Icons.emoji_events_rounded, 'Events'),
     _QuickActionData(Icons.chat_bubble_rounded, 'Message OTA'),
   ];
@@ -465,9 +487,9 @@ class _QuickActionTile extends StatelessWidget {
       elevation: 2,
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: () {
-          // TODO: Navigate to the selected student dashboard action.
-        },
+        onTap: action.route == null
+            ? null
+            : () => Navigator.of(context).pushNamed(action.route!),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -655,8 +677,9 @@ class _NotificationRow extends StatelessWidget {
 }
 
 class _QuickActionData {
-  const _QuickActionData(this.icon, this.label);
+  const _QuickActionData(this.icon, this.label, [this.route]);
 
   final IconData icon;
   final String label;
+  final String? route;
 }
