@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/academy_event.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
@@ -10,6 +11,8 @@ abstract class AppDataService implements Listenable {
   UserAccount get currentUserAccount;
 
   List<StudentProfile> get linkedStudentProfiles;
+
+  List<StudentProfile> get adminStudentProfiles;
 
   StudentProfile get selectedStudentProfile;
 
@@ -22,6 +25,14 @@ abstract class AppDataService implements Listenable {
   bool get isAnnouncementsLoading;
 
   String? get announcementsErrorMessage;
+
+  bool get isEventsLoading;
+
+  String? get eventsErrorMessage;
+
+  bool get isAdminStudentsLoading;
+
+  String? get adminStudentsErrorMessage;
 
   List<ClassSession> scheduleForWeekday(int weekday);
 
@@ -36,4 +47,6 @@ abstract class AppDataService implements Listenable {
   String beltDisplayLabel(String belt);
 
   List<NotificationItem> get notifications;
+
+  List<AcademyEvent> get events;
 }

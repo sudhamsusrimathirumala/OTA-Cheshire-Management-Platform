@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../models/academy_event.dart';
+import '../../services/app_data_service_provider.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -29,15 +31,15 @@ class AdminEventsScreen extends StatefulWidget {
 class _AdminEventsScreenState extends State<AdminEventsScreen> {
   var _selectedFilter = _EventFilter.all;
 
-  List<_AdminEvent> get _filteredEvents {
+  List<AcademyEvent> _filteredEvents(List<AcademyEvent> events) {
     final now = DateTime.now();
 
-    return _mockEvents.where((event) {
+    return events.where((event) {
       return switch (_selectedFilter) {
         _EventFilter.all => true,
         _EventFilter.published => event.isPublished,
         _EventFilter.draft => !event.isPublished,
-        _EventFilter.registrationOpen => event.isRegistrationOpen(now),
+        _EventFilter.registrationOpen => event.isRegistrationOpen,
         _EventFilter.upcoming => event.startDateTime.isAfter(now),
         _EventFilter.past => event.endDateTime.isBefore(now),
       };
@@ -46,36 +48,43 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final events = _filteredEvents;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final events = _filteredEvents(appDataService.events);
 
-    return AdminPageShell(
-      selectedDestination: AdminNavDestination.events,
-      title: 'Events',
-      subtitle: 'Create and update academy events and registration links.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _EventsToolbar(onCreateEvent: () => _openEventSheet()),
-          const SizedBox(height: 14),
-          _FilterRow(
-            selectedFilter: _selectedFilter,
-            onSelected: (filter) {
-              setState(() => _selectedFilter = filter);
-            },
+        return AdminPageShell(
+          selectedDestination: AdminNavDestination.events,
+          title: 'Events',
+          subtitle: 'Create and update academy events and registration links.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _EventsToolbar(onCreateEvent: () => _openEventSheet()),
+              const SizedBox(height: 14),
+              _FilterRow(
+                selectedFilter: _selectedFilter,
+                onSelected: (filter) {
+                  setState(() => _selectedFilter = filter);
+                },
+              ),
+              const SizedBox(height: 14),
+              _EventsPanel(
+                events: events,
+                isLoading: appDataService.isEventsLoading,
+                errorMessage: appDataService.eventsErrorMessage,
+                onEdit: _openEventSheet,
+                onPreview: _previewEvent,
+                onArchive: _confirmArchive,
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _EventsPanel(
-            events: events,
-            onEdit: _openEventSheet,
-            onPreview: _previewEvent,
-            onArchive: _confirmArchive,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Future<void> _openEventSheet([_AdminEvent? event]) async {
+  Future<void> _openEventSheet([AcademyEvent? event]) async {
     // TODO: Persist event create/update through Firestore writes.
     // TODO: Registration URLs should later feed both family Events and
     // Resources pages from the same Firestore event/resource relationship.
@@ -104,7 +113,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _previewEvent(_AdminEvent event) async {
+  Future<void> _previewEvent(AcademyEvent event) async {
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -123,7 +132,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
               ),
               const SizedBox(height: 12),
               _PreviewLine(label: 'When', value: event.dateRangeLabel),
-              _PreviewLine(label: 'Type', value: event.eventType.label),
+              _PreviewLine(label: 'Type', value: event.eventTypeLabel),
               _PreviewLine(label: 'Location', value: event.locationId),
               _PreviewLine(
                 label: 'Registration',
@@ -144,7 +153,8 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     );
   }
 
-  Future<void> _confirmArchive(_AdminEvent event) async {
+  Future<void> _confirmArchive(AcademyEvent event) async {
+    // TODO: Persist event archive/delete through Firestore writes.
     final shouldArchive = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -250,15 +260,19 @@ class _FilterRow extends StatelessWidget {
 class _EventsPanel extends StatelessWidget {
   const _EventsPanel({
     required this.events,
+    required this.isLoading,
+    required this.errorMessage,
     required this.onEdit,
     required this.onPreview,
     required this.onArchive,
   });
 
-  final List<_AdminEvent> events;
-  final ValueChanged<_AdminEvent> onEdit;
-  final ValueChanged<_AdminEvent> onPreview;
-  final ValueChanged<_AdminEvent> onArchive;
+  final List<AcademyEvent> events;
+  final bool isLoading;
+  final String? errorMessage;
+  final ValueChanged<AcademyEvent> onEdit;
+  final ValueChanged<AcademyEvent> onPreview;
+  final ValueChanged<AcademyEvent> onArchive;
 
   @override
   Widget build(BuildContext context) {
@@ -272,7 +286,11 @@ class _EventsPanel extends StatelessWidget {
             title: 'Events',
             detail: '${events.length} shown',
           ),
-          if (events.isEmpty)
+          if (isLoading)
+            const _LoadingState(message: 'Loading events...')
+          else if (errorMessage != null)
+            _EmptyState(message: errorMessage!)
+          else if (events.isEmpty)
             const _EmptyState(message: 'No events found.')
           else
             for (final event in events) ...[
@@ -299,7 +317,7 @@ class _EventRow extends StatelessWidget {
     required this.onArchive,
   });
 
-  final _AdminEvent event;
+  final AcademyEvent event;
   final VoidCallback onEdit;
   final VoidCallback onPreview;
   final VoidCallback onArchive;
@@ -315,7 +333,7 @@ class _EventRow extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _Badge(label: event.eventType.label, tone: _BadgeTone.navy),
+              _Badge(label: event.eventTypeLabel, tone: _BadgeTone.navy),
               _Badge(
                 label: event.isPublished ? 'Published' : 'Draft',
                 tone: event.isPublished
@@ -404,7 +422,7 @@ class _EventRow extends StatelessWidget {
 class _EventFormSheet extends StatefulWidget {
   const _EventFormSheet({this.event});
 
-  final _AdminEvent? event;
+  final AcademyEvent? event;
 
   @override
   State<_EventFormSheet> createState() => _EventFormSheetState();
@@ -448,8 +466,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           ? ''
           : _formatDateTime(event!.registrationDeadline!),
     );
-    _notesController = TextEditingController(text: event?.notes ?? '');
-    _eventType = event?.eventType ?? _EventType.specialEvent;
+    _notesController = TextEditingController();
+    _eventType = _eventTypeForId(event?.eventType);
     _isPublished = event?.isPublished ?? false;
     _showInResources = event?.showInResources ?? false;
   }
@@ -588,56 +606,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
         ),
       ),
     );
-  }
-}
-
-class _AdminEvent {
-  const _AdminEvent({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.locationId,
-    required this.eventType,
-    required this.startDateTime,
-    required this.endDateTime,
-    required this.isPublished,
-    required this.showInResources,
-    this.registrationUrl,
-    this.registrationDeadline,
-    this.notes,
-  });
-
-  final String id;
-  final String title;
-  final String description;
-  final String locationId;
-  final _EventType eventType;
-  final DateTime startDateTime;
-  final DateTime endDateTime;
-  final String? registrationUrl;
-  final DateTime? registrationDeadline;
-  final bool isPublished;
-  final bool showInResources;
-  final String? notes;
-
-  String get registrationLabel {
-    if (registrationUrl == null) {
-      return 'No registration';
-    }
-
-    if (registrationDeadline != null &&
-        registrationDeadline!.isBefore(DateTime.now())) {
-      return 'Registration closed';
-    }
-
-    return 'Registration open';
-  }
-
-  String get dateRangeLabel => _formatDateTime(startDateTime);
-
-  bool isRegistrationOpen(DateTime now) {
-    return registrationUrl != null &&
-        (registrationDeadline == null || registrationDeadline!.isAfter(now));
   }
 }
 
@@ -826,6 +794,36 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _LoadingState extends StatelessWidget {
+  const _LoadingState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -993,6 +991,34 @@ extension on _EventFilter {
   }
 }
 
+extension on _EventType {
+  String get id {
+    return switch (this) {
+      _EventType.parentNightOut => 'parentNightOut',
+      _EventType.tournament => 'tournament',
+      _EventType.summerCamp => 'summerCamp',
+      _EventType.beltTesting => 'beltTesting',
+      _EventType.seminar => 'seminar',
+      _EventType.closure => 'closure',
+      _EventType.specialEvent => 'specialEvent',
+    };
+  }
+}
+
+_EventType _eventTypeForId(String? eventType) {
+  final normalizedEventType = switch (eventType) {
+    'parent-night-out' => 'parentNightOut',
+    'summer-camp' => 'summerCamp',
+    'belt-testing' => 'beltTesting',
+    _ => eventType,
+  };
+
+  return _EventType.values.firstWhere(
+    (type) => type.id == normalizedEventType,
+    orElse: () => _EventType.specialEvent,
+  );
+}
+
 _BadgeColors _badgeColors(_BadgeTone tone) {
   return switch (tone) {
     _BadgeTone.navy => const _BadgeColors(
@@ -1061,47 +1087,6 @@ String _formatDateTime(DateTime dateTime) {
   final period = dateTime.hour >= 12 ? 'PM' : 'AM';
   return '$month ${dateTime.day}, $hour:$minute $period';
 }
-
-final _mockEvents = [
-  _AdminEvent(
-    id: 'parent_night_out',
-    title: 'Parent Night Out',
-    description: 'Evening event with games, training activities, and pizza.',
-    locationId: 'ota-cheshire',
-    eventType: _EventType.parentNightOut,
-    startDateTime: DateTime(2026, 7, 12, 18),
-    endDateTime: DateTime(2026, 7, 12, 21),
-    registrationUrl: 'https://forms.gle/ota-parent-night-out',
-    registrationDeadline: DateTime(2026, 7, 10, 20),
-    isPublished: true,
-    showInResources: true,
-    notes: 'Registration link should later appear in Resources too.',
-  ),
-  _AdminEvent(
-    id: 'summer_belt_testing',
-    title: 'Summer Belt Testing',
-    description: 'Testing event for eligible color belt students.',
-    locationId: 'ota-cheshire',
-    eventType: _EventType.beltTesting,
-    startDateTime: DateTime(2026, 8, 3, 10),
-    endDateTime: DateTime(2026, 8, 3, 13),
-    isPublished: false,
-    showInResources: false,
-  ),
-  _AdminEvent(
-    id: 'fall_tournament',
-    title: 'Fall Regional Tournament',
-    description: 'Regional tournament registration and preparation details.',
-    locationId: 'ota-cheshire',
-    eventType: _EventType.tournament,
-    startDateTime: DateTime(2026, 10, 18, 8),
-    endDateTime: DateTime(2026, 10, 18, 17),
-    registrationUrl: 'https://forms.gle/ota-fall-tournament',
-    registrationDeadline: DateTime(2026, 10, 5, 23, 59),
-    isPublished: true,
-    showInResources: true,
-  ),
-];
 
 const _monthNames = [
   'Jan',

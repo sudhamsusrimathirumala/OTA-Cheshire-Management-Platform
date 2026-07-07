@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../data/sample_events.dart';
 import '../../data/sample_notifications.dart';
 import '../../data/sample_schedule.dart';
 import '../../data/sample_student.dart';
+import '../../models/academy_event.dart';
 import '../../models/class_session.dart';
 import '../../models/notification_item.dart';
 import '../../models/student.dart';
@@ -97,36 +99,11 @@ class FirestoreSeedService {
 
   Future<void> _seedEvents() async {
     final batch = _firestore.batch();
-    final now = FieldValue.serverTimestamp();
 
-    // TODO: Replace placeholder event seed data with real event models.
-    final events = {
-      'parent_night_out': {
-        'locationId': sampleUserAccount.locationId,
-        'title': 'Parent Night Out',
-        'description': 'Placeholder academy event for future registration.',
-        'startsAt': Timestamp.fromDate(DateTime(2026, 7, 12, 18)),
-        'registrationUrl': null,
-        'isPublished': false,
-        'createdAt': now,
-        'updatedAt': now,
-      },
-      'summer_belt_testing': {
-        'locationId': sampleUserAccount.locationId,
-        'title': 'Summer Belt Testing',
-        'description': 'Placeholder testing event for future scheduling.',
-        'startsAt': Timestamp.fromDate(DateTime(2026, 8, 3, 10)),
-        'registrationUrl': null,
-        'isPublished': false,
-        'createdAt': now,
-        'updatedAt': now,
-      },
-    };
-
-    for (final event in events.entries) {
+    for (final event in sampleAcademyEvents) {
       batch.set(
-        _firestore.collection(FirestoreCollections.events).doc(event.key),
-        event.value,
+        _firestore.collection(FirestoreCollections.events).doc(event.id),
+        _eventData(event),
       );
     }
 
@@ -198,16 +175,16 @@ Map<String, Object?> _studentProfileData(Student profile) {
     'age': profile.age,
     'beltRank': profile.belt,
     'locationId': profile.locationId,
-    'guardianUserIds': [sampleUserAccount.id],
-    'selfUserId': null,
+    'guardianUserIds': profile.guardianUserIds,
+    'selfUserId': profile.selfUserId,
     'stickerProgress': {
       'current': profile.stickerCount,
       'required': profile.stickersRequired,
       'nextRank': profile.nextRank,
     },
-    'promotionHistory': <Map<String, Object?>>[],
-    'testingNotes': <String>[],
-    'isActive': true,
+    'promotionHistory': profile.promotionHistory,
+    'testingNotes': profile.testingNotes,
+    'isActive': profile.isActive,
     'createdAt': now,
     'updatedAt': now,
   };
@@ -262,5 +239,25 @@ Map<String, Object?> _announcementData(NotificationItem notification) {
     'createdAt': publishedAt,
     'updatedAt': publishedAt,
     'publishedAt': publishedAt,
+  };
+}
+
+Map<String, Object?> _eventData(AcademyEvent event) {
+  // TODO: Replace mock seed data with production event records.
+  return {
+    'title': event.title,
+    'description': event.description,
+    'locationId': event.locationId,
+    'eventType': event.eventType,
+    'startDateTime': Timestamp.fromDate(event.startDateTime),
+    'endDateTime': Timestamp.fromDate(event.endDateTime),
+    'registrationUrl': event.registrationUrl,
+    'registrationDeadline': event.registrationDeadline == null
+        ? null
+        : Timestamp.fromDate(event.registrationDeadline!),
+    'isPublished': event.isPublished,
+    'showInResources': event.showInResources,
+    'createdAt': Timestamp.fromDate(event.createdAt),
+    'updatedAt': Timestamp.fromDate(event.updatedAt),
   };
 }

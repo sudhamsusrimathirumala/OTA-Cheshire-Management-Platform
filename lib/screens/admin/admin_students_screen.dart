@@ -20,32 +20,25 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   var _activeOnly = true;
   var _ageFilter = _AgeFilter.all;
 
-  List<_AdminStudentRecord> get _students {
-    final serviceStudents = [
-      for (final profile in appDataService.linkedStudentProfiles)
-        _AdminStudentRecord.fromProfile(
-          profile,
-          guardianId: appDataService.currentUserAccount.id,
-          guardianName: appDataService.currentUserAccount.displayName,
-        ),
-    ];
-
-    final byId = {
-      for (final student in [...serviceStudents, ..._mockAdminStudents])
-        student.id: student,
-    };
-
-    return byId.values.toList()..sort((a, b) => a.name.compareTo(b.name));
+  List<_AdminStudentRecord> _studentsFromProfiles(
+    List<StudentProfile> profiles,
+  ) {
+    return [
+      for (final profile in profiles) _AdminStudentRecord.fromProfile(profile),
+    ]..sort((a, b) => a.name.compareTo(b.name));
   }
 
-  List<_AdminStudentRecord> get _filteredStudents {
+  List<_AdminStudentRecord> _filteredStudents(
+    List<_AdminStudentRecord> students,
+    String beltFilter,
+  ) {
     final query = _searchController.text.trim().toLowerCase();
 
-    return _students.where((student) {
+    return students.where((student) {
       final matchesSearch =
           query.isEmpty || student.name.toLowerCase().contains(query);
       final matchesBelt =
-          _beltFilter == 'All belts' || student.belt == _beltFilter;
+          beltFilter == 'All belts' || student.belt == beltFilter;
       final matchesActive = !_activeOnly || student.isActive;
       final matchesAge = switch (_ageFilter) {
         _AgeFilter.all => true,
@@ -57,8 +50,8 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     }).toList();
   }
 
-  List<String> get _beltOptions {
-    final belts = {for (final student in _students) student.belt}.toList()
+  List<String> _beltOptions(List<_AdminStudentRecord> students) {
+    final belts = {for (final student in students) student.belt}.toList()
       ..sort();
     return ['All belts', ...belts];
   }
@@ -71,11 +64,18 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final students = _filteredStudents;
-
     return AnimatedBuilder(
       animation: appDataService,
       builder: (context, child) {
+        final allStudents = _studentsFromProfiles(
+          appDataService.adminStudentProfiles,
+        );
+        final beltOptions = _beltOptions(allStudents);
+        final effectiveBeltFilter = beltOptions.contains(_beltFilter)
+            ? _beltFilter
+            : 'All belts';
+        final students = _filteredStudents(allStudents, effectiveBeltFilter);
+
         return AdminPageShell(
           selectedDestination: AdminNavDestination.students,
           title: 'Students',
@@ -85,8 +85,8 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             children: [
               _StudentToolbar(
                 searchController: _searchController,
-                beltFilter: _beltFilter,
-                beltOptions: _beltOptions,
+                beltFilter: effectiveBeltFilter,
+                beltOptions: beltOptions,
                 activeOnly: _activeOnly,
                 ageFilter: _ageFilter,
                 shownCount: students.length,
@@ -106,7 +106,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
               const SizedBox(height: 14),
               _StudentsPanel(
                 students: students,
-                hasAnyStudents: _students.isNotEmpty,
+                hasAnyStudents: allStudents.isNotEmpty,
+                isLoading: appDataService.isAdminStudentsLoading,
+                errorMessage: appDataService.adminStudentsErrorMessage,
                 onOpenStudent: _openStudentDetail,
               ),
             ],
@@ -117,8 +119,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   }
 
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
-    // TODO: Replace mock/service-backed detail data with Firestore-backed
-    // student profile reads and admin profile updates.
+    // TODO: Add Firestore-backed student profile writes from this detail view.
+    // TODO: Resolve guardian user IDs to display names once admin user reads
+    // are available.
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -128,12 +131,14 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
       builder: (context) {
-        final relatedStudents = _students
+        final allStudents = _studentsFromProfiles(
+          appDataService.adminStudentProfiles,
+        );
+        final relatedStudents = allStudents
             .where(
               (candidate) =>
-                  candidate.guardianId != null &&
-                  candidate.guardianId == student.guardianId &&
-                  candidate.id != student.id,
+                  candidate.id != student.id &&
+                  candidate.hasSharedGuardianWith(student),
             )
             .toList();
 
@@ -253,11 +258,15 @@ class _StudentsPanel extends StatelessWidget {
   const _StudentsPanel({
     required this.students,
     required this.hasAnyStudents,
+    required this.isLoading,
+    required this.errorMessage,
     required this.onOpenStudent,
   });
 
   final List<_AdminStudentRecord> students;
   final bool hasAnyStudents;
+  final bool isLoading;
+  final String? errorMessage;
   final ValueChanged<_AdminStudentRecord> onOpenStudent;
 
   @override
@@ -272,7 +281,11 @@ class _StudentsPanel extends StatelessWidget {
             title: 'Student Directory',
             detail: '${students.length} shown',
           ),
-          if (!hasAnyStudents)
+          if (isLoading)
+            const _LoadingState(message: 'Loading student profiles...')
+          else if (errorMessage != null)
+            _EmptyState(message: errorMessage!)
+          else if (!hasAnyStudents)
             const _EmptyState(message: 'No students found.')
           else if (students.isEmpty)
             const _EmptyState(message: 'No students match this filter.')
@@ -409,10 +422,7 @@ class _StudentDetailSheet extends StatelessWidget {
           _DetailSection(
             title: 'Parent / Guardian',
             children: [
-              _DetailRow(
-                label: 'Guardian',
-                value: student.guardianName ?? 'No parent/guardian linked.',
-              ),
+              _DetailRow(label: 'Guardian', value: student.guardianLabel),
               if (relatedStudents.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -473,15 +483,10 @@ class _AdminStudentRecord {
     required this.stickersRequired,
     required this.nextRank,
     required this.isActive,
-    this.guardianId,
-    this.guardianName,
+    required this.guardianUserIds,
   });
 
-  factory _AdminStudentRecord.fromProfile(
-    StudentProfile profile, {
-    String? guardianId,
-    String? guardianName,
-  }) {
+  factory _AdminStudentRecord.fromProfile(StudentProfile profile) {
     return _AdminStudentRecord(
       id: profile.id,
       name: profile.name,
@@ -491,9 +496,8 @@ class _AdminStudentRecord {
       stickerCount: profile.stickerCount,
       stickersRequired: profile.stickersRequired,
       nextRank: profile.nextRank,
-      isActive: true,
-      guardianId: guardianId,
-      guardianName: guardianName,
+      isActive: profile.isActive,
+      guardianUserIds: profile.guardianUserIds,
     );
   }
 
@@ -506,8 +510,19 @@ class _AdminStudentRecord {
   final int stickersRequired;
   final String nextRank;
   final bool isActive;
-  final String? guardianId;
-  final String? guardianName;
+  final List<String> guardianUserIds;
+
+  String get guardianLabel {
+    if (guardianUserIds.isEmpty) {
+      return 'No parent/guardian linked.';
+    }
+
+    return 'Guardian linked; account details coming later.';
+  }
+
+  bool hasSharedGuardianWith(_AdminStudentRecord other) {
+    return guardianUserIds.any(other.guardianUserIds.contains);
+  }
 }
 
 class _AgeFilterButton extends StatelessWidget {
@@ -826,6 +841,36 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _LoadingState extends StatelessWidget {
+  const _LoadingState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BadgeColors {
   const _BadgeColors({
     required this.background,
@@ -879,56 +924,3 @@ TextStyle? _rowTitleStyle(BuildContext context) {
     fontWeight: FontWeight.w900,
   );
 }
-
-const _mockAdminStudents = [
-  _AdminStudentRecord(
-    id: 'student_maya',
-    name: 'Maya Patel',
-    age: 9,
-    belt: 'Yellow-Green',
-    locationId: 'ota-cheshire',
-    stickerCount: 2,
-    stickersRequired: 4,
-    nextRank: 'Green',
-    isActive: true,
-    guardianId: 'guardian_patel',
-    guardianName: 'Rina Patel',
-  ),
-  _AdminStudentRecord(
-    id: 'student_aarav',
-    name: 'Aarav Patel',
-    age: 6,
-    belt: 'White-Yellow',
-    locationId: 'ota-cheshire',
-    stickerCount: 1,
-    stickersRequired: 3,
-    nextRank: 'Yellow',
-    isActive: true,
-    guardianId: 'guardian_patel',
-    guardianName: 'Rina Patel',
-  ),
-  _AdminStudentRecord(
-    id: 'student_elena',
-    name: 'Elena Rivera',
-    age: 13,
-    belt: 'Blue',
-    locationId: 'ota-cheshire',
-    stickerCount: 3,
-    stickersRequired: 4,
-    nextRank: 'Blue-Red',
-    isActive: true,
-    guardianId: 'guardian_rivera',
-    guardianName: 'Luis Rivera',
-  ),
-  _AdminStudentRecord(
-    id: 'student_daniel',
-    name: 'Daniel Kim',
-    age: 21,
-    belt: 'Black',
-    locationId: 'ota-cheshire',
-    stickerCount: 0,
-    stickersRequired: 0,
-    nextRank: 'Second Dan',
-    isActive: true,
-  ),
-];

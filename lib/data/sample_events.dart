@@ -1,0 +1,48 @@
+import '../models/academy_event.dart';
+import 'sample_constants.dart';
+
+final sampleAcademyEvents = [
+  AcademyEvent(
+    id: 'parent_night_out',
+    title: 'Parent Night Out',
+    description: 'Evening event with games, training activities, and pizza.',
+    locationId: otaCheshireLocationId,
+    eventType: 'parentNightOut',
+    startDateTime: DateTime(2026, 7, 12, 18),
+    endDateTime: DateTime(2026, 7, 12, 21),
+    registrationUrl: 'https://forms.gle/ota-parent-night-out',
+    registrationDeadline: DateTime(2026, 7, 10, 20),
+    isPublished: true,
+    showInResources: true,
+    createdAt: DateTime(2026, 6, 20, 9),
+    updatedAt: DateTime(2026, 6, 20, 9),
+  ),
+  AcademyEvent(
+    id: 'summer_belt_testing',
+    title: 'Summer Belt Testing',
+    description: 'Testing event for eligible color belt students.',
+    locationId: otaCheshireLocationId,
+    eventType: 'beltTesting',
+    startDateTime: DateTime(2026, 8, 3, 10),
+    endDateTime: DateTime(2026, 8, 3, 13),
+    isPublished: false,
+    showInResources: false,
+    createdAt: DateTime(2026, 6, 24, 10),
+    updatedAt: DateTime(2026, 6, 24, 10),
+  ),
+  AcademyEvent(
+    id: 'fall_tournament',
+    title: 'Fall Regional Tournament',
+    description: 'Regional tournament registration and preparation details.',
+    locationId: otaCheshireLocationId,
+    eventType: 'tournament',
+    startDateTime: DateTime(2026, 10, 18, 8),
+    endDateTime: DateTime(2026, 10, 18, 17),
+    registrationUrl: 'https://forms.gle/ota-fall-tournament',
+    registrationDeadline: DateTime(2026, 10, 5, 23, 59),
+    isPublished: true,
+    showInResources: true,
+    createdAt: DateTime(2026, 6, 28, 11),
+    updatedAt: DateTime(2026, 6, 28, 11),
+  ),
+];

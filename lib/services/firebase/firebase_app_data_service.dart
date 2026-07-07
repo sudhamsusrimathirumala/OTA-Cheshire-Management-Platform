@@ -4,9 +4,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../models/academy_event.dart';
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
 import '../../models/notification_item.dart';
+import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import '../app_data_service.dart';
@@ -26,15 +28,24 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   final AppDataService _fallbackService;
   Map<int, List<ClassSession>> _schedule = const <int, List<ClassSession>>{};
   List<NotificationItem> _notifications = const <NotificationItem>[];
+  List<AcademyEvent> _events = const <AcademyEvent>[];
+  List<StudentProfile> _adminStudentProfiles = const <StudentProfile>[];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _scheduleSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _announcementsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _adminStudentsSubscription;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
   bool _isAnnouncementsLoading = true;
   String? _announcementsErrorMessage;
+  bool _isEventsLoading = true;
+  String? _eventsErrorMessage;
+  bool _isAdminStudentsLoading = true;
+  String? _adminStudentsErrorMessage;
   bool _isUsingFallbackData = false;
 
   void _listenToFirestore() {
@@ -48,6 +59,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _firestore = firestore;
       _listenToSchedule(firestore);
       _listenToAnnouncements(firestore);
+      _listenToEvents(firestore);
+      _listenToAdminStudents(firestore);
     } catch (_) {
       _useFallbackDataForUnavailableFirebase();
     }
@@ -56,11 +69,17 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _useFallbackDataForUnavailableFirebase() {
     _schedule = _fallbackService.schedule;
     _notifications = _fallbackService.notifications;
+    _events = _fallbackService.events;
+    _adminStudentProfiles = _fallbackService.adminStudentProfiles;
     _isUsingFallbackData = true;
     _isScheduleLoading = false;
     _isAnnouncementsLoading = false;
+    _isEventsLoading = false;
+    _isAdminStudentsLoading = false;
     _scheduleErrorMessage = null;
     _announcementsErrorMessage = null;
+    _eventsErrorMessage = null;
+    _adminStudentsErrorMessage = null;
   }
 
   void _listenToSchedule(FirebaseFirestore firestore) {
@@ -80,6 +99,23 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .listen(
           _handleAnnouncementsSnapshot,
           onError: _handleAnnouncementsError,
+        );
+  }
+
+  void _listenToEvents(FirebaseFirestore firestore) {
+    _eventsSubscription = firestore
+        .collection(FirestoreCollections.events)
+        .snapshots()
+        .listen(_handleEventsSnapshot, onError: _handleEventsError);
+  }
+
+  void _listenToAdminStudents(FirebaseFirestore firestore) {
+    _adminStudentsSubscription = firestore
+        .collection(FirestoreCollections.studentProfiles)
+        .snapshots()
+        .listen(
+          _handleAdminStudentsSnapshot,
+          onError: _handleAdminStudentsError,
         );
   }
 
@@ -121,10 +157,45 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     notifyListeners();
   }
 
+  void _handleEventsSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _events = _eventsFromSnapshot(snapshot);
+    _isUsingFallbackData = false;
+    _isEventsLoading = false;
+    _eventsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleEventsError(Object error) {
+    _events = const <AcademyEvent>[];
+    _isEventsLoading = false;
+    _eventsErrorMessage = 'Unable to load events from Firestore.';
+    notifyListeners();
+  }
+
+  void _handleAdminStudentsSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    _adminStudentProfiles = _adminStudentsFromSnapshot(snapshot);
+    _isUsingFallbackData = false;
+    _isAdminStudentsLoading = false;
+    _adminStudentsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleAdminStudentsError(Object error) {
+    _adminStudentProfiles = const <StudentProfile>[];
+    _isAdminStudentsLoading = false;
+    _adminStudentsErrorMessage =
+        'Unable to load student profiles from Firestore.';
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
+    unawaited(_eventsSubscription?.cancel());
+    unawaited(_adminStudentsSubscription?.cancel());
     super.dispose();
   }
 
@@ -136,6 +207,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   @override
   List<StudentProfile> get linkedStudentProfiles =>
       _fallbackService.linkedStudentProfiles;
+
+  @override
+  List<StudentProfile> get adminStudentProfiles => _adminStudentProfiles;
 
   // TODO: Replace mock delegation with Firestore-backed selected profiles.
   @override
@@ -156,6 +230,18 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   String? get announcementsErrorMessage => _announcementsErrorMessage;
+
+  @override
+  bool get isEventsLoading => _isEventsLoading;
+
+  @override
+  String? get eventsErrorMessage => _eventsErrorMessage;
+
+  @override
+  bool get isAdminStudentsLoading => _isAdminStudentsLoading;
+
+  @override
+  String? get adminStudentsErrorMessage => _adminStudentsErrorMessage;
 
   @override
   List<ClassSession> scheduleForWeekday(int weekday) {
@@ -209,10 +295,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     return _fallbackService.beltDisplayLabel(belt);
   }
 
-  // TODO: Add Firestore-backed events and resources when those features are
-  // wired into AppDataService.
   @override
   List<NotificationItem> get notifications => _notifications;
+
+  @override
+  List<AcademyEvent> get events => _events;
 
   Map<int, List<ClassSession>> _scheduleFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
@@ -375,6 +462,120 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
   }
 
+  List<AcademyEvent> _eventsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
+      return const <AcademyEvent>[];
+    }
+
+    final events = <AcademyEvent>[];
+
+    for (final document in snapshot.docs) {
+      final event = _eventFromDocument(document);
+      if (event != null && event.locationId == _adminLocationId) {
+        events.add(event);
+      }
+    }
+
+    events.sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    return List<AcademyEvent>.unmodifiable(events);
+  }
+
+  AcademyEvent? _eventFromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final title = _stringValue(data['title']);
+    final locationId = _stringValue(data['locationId']);
+    final startDateTime =
+        _dateTimeValue(data['startDateTime']) ??
+        _dateTimeValue(data['startsAt']);
+
+    if (title == null || locationId == null || startDateTime == null) {
+      return null;
+    }
+
+    final endDateTime =
+        _dateTimeValue(data['endDateTime']) ??
+        startDateTime.add(const Duration(hours: 1));
+    final createdAt = _dateTimeValue(data['createdAt']) ?? startDateTime;
+    final updatedAt = _dateTimeValue(data['updatedAt']) ?? createdAt;
+
+    return AcademyEvent(
+      id: document.id,
+      title: title,
+      description: _stringValue(data['description']) ?? '',
+      locationId: locationId,
+      eventType: _stringValue(data['eventType']) ?? 'specialEvent',
+      startDateTime: startDateTime,
+      endDateTime: endDateTime,
+      registrationUrl: _stringValue(data['registrationUrl']),
+      registrationDeadline: _dateTimeValue(data['registrationDeadline']),
+      isPublished: _boolValue(data['isPublished']) ?? false,
+      showInResources: _boolValue(data['showInResources']) ?? false,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  List<StudentProfile> _adminStudentsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
+      return const <StudentProfile>[];
+    }
+
+    final students = <StudentProfile>[];
+
+    for (final document in snapshot.docs) {
+      final student = _studentProfileFromDocument(document);
+      if (student != null && student.locationId == _adminLocationId) {
+        students.add(student);
+      }
+    }
+
+    students.sort((a, b) => a.name.compareTo(b.name));
+    return List<StudentProfile>.unmodifiable(students);
+  }
+
+  StudentProfile? _studentProfileFromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final name = _stringValue(data['fullName']) ?? _stringValue(data['name']);
+    final locationId = _stringValue(data['locationId']);
+    final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
+    final age = _intValue(data['age']);
+
+    if (name == null || locationId == null || belt == null || age == null) {
+      return null;
+    }
+
+    final stickerProgress = data['stickerProgress'];
+    final stickerProgressMap = stickerProgress is Map
+        ? stickerProgress
+        : const <Object?, Object?>{};
+
+    return Student(
+      id: document.id,
+      name: name,
+      locationId: locationId,
+      belt: belt,
+      age: age,
+      stickerCount: _intValue(stickerProgressMap['current']) ?? 0,
+      stickersRequired: _intValue(stickerProgressMap['required']) ?? 0,
+      nextRank: _stringValue(stickerProgressMap['nextRank']) ?? 'Next rank',
+      guardianUserIds: _stringListValue(data['guardianUserIds']),
+      selfUserId: _stringValue(data['selfUserId']),
+      promotionHistory: _stringListValue(data['promotionHistory']),
+      testingNotes: _stringListValue(data['testingNotes']),
+      isActive: _boolValue(data['isActive']) ?? true,
+      createdAt: _dateTimeValue(data['createdAt']),
+      updatedAt: _dateTimeValue(data['updatedAt']),
+    );
+  }
+
   bool _announcementTargetsSelectedAudience({
     required String audienceType,
     required List<String> targetBelts,
@@ -410,6 +611,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           if (session.isEligibleFor(selectedStudentProfile))
             session.classTypeId,
     };
+  }
+
+  String get _adminLocationId {
+    final userLocationId = currentUserAccount.locationId;
+    if (userLocationId.isNotEmpty) {
+      return userLocationId;
+    }
+
+    return selectedStudentProfile.locationId;
   }
 }
 

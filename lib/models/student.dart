@@ -8,6 +8,13 @@ class Student {
     required this.stickerCount,
     required this.stickersRequired,
     required this.nextRank,
+    this.guardianUserIds = const <String>[],
+    this.selfUserId,
+    this.promotionHistory = const <String>[],
+    this.testingNotes = const <String>[],
+    this.isActive = true,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
@@ -18,6 +25,13 @@ class Student {
   final int stickerCount;
   final int stickersRequired;
   final String nextRank;
+  final List<String> guardianUserIds;
+  final String? selfUserId;
+  final List<String> promotionHistory;
+  final List<String> testingNotes;
+  final bool isActive;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));

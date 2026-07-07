@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 
+import '../data/sample_events.dart';
 import '../data/sample_curriculum.dart' as curriculum_data;
 import '../data/sample_notifications.dart';
 import '../data/sample_schedule.dart';
 import '../data/sample_student.dart';
+import '../models/academy_event.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
@@ -30,6 +32,13 @@ class MockAppDataService implements AppDataService {
           (student) =>
               currentUserAccount.linkedStudentProfileIds.contains(student.id),
         )
+        .toList(growable: false);
+  }
+
+  @override
+  List<StudentProfile> get adminStudentProfiles {
+    return sampleStudentProfiles
+        .where((student) => student.locationId == currentUserAccount.locationId)
         .toList(growable: false);
   }
 
@@ -69,6 +78,18 @@ class MockAppDataService implements AppDataService {
 
   @override
   String? get announcementsErrorMessage => null;
+
+  @override
+  bool get isEventsLoading => false;
+
+  @override
+  String? get eventsErrorMessage => null;
+
+  @override
+  bool get isAdminStudentsLoading => false;
+
+  @override
+  String? get adminStudentsErrorMessage => null;
 
   @override
   List<ClassSession> scheduleForWeekday(int weekday) {
@@ -114,6 +135,13 @@ class MockAppDataService implements AppDataService {
           (notification) =>
               notification.locationId == selectedStudentProfile.locationId,
         )
+        .toList(growable: false);
+  }
+
+  @override
+  List<AcademyEvent> get events {
+    return sampleAcademyEvents
+        .where((event) => event.locationId == currentUserAccount.locationId)
         .toList(growable: false);
   }
 }
