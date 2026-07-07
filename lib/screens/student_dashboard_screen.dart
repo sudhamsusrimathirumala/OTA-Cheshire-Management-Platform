@@ -12,54 +12,64 @@ class StudentDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final student = appDataService.selectedStudentProfile;
-    final notifications = appDataService.notifications;
-    final nextClass = appDataService.nextClassForDashboard();
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final student = appDataService.selectedStudentProfile;
+        final notifications = appDataService.notifications;
+        final nextClass = appDataService.nextClassForDashboard();
 
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _DashboardHeader(student: student),
-                        const SizedBox(height: 22),
-                        _NextClassCard(nextClass: nextClass),
-                        const SizedBox(height: 16),
-                        _BeltProgressCard(student: student),
-                        const SizedBox(height: 16),
-                        _NotificationsCard(notifications: notifications),
-                        const SizedBox(height: 24),
-                        Text(
-                          'Quick Actions',
-                          style: Theme.of(context).textTheme.titleLarge
-                              ?.copyWith(
-                                color: OtaColors.ink,
-                                fontWeight: FontWeight.w800,
-                              ),
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          body: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _DashboardHeader(student: student),
+                            const SizedBox(height: 22),
+                            _NextClassCard(nextClass: nextClass),
+                            const SizedBox(height: 16),
+                            _BeltProgressCard(student: student),
+                            const SizedBox(height: 16),
+                            _NotificationsCard(
+                              notifications: notifications,
+                              isLoading: appDataService.isAnnouncementsLoading,
+                              errorMessage:
+                                  appDataService.announcementsErrorMessage,
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              'Quick Actions',
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: OtaColors.ink,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            const _QuickActionsGrid(),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        const _QuickActionsGrid(),
-                      ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.dashboard,
-      ),
+          ),
+          bottomNavigationBar: const OtaBottomNavBar(
+            selectedDestination: OtaBottomNavDestination.dashboard,
+          ),
+        );
+      },
     );
   }
 }
@@ -324,9 +334,15 @@ class _BeltProgressCard extends StatelessWidget {
 }
 
 class _NotificationsCard extends StatelessWidget {
-  const _NotificationsCard({required this.notifications});
+  const _NotificationsCard({
+    required this.notifications,
+    required this.isLoading,
+    required this.errorMessage,
+  });
 
   final List<NotificationItem> notifications;
+  final bool isLoading;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
@@ -371,10 +387,28 @@ class _NotificationsCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          for (final notification in notifications) ...[
-            _NotificationRow(title: notification.title),
-            if (notification != notifications.last) const SizedBox(height: 12),
-          ],
+          if (isLoading)
+            const _NotificationStatusRow(
+              icon: Icons.sync_rounded,
+              message: 'Loading OTA updates...',
+              showProgress: true,
+            )
+          else if (errorMessage != null)
+            _NotificationStatusRow(
+              icon: Icons.cloud_off_rounded,
+              message: errorMessage!,
+            )
+          else if (notifications.isEmpty)
+            const _NotificationStatusRow(
+              icon: Icons.notifications_none_rounded,
+              message: 'No updates right now.',
+            )
+          else
+            for (final notification in notifications) ...[
+              _NotificationRow(title: notification.title),
+              if (notification != notifications.last)
+                const SizedBox(height: 12),
+            ],
         ],
       ),
     );
@@ -547,6 +581,43 @@ class _RankStat extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _NotificationStatusRow extends StatelessWidget {
+  const _NotificationStatusRow({
+    required this.icon,
+    required this.message,
+    this.showProgress = false,
+  });
+
+  final IconData icon;
+  final String message;
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        if (showProgress)
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Icon(icon, color: OtaColors.maroon, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            message,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
