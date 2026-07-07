@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/academy_event.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -29,6 +30,7 @@ class AdminEventsScreen extends StatefulWidget {
 }
 
 class _AdminEventsScreenState extends State<AdminEventsScreen> {
+  final _writeService = FirebaseAdminWriteService();
   var _selectedFilter = _EventFilter.all;
 
   List<AcademyEvent> _filteredEvents(List<AcademyEvent> events) {
@@ -85,10 +87,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
   }
 
   Future<void> _openEventSheet([AcademyEvent? event]) async {
-    // TODO: Persist event create/update through Firestore writes.
     // TODO: Registration URLs should later feed both family Events and
     // Resources pages from the same Firestore event/resource relationship.
-    final action = await showModalBottomSheet<_EventSaveAction>(
+    final result = await showModalBottomSheet<_EventFormResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -99,18 +100,48 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
       builder: (context) => _EventFormSheet(event: event),
     );
 
-    if (!mounted || action == null) {
+    if (!mounted || result == null) {
       return;
     }
 
-    final message = switch (action) {
-      _EventSaveAction.draft => 'Mock event draft saved.',
-      _EventSaveAction.publish => 'Mock event published.',
-    };
+    if (!useFirebase) {
+      final mockMessage = switch (result.action) {
+        _EventSaveAction.draft => 'Mock event draft saved.',
+        _EventSaveAction.publish => 'Mock event published.',
+      };
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mockMessage)));
+      return;
+    }
+
+    try {
+      await _writeService.saveEvent(result.data);
+
+      if (!mounted) {
+        return;
+      }
+
+      final message = result.isEditing
+          ? 'Event updated.'
+          : switch (result.action) {
+              _EventSaveAction.draft => 'Event draft saved.',
+              _EventSaveAction.publish => 'Event published.',
+            };
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to save event.')));
+    }
   }
 
   Future<void> _previewEvent(AcademyEvent event) async {
@@ -154,15 +185,12 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
   }
 
   Future<void> _confirmArchive(AcademyEvent event) async {
-    // TODO: Persist event archive/delete through Firestore writes.
     final shouldArchive = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
           title: const Text('Archive event?'),
-          content: Text(
-            'This mock action will not remove "${event.title}" yet.',
-          ),
+          content: Text('This will hide "${event.title}" from active lists.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -174,7 +202,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 backgroundColor: OtaColors.maroon,
                 foregroundColor: OtaColors.white,
               ),
-              child: const Text('Archive Mock Event'),
+              child: const Text('Archive Event'),
             ),
           ],
         );
@@ -185,9 +213,32 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('${event.title} mock archived.')));
+    if (!useFirebase) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${event.title} mock archived.')));
+      return;
+    }
+
+    try {
+      await _writeService.archiveEvent(event.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${event.title} archived.')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to archive event.')));
+    }
   }
 }
 
@@ -440,6 +491,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   late _EventType _eventType;
   late bool _isPublished;
   late bool _showInResources;
+  String? _validationMessage;
 
   @override
   void initState() {
@@ -499,7 +551,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           children: [
             _SheetHeader(
               title: isEditing ? 'Edit Event' : 'Create Event',
-              subtitle: 'Mock form only. Changes are not saved yet.',
+              subtitle: 'Drafts and published events write to Firestore.',
             ),
             const SizedBox(height: 14),
             _AdminTextField(controller: _titleController, label: 'Title'),
@@ -567,6 +619,10 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               maxLines: 3,
             ),
             const SizedBox(height: 16),
+            if (_validationMessage != null) ...[
+              _ValidationMessage(message: _validationMessage!),
+              const SizedBox(height: 10),
+            ],
             Wrap(
               alignment: WrapAlignment.end,
               spacing: 8,
@@ -577,8 +633,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                   child: const Text('Cancel'),
                 ),
                 OutlinedButton(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_EventSaveAction.draft),
+                  onPressed: () => _submit(_EventSaveAction.draft),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: OtaColors.maroon,
                     side: const BorderSide(color: OtaColors.maroon),
@@ -589,8 +644,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                   child: const Text('Save Draft'),
                 ),
                 FilledButton(
-                  onPressed: () =>
-                      Navigator.of(context).pop(_EventSaveAction.publish),
+                  onPressed: () => _submit(_EventSaveAction.publish),
                   style: FilledButton.styleFrom(
                     backgroundColor: OtaColors.maroon,
                     foregroundColor: OtaColors.white,
@@ -598,13 +652,98 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: const Text('Publish Mock Event'),
+                  child: const Text('Publish Event'),
                 ),
               ],
             ),
           ],
         ),
       ),
+    );
+  }
+
+  void _submit(_EventSaveAction action) {
+    final title = _titleController.text.trim();
+    final description = _descriptionController.text.trim();
+    final locationId = _locationController.text.trim().isEmpty
+        ? appDataService.currentUserAccount.locationId
+        : _locationController.text.trim();
+    final startDateTime = _parseDateTimeInput(_startController.text);
+    final endDateTime = _endController.text.trim().isEmpty
+        ? startDateTime?.add(const Duration(hours: 1))
+        : _parseDateTimeInput(_endController.text);
+    final registrationDeadline =
+        _registrationDeadlineController.text.trim().isEmpty
+        ? null
+        : _parseDateTimeInput(_registrationDeadlineController.text);
+    final registrationUrl = _registrationUrlController.text.trim().isEmpty
+        ? null
+        : _registrationUrlController.text.trim();
+
+    if (title.isEmpty) {
+      setState(() => _validationMessage = 'Title is required.');
+      return;
+    }
+
+    if (description.isEmpty) {
+      setState(() => _validationMessage = 'Description is required.');
+      return;
+    }
+
+    if (startDateTime == null) {
+      setState(() => _validationMessage = 'Start date/time is required.');
+      return;
+    }
+
+    if (endDateTime == null) {
+      setState(() => _validationMessage = 'End date/time is invalid.');
+      return;
+    }
+
+    if (!endDateTime.isAfter(startDateTime)) {
+      setState(
+        () => _validationMessage = 'End date/time must be after start time.',
+      );
+      return;
+    }
+
+    if (_registrationDeadlineController.text.trim().isNotEmpty &&
+        registrationDeadline == null) {
+      setState(() => _validationMessage = 'Registration deadline is invalid.');
+      return;
+    }
+
+    final event = widget.event;
+    final isPublished = action == _EventSaveAction.publish;
+    final data = event == null
+        ? EventWriteData(
+            title: title,
+            description: description,
+            locationId: locationId,
+            eventType: _eventType.id,
+            startDateTime: startDateTime,
+            endDateTime: endDateTime,
+            registrationUrl: registrationUrl,
+            registrationDeadline: registrationDeadline,
+            isPublished: isPublished,
+            showInResources: _showInResources,
+          )
+        : EventWriteData.fromEvent(
+            event,
+            title: title,
+            description: description,
+            locationId: locationId,
+            eventType: _eventType.id,
+            startDateTime: startDateTime,
+            endDateTime: endDateTime,
+            registrationUrl: registrationUrl,
+            registrationDeadline: registrationDeadline,
+            isPublished: isPublished,
+            showInResources: _showInResources,
+          );
+
+    Navigator.of(context).pop(
+      _EventFormResult(action: action, data: data, isEditing: event != null),
     );
   }
 }
@@ -824,6 +963,32 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
+class _ValidationMessage extends StatelessWidget {
+  const _ValidationMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F4),
+        border: Border.all(color: const Color(0xFFF0A0AA)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: OtaColors.actionRed,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -978,6 +1143,18 @@ enum _BadgeTone { navy, success, warning, important, neutral }
 
 enum _EventSaveAction { draft, publish }
 
+class _EventFormResult {
+  const _EventFormResult({
+    required this.action,
+    required this.data,
+    required this.isEditing,
+  });
+
+  final _EventSaveAction action;
+  final EventWriteData data;
+  final bool isEditing;
+}
+
 extension on _EventFilter {
   String get label {
     return switch (this) {
@@ -1086,6 +1263,48 @@ String _formatDateTime(DateTime dateTime) {
   final minute = dateTime.minute.toString().padLeft(2, '0');
   final period = dateTime.hour >= 12 ? 'PM' : 'AM';
   return '$month ${dateTime.day}, $hour:$minute $period';
+}
+
+DateTime? _parseDateTimeInput(String input) {
+  final value = input.trim();
+  if (value.isEmpty) {
+    return null;
+  }
+
+  final parsed = DateTime.tryParse(value);
+  if (parsed != null) {
+    return parsed;
+  }
+
+  final match = RegExp(
+    r'^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{1,2}):(\d{2})\s*(AM|PM)$',
+    caseSensitive: false,
+  ).firstMatch(value);
+  if (match == null) {
+    return null;
+  }
+
+  final month =
+      _monthNames.indexWhere(
+        (name) => name.toLowerCase() == match.group(1)!.toLowerCase(),
+      ) +
+      1;
+  final day = int.tryParse(match.group(2)!);
+  final hourValue = int.tryParse(match.group(3)!);
+  final minute = int.tryParse(match.group(4)!);
+  final period = match.group(5)!.toUpperCase();
+
+  if (month <= 0 || day == null || hourValue == null || minute == null) {
+    return null;
+  }
+
+  final hour = switch (period) {
+    'AM' when hourValue == 12 => 0,
+    'PM' when hourValue != 12 => hourValue + 12,
+    _ => hourValue,
+  };
+
+  return DateTime(DateTime.now().year, month, day, hour, minute);
 }
 
 const _monthNames = [

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/academy_announcement.dart';
 import '../models/academy_event.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
@@ -47,6 +48,8 @@ abstract class AppDataService implements Listenable {
   String beltDisplayLabel(String belt);
 
   List<NotificationItem> get notifications;
+
+  List<AcademyAnnouncement> get adminAnnouncements;
 
   List<AcademyEvent> get events;
 }

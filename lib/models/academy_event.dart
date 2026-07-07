@@ -13,6 +13,7 @@ class AcademyEvent {
     required this.updatedAt,
     this.registrationUrl,
     this.registrationDeadline,
+    this.isArchived = false,
   });
 
   final String id;
@@ -28,6 +29,7 @@ class AcademyEvent {
   final bool showInResources;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isArchived;
 
   bool get isRegistrationOpen {
     if (registrationUrl == null) {

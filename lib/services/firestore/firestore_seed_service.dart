@@ -257,6 +257,7 @@ Map<String, Object?> _eventData(AcademyEvent event) {
         : Timestamp.fromDate(event.registrationDeadline!),
     'isPublished': event.isPublished,
     'showInResources': event.showInResources,
+    'isArchived': event.isArchived,
     'createdAt': Timestamp.fromDate(event.createdAt),
     'updatedAt': Timestamp.fromDate(event.updatedAt),
   };

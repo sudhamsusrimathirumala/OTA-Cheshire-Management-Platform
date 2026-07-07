@@ -5,6 +5,7 @@ import '../data/sample_curriculum.dart' as curriculum_data;
 import '../data/sample_notifications.dart';
 import '../data/sample_schedule.dart';
 import '../data/sample_student.dart';
+import '../models/academy_announcement.dart';
 import '../models/academy_event.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
@@ -136,6 +137,62 @@ class MockAppDataService implements AppDataService {
               notification.locationId == selectedStudentProfile.locationId,
         )
         .toList(growable: false);
+  }
+
+  @override
+  List<AcademyAnnouncement> get adminAnnouncements {
+    return [
+          ...sampleNotifications.map(
+            (notification) => AcademyAnnouncement(
+              id: notification.id,
+              title: notification.title,
+              summary: notification.summary,
+              body: notification.body,
+              announcementType: notification.category.name,
+              priority: notification.priority.name,
+              status: 'published',
+              audienceType: 'everyone',
+              locationId: notification.locationId,
+              publishedAt: notification.timestamp,
+              createdAt: notification.timestamp,
+              updatedAt: notification.timestamp,
+            ),
+          ),
+          AcademyAnnouncement(
+            id: 'draft_parent_night_out',
+            title: 'Parent Night Out Registration',
+            summary: 'Draft registration reminder for the next academy event.',
+            body:
+                'Parent Night Out registration details are being prepared. This announcement will include the event time, registration link, and pickup reminders.',
+            announcementType: NotificationCategory.reminder.name,
+            priority: NotificationPriority.general.name,
+            status: 'draft',
+            audienceType: 'everyone',
+            locationId: currentUserAccount.locationId,
+            publishedAt: DateTime(2026, 6, 25, 10),
+            createdAt: DateTime(2026, 6, 25, 10),
+            updatedAt: DateTime(2026, 6, 25, 10),
+          ),
+          AcademyAnnouncement(
+            id: 'draft_schedule_note',
+            title: 'July Schedule Note',
+            summary:
+                'Draft note for families about upcoming July schedule changes.',
+            body:
+                'July schedule adjustments are being reviewed. Families will receive the final version after class times are confirmed.',
+            announcementType: NotificationCategory.scheduleChange.name,
+            priority: NotificationPriority.important.name,
+            status: 'draft',
+            audienceType: 'everyone',
+            locationId: currentUserAccount.locationId,
+            publishedAt: DateTime(2026, 6, 24, 15),
+            createdAt: DateTime(2026, 6, 24, 15),
+            updatedAt: DateTime(2026, 6, 24, 15),
+          ),
+        ]
+        .where((item) => item.locationId == currentUserAccount.locationId)
+        .toList(growable: false)
+      ..sort((a, b) => b.displayDate.compareTo(a.displayDate));
   }
 
   @override

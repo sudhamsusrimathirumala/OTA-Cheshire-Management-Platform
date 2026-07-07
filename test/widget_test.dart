@@ -189,7 +189,7 @@ void main() {
     expect(find.text('Create Announcement'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);
     expect(find.text('Draft'), findsWidgets);
-    expect(find.text('Sent'), findsWidgets);
+    expect(find.text('Published'), findsWidgets);
     expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
     expect(find.text('Preview'), findsWidgets);
 
@@ -199,7 +199,7 @@ void main() {
     expect(find.text('Full message/body'), findsOneWidget);
     expect(find.text('Audience'), findsOneWidget);
     expect(find.text('Save Draft'), findsOneWidget);
-    expect(find.text('Send Mock Announcement'), findsOneWidget);
+    expect(find.text('Publish Announcement'), findsOneWidget);
   });
 
   testWidgets('curriculum screen updates displayed belt content', (

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
@@ -28,6 +29,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   final AppDataService _fallbackService;
   Map<int, List<ClassSession>> _schedule = const <int, List<ClassSession>>{};
   List<NotificationItem> _notifications = const <NotificationItem>[];
+  List<AcademyAnnouncement> _adminAnnouncements = const <AcademyAnnouncement>[];
   List<AcademyEvent> _events = const <AcademyEvent>[];
   List<StudentProfile> _adminStudentProfiles = const <StudentProfile>[];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -69,6 +71,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _useFallbackDataForUnavailableFirebase() {
     _schedule = _fallbackService.schedule;
     _notifications = _fallbackService.notifications;
+    _adminAnnouncements = _fallbackService.adminAnnouncements;
     _events = _fallbackService.events;
     _adminStudentProfiles = _fallbackService.adminStudentProfiles;
     _isUsingFallbackData = true;
@@ -94,7 +97,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _listenToAnnouncements(FirebaseFirestore firestore) {
     _announcementsSubscription = firestore
         .collection(FirestoreCollections.announcements)
-        .orderBy('publishedAt', descending: true)
         .snapshots()
         .listen(
           _handleAnnouncementsSnapshot,
@@ -143,6 +145,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
     _latestAnnouncementsSnapshot = snapshot;
+    _adminAnnouncements = _adminAnnouncementsFromSnapshot(snapshot);
     _notifications = _announcementsFromSnapshot(snapshot);
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
@@ -152,6 +155,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   void _handleAnnouncementsError(Object error) {
     _notifications = const <NotificationItem>[];
+    _adminAnnouncements = const <AcademyAnnouncement>[];
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
     notifyListeners();
@@ -297,6 +301,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   List<NotificationItem> get notifications => _notifications;
+
+  @override
+  List<AcademyAnnouncement> get adminAnnouncements => _adminAnnouncements;
 
   @override
   List<AcademyEvent> get events => _events;
@@ -462,6 +469,76 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
   }
 
+  List<AcademyAnnouncement> _adminAnnouncementsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
+      return const <AcademyAnnouncement>[];
+    }
+
+    final announcements = <AcademyAnnouncement>[];
+
+    for (final document in snapshot.docs) {
+      final announcement = _academyAnnouncementFromDocument(document);
+      if (announcement != null && announcement.locationId == _adminLocationId) {
+        announcements.add(announcement);
+      }
+    }
+
+    announcements.sort((a, b) => b.displayDate.compareTo(a.displayDate));
+    return List<AcademyAnnouncement>.unmodifiable(announcements);
+  }
+
+  AcademyAnnouncement? _academyAnnouncementFromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final title = _stringValue(data['title']);
+    final summary = _stringValue(data['summary']);
+    final body = _stringValue(data['body']);
+    final announcementType = _stringValue(data['announcementType']);
+    final priority = _stringValue(data['priority']);
+    final status = _stringValue(data['status']);
+    final audienceType = _stringValue(data['audienceType']);
+    final locationId = _stringValue(data['locationId']);
+    final createdAt = _dateTimeValue(data['createdAt']);
+    final updatedAt = _dateTimeValue(data['updatedAt']);
+
+    if (title == null ||
+        summary == null ||
+        body == null ||
+        announcementType == null ||
+        priority == null ||
+        status == null ||
+        audienceType == null ||
+        locationId == null ||
+        createdAt == null ||
+        updatedAt == null) {
+      return null;
+    }
+
+    return AcademyAnnouncement(
+      id: document.id,
+      title: title,
+      summary: summary,
+      body: body,
+      announcementType: announcementType,
+      priority: priority,
+      status: status,
+      audienceType: audienceType,
+      locationId: locationId,
+      publishedAt: _dateTimeValue(data['publishedAt']),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      targetBelts: _stringListValue(data['targetBelts']),
+      targetClassTypeIds: _stringListValue(data['targetClassTypeIds']),
+      targetStudentProfileIds: _stringListValue(
+        data['targetStudentProfileIds'],
+      ),
+      targetUserIds: _stringListValue(data['targetUserIds']),
+    );
+  }
+
   List<AcademyEvent> _eventsFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
@@ -473,7 +550,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     for (final document in snapshot.docs) {
       final event = _eventFromDocument(document);
-      if (event != null && event.locationId == _adminLocationId) {
+      if (event != null &&
+          event.locationId == _adminLocationId &&
+          !event.isArchived) {
         events.add(event);
       }
     }
@@ -514,6 +593,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       registrationDeadline: _dateTimeValue(data['registrationDeadline']),
       isPublished: _boolValue(data['isPublished']) ?? false,
       showInResources: _boolValue(data['showInResources']) ?? false,
+      isArchived: _boolValue(data['isArchived']) ?? false,
       createdAt: createdAt,
       updatedAt: updatedAt,
     );

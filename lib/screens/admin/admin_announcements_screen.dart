@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 
+import '../../models/academy_announcement.dart';
 import '../../models/notification_item.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
-enum _AnnouncementFilter { all, draft, sent, important, critical }
+enum _AnnouncementFilter {
+  all,
+  draft,
+  published,
+  archived,
+  important,
+  critical,
+}
 
-enum _AnnouncementStatus { draft, sent }
+enum _AnnouncementStatus { draft, published, archived }
 
 class AdminAnnouncementsScreen extends StatefulWidget {
   const AdminAnnouncementsScreen({super.key});
@@ -19,13 +28,13 @@ class AdminAnnouncementsScreen extends StatefulWidget {
 }
 
 class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
+  final _writeService = FirebaseAdminWriteService();
   var _selectedFilter = _AnnouncementFilter.all;
 
   List<_AdminAnnouncement> get _announcements {
     return [
-      ..._draftAnnouncements,
-      for (final notification in appDataService.notifications)
-        _AdminAnnouncement.fromNotification(notification),
+      for (final announcement in appDataService.adminAnnouncements)
+        _AdminAnnouncement.fromAcademyAnnouncement(announcement),
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
@@ -39,10 +48,18 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                   announcement.status == _AnnouncementStatus.draft,
             )
             .toList(growable: false),
-      _AnnouncementFilter.sent =>
+      _AnnouncementFilter.published =>
         _announcements
             .where(
-              (announcement) => announcement.status == _AnnouncementStatus.sent,
+              (announcement) =>
+                  announcement.status == _AnnouncementStatus.published,
+            )
+            .toList(growable: false),
+      _AnnouncementFilter.archived =>
+        _announcements
+            .where(
+              (announcement) =>
+                  announcement.status == _AnnouncementStatus.archived,
             )
             .toList(growable: false),
       _AnnouncementFilter.important =>
@@ -105,7 +122,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   Future<void> _openAnnouncementSheet([
     _AdminAnnouncement? announcement,
   ]) async {
-    final action = await showModalBottomSheet<_AnnouncementSaveAction>(
+    final result = await showModalBottomSheet<_AnnouncementFormResult>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -118,18 +135,48 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       },
     );
 
-    if (!mounted || action == null) {
+    if (!mounted || result == null) {
       return;
     }
 
-    final message = switch (action) {
-      _AnnouncementSaveAction.draft => 'Mock draft saved.',
-      _AnnouncementSaveAction.sent => 'Mock announcement sent.',
-    };
+    if (!useFirebase) {
+      final mockMessage = switch (result.action) {
+        _AnnouncementSaveAction.draft => 'Mock draft saved.',
+        _AnnouncementSaveAction.publish => 'Mock announcement published.',
+      };
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(mockMessage)));
+      return;
+    }
+
+    try {
+      await _writeService.saveAnnouncement(result.data);
+
+      if (!mounted) {
+        return;
+      }
+
+      final message = result.isEditing
+          ? 'Announcement updated.'
+          : switch (result.action) {
+              _AnnouncementSaveAction.draft => 'Announcement draft saved.',
+              _AnnouncementSaveAction.publish => 'Announcement published.',
+            };
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to save announcement.')),
+      );
+    }
   }
 
   Future<void> _previewAnnouncement(_AdminAnnouncement announcement) async {
@@ -180,13 +227,13 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   }
 
   Future<void> _confirmDelete(_AdminAnnouncement announcement) async {
-    final shouldDelete = await showDialog<bool>(
+    final shouldArchive = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Delete announcement?'),
+          title: const Text('Archive announcement?'),
           content: Text(
-            'This mock action will not remove "${announcement.title}" yet.',
+            'This will remove "${announcement.title}" from family-facing announcement lists.',
           ),
           actions: [
             TextButton(
@@ -194,28 +241,48 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
-                // TODO: Delete this announcement through Firebase writes.
-                Navigator.of(context).pop(true);
-              },
+              onPressed: () => Navigator.of(context).pop(true),
               style: FilledButton.styleFrom(
                 backgroundColor: OtaColors.maroon,
                 foregroundColor: OtaColors.white,
               ),
-              child: const Text('Delete Mock Announcement'),
+              child: const Text('Archive Announcement'),
             ),
           ],
         );
       },
     );
 
-    if (!mounted || shouldDelete != true) {
+    if (!mounted || shouldArchive != true) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${announcement.title} mock delete confirmed.')),
-    );
+    if (!useFirebase) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${announcement.title} mock archived.')),
+      );
+      return;
+    }
+
+    try {
+      await _writeService.archiveAnnouncement(announcement.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${announcement.title} archived.')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to archive announcement.')),
+      );
+    }
   }
 }
 
@@ -388,9 +455,11 @@ class _AnnouncementRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final priorityTone = _priorityTone(announcement.priority);
-    final statusTone = announcement.status == _AnnouncementStatus.draft
-        ? _BadgeTone.warning
-        : _BadgeTone.success;
+    final statusTone = switch (announcement.status) {
+      _AnnouncementStatus.draft => _BadgeTone.warning,
+      _AnnouncementStatus.published => _BadgeTone.success,
+      _AnnouncementStatus.archived => _BadgeTone.navy,
+    };
 
     return Container(
       decoration: BoxDecoration(
@@ -398,6 +467,8 @@ class _AnnouncementRow extends StatelessWidget {
             ? const Color(0xFFFFF4F4)
             : announcement.status == _AnnouncementStatus.draft
             ? const Color(0xFFFFFAEB)
+            : announcement.status == _AnnouncementStatus.archived
+            ? const Color(0xFFF2F4F7)
             : OtaColors.white,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -506,6 +577,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   late NotificationPriority _priority;
   late _AnnouncementStatus _status;
   var _audience = _Audience.allFamilies;
+  String? _validationMessage;
 
   @override
   void initState() {
@@ -547,7 +619,8 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
           children: [
             _SheetHeader(
               title: isEditing ? 'Edit Announcement' : 'Create Announcement',
-              subtitle: 'Mock form only. Changes are not saved yet.',
+              subtitle:
+                  'Drafts and published announcements write to Firestore.',
             ),
             const SizedBox(height: 14),
             _AdminTextField(controller: _titleController, label: 'Title'),
@@ -701,6 +774,10 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               ],
             ),
             const SizedBox(height: 16),
+            if (_validationMessage != null) ...[
+              _ValidationMessage(message: _validationMessage!),
+              const SizedBox(height: 10),
+            ],
             Wrap(
               alignment: WrapAlignment.end,
               spacing: 8,
@@ -711,10 +788,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                   child: const Text('Cancel'),
                 ),
                 OutlinedButton(
-                  onPressed: () {
-                    // TODO: Persist draft announcement through Firebase.
-                    Navigator.of(context).pop(_AnnouncementSaveAction.draft);
-                  },
+                  onPressed: () => _submit(_AnnouncementSaveAction.draft),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: OtaColors.maroon,
                     side: const BorderSide(color: OtaColors.maroon),
@@ -725,10 +799,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                   child: const Text('Save Draft'),
                 ),
                 FilledButton(
-                  onPressed: () {
-                    // TODO: Send announcement through Firebase and fan out.
-                    Navigator.of(context).pop(_AnnouncementSaveAction.sent);
-                  },
+                  onPressed: () => _submit(_AnnouncementSaveAction.publish),
                   style: FilledButton.styleFrom(
                     backgroundColor: OtaColors.maroon,
                     foregroundColor: OtaColors.white,
@@ -736,7 +807,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: const Text('Send Mock Announcement'),
+                  child: const Text('Publish Announcement'),
                 ),
               ],
             ),
@@ -745,10 +816,69 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       ),
     );
   }
+
+  void _submit(_AnnouncementSaveAction action) {
+    final title = _titleController.text.trim();
+    final summary = _summaryController.text.trim();
+    final body = _bodyController.text.trim();
+
+    if (title.isEmpty) {
+      setState(() => _validationMessage = 'Title is required.');
+      return;
+    }
+
+    if (summary.isEmpty) {
+      setState(() => _validationMessage = 'Summary is required.');
+      return;
+    }
+
+    if (body.isEmpty) {
+      setState(() => _validationMessage = 'Full message/body is required.');
+      return;
+    }
+
+    final status = action == _AnnouncementSaveAction.publish
+        ? 'published'
+        : 'draft';
+    final announcement = widget.announcement;
+    final locationId =
+        announcement?.locationId ??
+        appDataService.currentUserAccount.locationId;
+
+    final data = announcement == null
+        ? AnnouncementWriteData(
+            title: title,
+            summary: summary,
+            body: body,
+            announcementType: _category.name,
+            priority: _priority.name,
+            status: status,
+            locationId: locationId,
+          )
+        : AnnouncementWriteData.fromAnnouncement(
+            announcement.source,
+            title: title,
+            summary: summary,
+            body: body,
+            announcementType: _category.name,
+            priority: _priority.name,
+            status: status,
+            locationId: locationId,
+          );
+
+    Navigator.of(context).pop(
+      _AnnouncementFormResult(
+        action: action,
+        data: data,
+        isEditing: announcement != null,
+      ),
+    );
+  }
 }
 
 class _AdminAnnouncement {
   const _AdminAnnouncement({
+    required this.source,
     required this.id,
     required this.title,
     required this.summary,
@@ -759,19 +889,23 @@ class _AdminAnnouncement {
     required this.timestamp,
   });
 
-  factory _AdminAnnouncement.fromNotification(NotificationItem notification) {
+  factory _AdminAnnouncement.fromAcademyAnnouncement(
+    AcademyAnnouncement announcement,
+  ) {
     return _AdminAnnouncement(
-      id: notification.id,
-      title: notification.title,
-      summary: notification.summary,
-      body: notification.body,
-      category: notification.category,
-      priority: notification.priority,
-      status: _AnnouncementStatus.sent,
-      timestamp: notification.timestamp,
+      source: announcement,
+      id: announcement.id,
+      title: announcement.title,
+      summary: announcement.summary,
+      body: announcement.body,
+      category: announcement.category,
+      priority: announcement.notificationPriority,
+      status: _statusForAnnouncement(announcement.status),
+      timestamp: announcement.displayDate,
     );
   }
 
+  final AcademyAnnouncement source;
   final String id;
   final String title;
   final String summary;
@@ -780,6 +914,8 @@ class _AdminAnnouncement {
   final NotificationPriority priority;
   final _AnnouncementStatus status;
   final DateTime timestamp;
+
+  String get locationId => source.locationId;
 }
 
 class _AdminPanel extends StatelessWidget {
@@ -968,6 +1104,32 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
+class _ValidationMessage extends StatelessWidget {
+  const _ValidationMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F4),
+        border: Border.all(color: const Color(0xFFF0A0AA)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: OtaColors.actionRed,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -1034,7 +1196,19 @@ class _BadgeColors {
 
 enum _BadgeTone { navy, success, warning, important, critical }
 
-enum _AnnouncementSaveAction { draft, sent }
+enum _AnnouncementSaveAction { draft, publish }
+
+class _AnnouncementFormResult {
+  const _AnnouncementFormResult({
+    required this.action,
+    required this.data,
+    required this.isEditing,
+  });
+
+  final _AnnouncementSaveAction action;
+  final AnnouncementWriteData data;
+  final bool isEditing;
+}
 
 enum _Audience {
   allFamilies('All Families'),
@@ -1052,7 +1226,8 @@ extension on _AnnouncementFilter {
     return switch (this) {
       _AnnouncementFilter.all => 'All',
       _AnnouncementFilter.draft => 'Draft',
-      _AnnouncementFilter.sent => 'Sent',
+      _AnnouncementFilter.published => 'Published',
+      _AnnouncementFilter.archived => 'Archived',
       _AnnouncementFilter.important => 'Important',
       _AnnouncementFilter.critical => 'Critical',
     };
@@ -1063,9 +1238,18 @@ extension on _AnnouncementStatus {
   String get label {
     return switch (this) {
       _AnnouncementStatus.draft => 'Draft',
-      _AnnouncementStatus.sent => 'Sent',
+      _AnnouncementStatus.published => 'Published',
+      _AnnouncementStatus.archived => 'Archived',
     };
   }
+}
+
+_AnnouncementStatus _statusForAnnouncement(String status) {
+  return switch (status) {
+    'published' || 'sent' => _AnnouncementStatus.published,
+    'archived' => _AnnouncementStatus.archived,
+    _ => _AnnouncementStatus.draft,
+  };
 }
 
 _BadgeTone _priorityTone(NotificationPriority priority) {
@@ -1130,31 +1314,6 @@ String _formatDateTime(DateTime dateTime) {
   final period = dateTime.hour >= 12 ? 'PM' : 'AM';
   return '$month ${dateTime.day}, $hour:$minute $period';
 }
-
-final _draftAnnouncements = [
-  _AdminAnnouncement(
-    id: 'draft_parent_night_out',
-    title: 'Parent Night Out Registration',
-    summary: 'Draft registration reminder for the next academy event.',
-    body:
-        'Parent Night Out registration details are being prepared. This announcement will include the event time, registration link, and pickup reminders.',
-    category: NotificationCategory.reminder,
-    priority: NotificationPriority.general,
-    status: _AnnouncementStatus.draft,
-    timestamp: DateTime(2026, 6, 25, 10),
-  ),
-  _AdminAnnouncement(
-    id: 'draft_schedule_note',
-    title: 'July Schedule Note',
-    summary: 'Draft note for families about upcoming July schedule changes.',
-    body:
-        'July schedule adjustments are being reviewed. Families will receive the final version after class times are confirmed.',
-    category: NotificationCategory.scheduleChange,
-    priority: NotificationPriority.important,
-    status: _AnnouncementStatus.draft,
-    timestamp: DateTime(2026, 6, 24, 15),
-  ),
-];
 
 const _monthNames = [
   'Jan',
