@@ -1,16 +1,1119 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
-class AdminEventsScreen extends StatelessWidget {
+enum _EventFilter { all, published, draft, registrationOpen, upcoming, past }
+
+enum _EventType {
+  parentNightOut('Parent Night Out'),
+  tournament('Tournament'),
+  summerCamp('Summer Camp'),
+  beltTesting('Belt Testing'),
+  seminar('Seminar'),
+  closure('Closure'),
+  specialEvent('Special Event');
+
+  const _EventType(this.label);
+
+  final String label;
+}
+
+class AdminEventsScreen extends StatefulWidget {
   const AdminEventsScreen({super.key});
 
   @override
+  State<AdminEventsScreen> createState() => _AdminEventsScreenState();
+}
+
+class _AdminEventsScreenState extends State<AdminEventsScreen> {
+  var _selectedFilter = _EventFilter.all;
+
+  List<_AdminEvent> get _filteredEvents {
+    final now = DateTime.now();
+
+    return _mockEvents.where((event) {
+      return switch (_selectedFilter) {
+        _EventFilter.all => true,
+        _EventFilter.published => event.isPublished,
+        _EventFilter.draft => !event.isPublished,
+        _EventFilter.registrationOpen => event.isRegistrationOpen(now),
+        _EventFilter.upcoming => event.startDateTime.isAfter(now),
+        _EventFilter.past => event.endDateTime.isBefore(now),
+      };
+    }).toList()..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const AdminPlaceholderPage(
-      title: 'Events',
-      description: 'Create and update academy events and registration links.',
+    final events = _filteredEvents;
+
+    return AdminPageShell(
       selectedDestination: AdminNavDestination.events,
+      title: 'Events',
+      subtitle: 'Create and update academy events and registration links.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _EventsToolbar(onCreateEvent: () => _openEventSheet()),
+          const SizedBox(height: 14),
+          _FilterRow(
+            selectedFilter: _selectedFilter,
+            onSelected: (filter) {
+              setState(() => _selectedFilter = filter);
+            },
+          ),
+          const SizedBox(height: 14),
+          _EventsPanel(
+            events: events,
+            onEdit: _openEventSheet,
+            onPreview: _previewEvent,
+            onArchive: _confirmArchive,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openEventSheet([_AdminEvent? event]) async {
+    // TODO: Persist event create/update through Firestore writes.
+    // TODO: Registration URLs should later feed both family Events and
+    // Resources pages from the same Firestore event/resource relationship.
+    final action = await showModalBottomSheet<_EventSaveAction>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: OtaColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+      ),
+      builder: (context) => _EventFormSheet(event: event),
+    );
+
+    if (!mounted || action == null) {
+      return;
+    }
+
+    final message = switch (action) {
+      _EventSaveAction.draft => 'Mock event draft saved.',
+      _EventSaveAction.publish => 'Mock event published.',
+    };
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _previewEvent(_AdminEvent event) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(event.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _PreviewLine(label: 'When', value: event.dateRangeLabel),
+              _PreviewLine(label: 'Type', value: event.eventType.label),
+              _PreviewLine(label: 'Location', value: event.locationId),
+              _PreviewLine(
+                label: 'Registration',
+                value: event.registrationUrl == null
+                    ? 'No registration link'
+                    : event.registrationUrl!,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _confirmArchive(_AdminEvent event) async {
+    final shouldArchive = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Archive event?'),
+          content: Text(
+            'This mock action will not remove "${event.title}" yet.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: OtaColors.maroon,
+                foregroundColor: OtaColors.white,
+              ),
+              child: const Text('Archive Mock Event'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldArchive != true) {
+      return;
+    }
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${event.title} mock archived.')));
+  }
+}
+
+class _EventsToolbar extends StatelessWidget {
+  const _EventsToolbar({required this.onCreateEvent});
+
+  final VoidCallback onCreateEvent;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminPanel(
+      child: Row(
+        children: [
+          Container(width: 4, height: 34, color: OtaColors.maroon),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Academy event management',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: OtaColors.ink,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          FilledButton.icon(
+            onPressed: onCreateEvent,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Create Event'),
+            style: FilledButton.styleFrom(
+              backgroundColor: OtaColors.maroon,
+              foregroundColor: OtaColors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+              textStyle: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({required this.selectedFilter, required this.onSelected});
+
+  final _EventFilter selectedFilter;
+  final ValueChanged<_EventFilter> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final filter in _EventFilter.values) ...[
+            _FilterButton(
+              label: filter.label,
+              selected: filter == selectedFilter,
+              onTap: () => onSelected(filter),
+            ),
+            if (filter != _EventFilter.values.last) const SizedBox(width: 8),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventsPanel extends StatelessWidget {
+  const _EventsPanel({
+    required this.events,
+    required this.onEdit,
+    required this.onPreview,
+    required this.onArchive,
+  });
+
+  final List<_AdminEvent> events;
+  final ValueChanged<_AdminEvent> onEdit;
+  final ValueChanged<_AdminEvent> onPreview;
+  final ValueChanged<_AdminEvent> onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    return _AdminPanel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PanelHeader(
+            icon: Icons.event_outlined,
+            title: 'Events',
+            detail: '${events.length} shown',
+          ),
+          if (events.isEmpty)
+            const _EmptyState(message: 'No events found.')
+          else
+            for (final event in events) ...[
+              _EventRow(
+                event: event,
+                onEdit: () => onEdit(event),
+                onPreview: () => onPreview(event),
+                onArchive: () => onArchive(event),
+              ),
+              if (event != events.last)
+                const Divider(height: 1, color: Color(0xFFE1E4EA)),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventRow extends StatelessWidget {
+  const _EventRow({
+    required this.event,
+    required this.onEdit,
+    required this.onPreview,
+    required this.onArchive,
+  });
+
+  final _AdminEvent event;
+  final VoidCallback onEdit;
+  final VoidCallback onPreview;
+  final VoidCallback onArchive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 860;
+          final badges = Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              _Badge(label: event.eventType.label, tone: _BadgeTone.navy),
+              _Badge(
+                label: event.isPublished ? 'Published' : 'Draft',
+                tone: event.isPublished
+                    ? _BadgeTone.success
+                    : _BadgeTone.warning,
+              ),
+              _Badge(
+                label: event.registrationLabel,
+                tone: event.registrationUrl == null
+                    ? _BadgeTone.neutral
+                    : _BadgeTone.important,
+              ),
+              if (event.registrationUrl != null)
+                const _Badge(label: 'Link', tone: _BadgeTone.success),
+            ],
+          );
+          final actions = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ActionLink(label: 'Edit', onPressed: onEdit),
+              const SizedBox(width: 2),
+              _ActionLink(label: 'Preview', onPressed: onPreview),
+              const SizedBox(width: 2),
+              _ActionLink(
+                label: 'Archive',
+                onPressed: onArchive,
+                isDanger: true,
+              ),
+            ],
+          );
+
+          final titleBlock = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                event.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _rowTitleStyle(context),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                event.description,
+                maxLines: isNarrow ? 2 : 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleBlock,
+                const SizedBox(height: 8),
+                Text(event.dateRangeLabel, style: _metaStyle(context)),
+                const SizedBox(height: 8),
+                badges,
+                const SizedBox(height: 8),
+                actions,
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(flex: 4, child: titleBlock),
+              SizedBox(
+                width: 148,
+                child: Text(event.dateRangeLabel, style: _metaStyle(context)),
+              ),
+              Expanded(flex: 4, child: badges),
+              actions,
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EventFormSheet extends StatefulWidget {
+  const _EventFormSheet({this.event});
+
+  final _AdminEvent? event;
+
+  @override
+  State<_EventFormSheet> createState() => _EventFormSheetState();
+}
+
+class _EventFormSheetState extends State<_EventFormSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _startController;
+  late final TextEditingController _endController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _registrationUrlController;
+  late final TextEditingController _registrationDeadlineController;
+  late final TextEditingController _notesController;
+  late _EventType _eventType;
+  late bool _isPublished;
+  late bool _showInResources;
+
+  @override
+  void initState() {
+    super.initState();
+    final event = widget.event;
+    _titleController = TextEditingController(text: event?.title ?? '');
+    _descriptionController = TextEditingController(
+      text: event?.description ?? '',
+    );
+    _startController = TextEditingController(
+      text: event == null ? '' : _formatDateTime(event.startDateTime),
+    );
+    _endController = TextEditingController(
+      text: event == null ? '' : _formatDateTime(event.endDateTime),
+    );
+    _locationController = TextEditingController(
+      text: event?.locationId ?? 'ota-cheshire',
+    );
+    _registrationUrlController = TextEditingController(
+      text: event?.registrationUrl ?? '',
+    );
+    _registrationDeadlineController = TextEditingController(
+      text: event?.registrationDeadline == null
+          ? ''
+          : _formatDateTime(event!.registrationDeadline!),
+    );
+    _notesController = TextEditingController(text: event?.notes ?? '');
+    _eventType = event?.eventType ?? _EventType.specialEvent;
+    _isPublished = event?.isPublished ?? false;
+    _showInResources = event?.showInResources ?? false;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _startController.dispose();
+    _endController.dispose();
+    _locationController.dispose();
+    _registrationUrlController.dispose();
+    _registrationDeadlineController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.event != null;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SheetHeader(
+              title: isEditing ? 'Edit Event' : 'Create Event',
+              subtitle: 'Mock form only. Changes are not saved yet.',
+            ),
+            const SizedBox(height: 14),
+            _AdminTextField(controller: _titleController, label: 'Title'),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _descriptionController,
+              label: 'Description',
+              maxLines: 3,
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<_EventType>(
+              initialValue: _eventType,
+              decoration: _fieldDecoration('Event type'),
+              items: [
+                for (final type in _EventType.values)
+                  DropdownMenuItem(value: type, child: Text(type.label)),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _eventType = value);
+                }
+              },
+            ),
+            const SizedBox(height: 10),
+            _TwoColumnFields(
+              first: _AdminTextField(
+                controller: _startController,
+                label: 'Start date/time',
+              ),
+              second: _AdminTextField(
+                controller: _endController,
+                label: 'End date/time',
+              ),
+            ),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _locationController,
+              label: 'Location ID',
+            ),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _registrationUrlController,
+              label: 'Registration link / Google Form URL',
+            ),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _registrationDeadlineController,
+              label: 'Registration deadline',
+            ),
+            const SizedBox(height: 10),
+            _SwitchRow(
+              title: 'Published',
+              value: _isPublished,
+              onChanged: (value) => setState(() => _isPublished = value),
+            ),
+            _SwitchRow(
+              title: 'Show in resources',
+              value: _showInResources,
+              onChanged: (value) => setState(() => _showInResources = value),
+            ),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _notesController,
+              label: 'Optional notes',
+              maxLines: 3,
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                OutlinedButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_EventSaveAction.draft),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: OtaColors.maroon,
+                    side: const BorderSide(color: OtaColors.maroon),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  child: const Text('Save Draft'),
+                ),
+                FilledButton(
+                  onPressed: () =>
+                      Navigator.of(context).pop(_EventSaveAction.publish),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: OtaColors.maroon,
+                    foregroundColor: OtaColors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  child: const Text('Publish Mock Event'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminEvent {
+  const _AdminEvent({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.locationId,
+    required this.eventType,
+    required this.startDateTime,
+    required this.endDateTime,
+    required this.isPublished,
+    required this.showInResources,
+    this.registrationUrl,
+    this.registrationDeadline,
+    this.notes,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String locationId;
+  final _EventType eventType;
+  final DateTime startDateTime;
+  final DateTime endDateTime;
+  final String? registrationUrl;
+  final DateTime? registrationDeadline;
+  final bool isPublished;
+  final bool showInResources;
+  final String? notes;
+
+  String get registrationLabel {
+    if (registrationUrl == null) {
+      return 'No registration';
+    }
+
+    if (registrationDeadline != null &&
+        registrationDeadline!.isBefore(DateTime.now())) {
+      return 'Registration closed';
+    }
+
+    return 'Registration open';
+  }
+
+  String get dateRangeLabel => _formatDateTime(startDateTime);
+
+  bool isRegistrationOpen(DateTime now) {
+    return registrationUrl != null &&
+        (registrationDeadline == null || registrationDeadline!.isAfter(now));
+  }
+}
+
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: selected ? OtaColors.white : OtaColors.ink,
+        backgroundColor: selected ? OtaColors.navy : OtaColors.white,
+        side: BorderSide(
+          color: selected ? OtaColors.navy : const Color(0xFFD0D5DD),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _AdminPanel extends StatelessWidget {
+  const _AdminPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(12),
+  });
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFEFC),
+        border: Border.all(color: const Color(0xFFE9D2D7)),
+        borderRadius: BorderRadius.circular(4),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x168B1E2D),
+            blurRadius: 16,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _PanelHeader extends StatelessWidget {
+  const _PanelHeader({
+    required this.icon,
+    required this.title,
+    required this.detail,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [OtaColors.navy, OtaColors.maroon],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: OtaColors.white, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: OtaColors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          Text(
+            detail,
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: OtaColors.white.withValues(alpha: 0.78),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  const _Badge({required this.label, required this.tone});
+
+  final String label;
+  final _BadgeTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = _badgeColors(tone);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border.all(color: colors.border),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: colors.foreground,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionLink extends StatelessWidget {
+  const _ActionLink({
+    required this.label,
+    required this.onPressed,
+    this.isDanger = false,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool isDanger;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: isDanger ? OtaColors.actionRed : OtaColors.maroon,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: OtaColors.mutedText,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            color: OtaColors.ink,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: OtaColors.mutedText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminTextField extends StatelessWidget {
+  const _AdminTextField({
+    required this.controller,
+    required this.label,
+    this.maxLines = 1,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: _fieldDecoration(label),
+    );
+  }
+}
+
+class _TwoColumnFields extends StatelessWidget {
+  const _TwoColumnFields({required this.first, required this.second});
+
+  final Widget first;
+  final Widget second;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 620) {
+          return Column(children: [first, const SizedBox(height: 10), second]);
+        }
+
+        return Row(
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 10),
+            Expanded(child: second),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      onChanged: onChanged,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      activeThumbColor: OtaColors.maroon,
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: OtaColors.ink,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewLine extends StatelessWidget {
+  const _PreviewLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 94,
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(child: Text(value)),
+        ],
+      ),
+    );
+  }
+}
+
+class _BadgeColors {
+  const _BadgeColors({
+    required this.background,
+    required this.border,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color border;
+  final Color foreground;
+}
+
+enum _BadgeTone { navy, success, warning, important, neutral }
+
+enum _EventSaveAction { draft, publish }
+
+extension on _EventFilter {
+  String get label {
+    return switch (this) {
+      _EventFilter.all => 'All',
+      _EventFilter.published => 'Published',
+      _EventFilter.draft => 'Draft',
+      _EventFilter.registrationOpen => 'Registration Open',
+      _EventFilter.upcoming => 'Upcoming',
+      _EventFilter.past => 'Past',
+    };
+  }
+}
+
+_BadgeColors _badgeColors(_BadgeTone tone) {
+  return switch (tone) {
+    _BadgeTone.navy => const _BadgeColors(
+      background: Color(0xFFEFF2F7),
+      border: Color(0xFFC9D1E4),
+      foreground: OtaColors.navy,
+    ),
+    _BadgeTone.success => const _BadgeColors(
+      background: Color(0xFFEAF7EF),
+      border: Color(0xFFB9DEC6),
+      foreground: Color(0xFF23633B),
+    ),
+    _BadgeTone.warning => const _BadgeColors(
+      background: Color(0xFFFFF3CD),
+      border: Color(0xFFE9D28E),
+      foreground: Color(0xFF7A5200),
+    ),
+    _BadgeTone.important => const _BadgeColors(
+      background: OtaColors.softRed,
+      border: Color(0xFFE7C8CE),
+      foreground: OtaColors.maroon,
+    ),
+    _BadgeTone.neutral => const _BadgeColors(
+      background: Color(0xFFF2F4F7),
+      border: Color(0xFFD0D5DD),
+      foreground: OtaColors.ink,
+    ),
+  };
+}
+
+InputDecoration _fieldDecoration(String label) {
+  return InputDecoration(
+    labelText: label,
+    border: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(4)),
+    ),
+    enabledBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(4)),
+      borderSide: BorderSide(color: Color(0xFFD0D5DD)),
+    ),
+    focusedBorder: const OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(4)),
+      borderSide: BorderSide(color: OtaColors.maroon, width: 1.4),
+    ),
+  );
+}
+
+TextStyle? _rowTitleStyle(BuildContext context) {
+  return Theme.of(context).textTheme.bodyLarge?.copyWith(
+    color: OtaColors.ink,
+    fontWeight: FontWeight.w900,
+  );
+}
+
+TextStyle? _metaStyle(BuildContext context) {
+  return Theme.of(context).textTheme.labelMedium?.copyWith(
+    color: OtaColors.mutedText,
+    fontWeight: FontWeight.w700,
+  );
+}
+
+String _formatDateTime(DateTime dateTime) {
+  final month = _monthNames[dateTime.month - 1];
+  final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+  return '$month ${dateTime.day}, $hour:$minute $period';
+}
+
+final _mockEvents = [
+  _AdminEvent(
+    id: 'parent_night_out',
+    title: 'Parent Night Out',
+    description: 'Evening event with games, training activities, and pizza.',
+    locationId: 'ota-cheshire',
+    eventType: _EventType.parentNightOut,
+    startDateTime: DateTime(2026, 7, 12, 18),
+    endDateTime: DateTime(2026, 7, 12, 21),
+    registrationUrl: 'https://forms.gle/ota-parent-night-out',
+    registrationDeadline: DateTime(2026, 7, 10, 20),
+    isPublished: true,
+    showInResources: true,
+    notes: 'Registration link should later appear in Resources too.',
+  ),
+  _AdminEvent(
+    id: 'summer_belt_testing',
+    title: 'Summer Belt Testing',
+    description: 'Testing event for eligible color belt students.',
+    locationId: 'ota-cheshire',
+    eventType: _EventType.beltTesting,
+    startDateTime: DateTime(2026, 8, 3, 10),
+    endDateTime: DateTime(2026, 8, 3, 13),
+    isPublished: false,
+    showInResources: false,
+  ),
+  _AdminEvent(
+    id: 'fall_tournament',
+    title: 'Fall Regional Tournament',
+    description: 'Regional tournament registration and preparation details.',
+    locationId: 'ota-cheshire',
+    eventType: _EventType.tournament,
+    startDateTime: DateTime(2026, 10, 18, 8),
+    endDateTime: DateTime(2026, 10, 18, 17),
+    registrationUrl: 'https://forms.gle/ota-fall-tournament',
+    registrationDeadline: DateTime(2026, 10, 5, 23, 59),
+    isPublished: true,
+    showInResources: true,
+  ),
+];
+
+const _monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];

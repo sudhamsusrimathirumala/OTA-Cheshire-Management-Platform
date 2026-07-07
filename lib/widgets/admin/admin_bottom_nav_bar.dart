@@ -70,13 +70,13 @@ class _AdminNavigationBarState extends State<AdminNavigationBar> {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: OtaColors.white,
-        border: Border(bottom: BorderSide(color: Color(0xFFE1E4EA))),
+        color: Color(0xFFFFFBF7),
+        border: Border(bottom: BorderSide(color: Color(0xFFE9D2D7))),
         boxShadow: [
           BoxShadow(
-            color: Color(0x14111A36),
-            blurRadius: 10,
-            offset: Offset(0, 3),
+            color: Color(0x1C8B1E2D),
+            blurRadius: 14,
+            offset: Offset(0, 4),
           ),
         ],
       ),
@@ -115,7 +115,7 @@ class AdminPageShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFFAFB),
+      backgroundColor: const Color(0xFFFFF8F4),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -208,10 +208,10 @@ class AdminPlaceholderPage extends StatelessWidget {
       subtitle: description,
       child: DecoratedBox(
         decoration: const BoxDecoration(
-          color: OtaColors.white,
+          color: Color(0xFFFFFCF8),
           border: Border(
-            top: BorderSide(color: Color(0xFFE1E4EA)),
-            bottom: BorderSide(color: Color(0xFFE1E4EA)),
+            top: BorderSide(color: Color(0xFFE9D2D7)),
+            bottom: BorderSide(color: Color(0xFFE9D2D7)),
           ),
         ),
         child: Padding(
@@ -248,7 +248,11 @@ class _AdminTopHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: OtaColors.white,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFFFFFFFF), Color(0xFFFFF0EA)],
+        ),
+      ),
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
       child: Center(
         child: ConstrainedBox(
@@ -260,13 +264,17 @@ class _AdminTopHeader extends StatelessWidget {
                 height: 34,
                 margin: const EdgeInsets.only(right: 10),
                 decoration: BoxDecoration(
-                  color: OtaColors.softRed,
-                  border: Border.all(color: const Color(0xFFE7C8CE)),
+                  gradient: const LinearGradient(
+                    colors: [OtaColors.maroon, OtaColors.actionRed],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(color: const Color(0xFFDCA6AE)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: const Icon(
                   Icons.admin_panel_settings_outlined,
-                  color: OtaColors.maroon,
+                  color: OtaColors.white,
                   size: 20,
                 ),
               ),
@@ -299,8 +307,8 @@ class _AdminTopHeader extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: OtaColors.softRed,
-                  border: Border.all(color: const Color(0xFFE7C8CE)),
+                  color: const Color(0xFFFFF3CD),
+                  border: Border.all(color: const Color(0xFFE9D28E)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -366,10 +374,10 @@ class _AdminNavTab extends StatelessWidget {
               Navigator.of(context).pushReplacementNamed(destination.route);
             },
       style: TextButton.styleFrom(
-        foregroundColor: isSelected ? OtaColors.maroon : OtaColors.ink,
-        disabledForegroundColor: OtaColors.maroon,
+        foregroundColor: isSelected ? OtaColors.white : OtaColors.ink,
+        disabledForegroundColor: OtaColors.white,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        backgroundColor: isSelected ? OtaColors.softRed : Colors.transparent,
+        backgroundColor: isSelected ? OtaColors.maroon : Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         textStyle: const TextStyle(fontWeight: FontWeight.w800),
       ),
@@ -389,7 +397,7 @@ class _AdminNavTab extends StatelessWidget {
             duration: const Duration(milliseconds: 160),
             height: 2,
             width: isSelected ? 28 : 0,
-            color: OtaColors.maroon,
+            color: const Color(0xFFFFC857),
           ),
         ],
       ),

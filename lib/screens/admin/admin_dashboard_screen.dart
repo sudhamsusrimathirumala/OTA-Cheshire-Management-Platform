@@ -130,14 +130,14 @@ class _Panel extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: OtaColors.white,
-        border: Border.all(color: const Color(0xFFE7D8DB)),
+        color: const Color(0xFFFFFEFC),
+        border: Border.all(color: const Color(0xFFE9D2D7)),
         borderRadius: BorderRadius.circular(4),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x0F111A36),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x168B1E2D),
+            blurRadius: 16,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -146,23 +146,29 @@ class _Panel extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
-            child: Row(
-              children: [
-                Icon(icon, size: 18, color: OtaColors.maroon),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: OtaColors.ink,
-                      fontWeight: FontWeight.w800,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: OtaColors.softRed,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                children: [
+                  Icon(icon, size: 18, color: OtaColors.maroon),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: OtaColors.ink,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          const Divider(height: 1, color: Color(0xFFE7D8DB)),
+          const Divider(height: 1, color: Color(0xFFE9D2D7)),
           Padding(padding: const EdgeInsets.all(12), child: child),
         ],
       ),

@@ -797,14 +797,14 @@ class _AdminPanel extends StatelessWidget {
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        color: OtaColors.white,
-        border: Border.all(color: const Color(0xFFE0D2D6)),
+        color: const Color(0xFFFFFEFC),
+        border: Border.all(color: const Color(0xFFE9D2D7)),
         borderRadius: BorderRadius.circular(4),
         boxShadow: const [
           BoxShadow(
-            color: Color(0x10111A36),
-            blurRadius: 12,
-            offset: Offset(0, 4),
+            color: Color(0x168B1E2D),
+            blurRadius: 16,
+            offset: Offset(0, 5),
           ),
         ],
       ),
@@ -829,7 +829,11 @@ class _PanelHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: const BoxDecoration(
-        color: OtaColors.navy,
+        gradient: LinearGradient(
+          colors: [OtaColors.navy, OtaColors.maroon],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
         borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
       ),
       child: Row(
