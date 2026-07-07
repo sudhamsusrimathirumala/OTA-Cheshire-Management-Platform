@@ -273,6 +273,7 @@ ClassSession _session(
   return ClassSession(
     id: id,
     className: className,
+    classTypeId: _classTypeIdFor(className),
     locationId: otaCheshireLocationId,
     startTime: startTime,
     endTime: startTime.add(const Duration(minutes: 40)),
@@ -283,4 +284,23 @@ ClassSession _session(
     isPublished: isPublished,
     resumesOn: resumesOn,
   );
+}
+
+String _classTypeIdFor(String className) {
+  return switch (className) {
+    'Little Tiger (Age 3-5)' => 'little-tiger',
+    'Level 1' => 'level-1',
+    'Level 2' => 'level-2',
+    'Level 3' => 'level-3',
+    'Level 4' => 'level-4',
+    'Black Belt' => 'black-belt',
+    'Teen & Black Belt' => 'teen-black-belt',
+    'Adult' => 'adult',
+    'Level 1 / Level 2 Sparring' || 'Teen/Adult Sparring' => 'sparring-class',
+    _ => throw ArgumentError.value(
+      className,
+      'className',
+      'Unknown class type',
+    ),
+  };
 }

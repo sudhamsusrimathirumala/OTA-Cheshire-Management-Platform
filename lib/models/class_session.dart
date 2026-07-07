@@ -4,6 +4,7 @@ class ClassSession {
   ClassSession({
     required this.id,
     required this.className,
+    required this.classTypeId,
     required this.locationId,
     required this.startTime,
     required this.endTime,
@@ -17,6 +18,9 @@ class ClassSession {
 
   final String id;
   final String className;
+  // Used for future bulk actions, such as editing or deleting all sessions of
+  // the same class type while keeping each scheduled occurrence separate.
+  final String classTypeId;
   final String locationId;
   final DateTime startTime;
   final DateTime endTime;

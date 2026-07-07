@@ -219,6 +219,9 @@ Map<String, Object?> _classSessionData(ClassSession session, int weekday) {
 
   return {
     'className': session.className,
+    // Used for future bulk actions, such as editing or deleting all sessions of
+    // the same class type while keeping each scheduled occurrence separate.
+    'classTypeId': session.classTypeId,
     'locationId': session.locationId,
     'weekday': weekday,
     'startTime': Timestamp.fromDate(session.startTime),
