@@ -35,66 +35,87 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final notifications = _filteredNotifications;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final notifications = _filteredNotifications;
+        final announcementsErrorMessage =
+            appDataService.announcementsErrorMessage;
 
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _NotificationsHeader(
-                          unreadCount: appDataService.notifications
-                              .where((notification) => !notification.isRead)
-                              .length,
-                        ),
-                        const SizedBox(height: 16),
-                        _NotificationFilters(
-                          selectedFilter: _selectedFilter,
-                          onSelected: (filter) {
-                            setState(() => _selectedFilter = filter);
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        if (notifications.isEmpty)
-                          const _NotificationsEmptyState()
-                        else
-                          for (final notification in notifications) ...[
-                            NotificationCard(
-                              notification: notification,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => NotificationDetailScreen(
-                                      notification: notification,
-                                    ),
-                                  ),
-                                );
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          body: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _NotificationsHeader(
+                              unreadCount: appDataService.notifications
+                                  .where((notification) => !notification.isRead)
+                                  .length,
+                            ),
+                            const SizedBox(height: 16),
+                            _NotificationFilters(
+                              selectedFilter: _selectedFilter,
+                              onSelected: (filter) {
+                                setState(() => _selectedFilter = filter);
                               },
                             ),
-                            if (notification != notifications.last)
-                              const SizedBox(height: 12),
+                            const SizedBox(height: 16),
+                            if (appDataService.isAnnouncementsLoading)
+                              const _NotificationsStatusState(
+                                icon: Icons.sync_rounded,
+                                title: 'Loading announcements',
+                                detail: 'Checking the latest OTA updates.',
+                                showProgress: true,
+                              )
+                            else if (announcementsErrorMessage != null)
+                              _NotificationsStatusState(
+                                icon: Icons.cloud_off_rounded,
+                                title: 'Announcements unavailable',
+                                detail: announcementsErrorMessage,
+                              )
+                            else if (notifications.isEmpty)
+                              const _NotificationsEmptyState()
+                            else
+                              for (final notification in notifications) ...[
+                                NotificationCard(
+                                  notification: notification,
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) =>
+                                            NotificationDetailScreen(
+                                              notification: notification,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                if (notification != notifications.last)
+                                  const SizedBox(height: 12),
+                              ],
                           ],
-                      ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.notifications,
-      ),
+          ),
+          bottomNavigationBar: const OtaBottomNavBar(
+            selectedDestination: OtaBottomNavDestination.notifications,
+          ),
+        );
+      },
     );
   }
 }
@@ -295,6 +316,72 @@ class _NotificationsEmptyState extends StatelessWidget {
               color: OtaColors.ink,
               fontWeight: FontWeight.w900,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NotificationsStatusState extends StatelessWidget {
+  const _NotificationsStatusState({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.showProgress = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.08),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showProgress)
+            const CircularProgressIndicator()
+          else
+            Container(
+              width: 62,
+              height: 62,
+              decoration: BoxDecoration(
+                color: OtaColors.softRed,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(icon, color: OtaColors.maroon, size: 34),
+            ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            detail,
+            textAlign: TextAlign.center,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
           ),
         ],
       ),

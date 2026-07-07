@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../models/class_session.dart';
@@ -16,21 +17,54 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   FirebaseAppDataService({
     FirebaseFirestore? firestore,
     AppDataService? fallbackService,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance,
-       _fallbackService = fallbackService ?? const MockAppDataService() {
-    _listenToSchedule();
+  }) : _fallbackService = fallbackService ?? const MockAppDataService() {
+    _firestore = firestore;
+    _listenToFirestore();
   }
 
-  final FirebaseFirestore _firestore;
+  FirebaseFirestore? _firestore;
   final AppDataService _fallbackService;
   Map<int, List<ClassSession>> _schedule = const <int, List<ClassSession>>{};
+  List<NotificationItem> _notifications = const <NotificationItem>[];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _scheduleSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _announcementsSubscription;
+  QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
+  bool _isAnnouncementsLoading = true;
+  String? _announcementsErrorMessage;
+  bool _isUsingFallbackData = false;
 
-  void _listenToSchedule() {
-    _scheduleSubscription = _firestore
+  void _listenToFirestore() {
+    try {
+      if (_firestore == null && Firebase.apps.isEmpty) {
+        _useFallbackDataForUnavailableFirebase();
+        return;
+      }
+
+      final firestore = _firestore ?? FirebaseFirestore.instance;
+      _firestore = firestore;
+      _listenToSchedule(firestore);
+      _listenToAnnouncements(firestore);
+    } catch (_) {
+      _useFallbackDataForUnavailableFirebase();
+    }
+  }
+
+  void _useFallbackDataForUnavailableFirebase() {
+    _schedule = _fallbackService.schedule;
+    _notifications = _fallbackService.notifications;
+    _isUsingFallbackData = true;
+    _isScheduleLoading = false;
+    _isAnnouncementsLoading = false;
+    _scheduleErrorMessage = null;
+    _announcementsErrorMessage = null;
+  }
+
+  void _listenToSchedule(FirebaseFirestore firestore) {
+    _scheduleSubscription = firestore
         .collection(FirestoreCollections.classSessions)
         .orderBy('weekday')
         .orderBy('startMinutes')
@@ -38,8 +72,25 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
   }
 
+  void _listenToAnnouncements(FirebaseFirestore firestore) {
+    _announcementsSubscription = firestore
+        .collection(FirestoreCollections.announcements)
+        .orderBy('publishedAt', descending: true)
+        .snapshots()
+        .listen(
+          _handleAnnouncementsSnapshot,
+          onError: _handleAnnouncementsError,
+        );
+  }
+
   void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
     _schedule = _scheduleFromSnapshot(snapshot);
+    _isUsingFallbackData = false;
+    if (_latestAnnouncementsSnapshot != null) {
+      _notifications = _announcementsFromSnapshot(
+        _latestAnnouncementsSnapshot!,
+      );
+    }
     _isScheduleLoading = false;
     _scheduleErrorMessage = null;
     notifyListeners();
@@ -52,9 +103,28 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     notifyListeners();
   }
 
+  void _handleAnnouncementsSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    _latestAnnouncementsSnapshot = snapshot;
+    _notifications = _announcementsFromSnapshot(snapshot);
+    _isUsingFallbackData = false;
+    _isAnnouncementsLoading = false;
+    _announcementsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleAnnouncementsError(Object error) {
+    _notifications = const <NotificationItem>[];
+    _isAnnouncementsLoading = false;
+    _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     unawaited(_scheduleSubscription?.cancel());
+    unawaited(_announcementsSubscription?.cancel());
     super.dispose();
   }
 
@@ -82,12 +152,22 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String? get scheduleErrorMessage => _scheduleErrorMessage;
 
   @override
+  bool get isAnnouncementsLoading => _isAnnouncementsLoading;
+
+  @override
+  String? get announcementsErrorMessage => _announcementsErrorMessage;
+
+  @override
   List<ClassSession> scheduleForWeekday(int weekday) {
     return _schedule[weekday] ?? const <ClassSession>[];
   }
 
   @override
   ClassSession? nextClassForDashboard() {
+    if (_isUsingFallbackData) {
+      return _fallbackService.nextClassForDashboard();
+    }
+
     final weekdays = _weekdaysStartingWith(DateTime.now().weekday);
 
     for (final weekday in weekdays) {
@@ -129,11 +209,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     return _fallbackService.beltDisplayLabel(belt);
   }
 
-  // TODO: Replace mock delegation with Firestore-backed announcements.
   // TODO: Add Firestore-backed events and resources when those features are
   // wired into AppDataService.
   @override
-  List<NotificationItem> get notifications => _fallbackService.notifications;
+  List<NotificationItem> get notifications => _notifications;
 
   Map<int, List<ClassSession>> _scheduleFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
@@ -213,6 +292,125 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       resumesOn: _dateTimeValue(data['resumesOn']),
     );
   }
+
+  List<NotificationItem> _announcementsFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
+      return const <NotificationItem>[];
+    }
+
+    final announcements = <NotificationItem>[];
+
+    for (final document in snapshot.docs) {
+      final announcement = _notificationFromAnnouncementDocument(document);
+      if (announcement != null) {
+        announcements.add(announcement);
+      }
+    }
+
+    announcements.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    return List<NotificationItem>.unmodifiable(announcements);
+  }
+
+  NotificationItem? _notificationFromAnnouncementDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final title = _stringValue(data['title']);
+    final summary = _stringValue(data['summary']);
+    final body = _stringValue(data['body']);
+    final announcementType = _stringValue(data['announcementType']);
+    final priority = _stringValue(data['priority']);
+    final status = _stringValue(data['status']);
+    final audienceType = _stringValue(data['audienceType']);
+    final locationId = _stringValue(data['locationId']);
+    final publishedAt = _dateTimeValue(data['publishedAt']);
+    final createdAt = _dateTimeValue(data['createdAt']);
+    final updatedAt = _dateTimeValue(data['updatedAt']);
+    final targetBelts = _stringListValue(data['targetBelts']);
+    final targetClassTypeIds = _stringListValue(data['targetClassTypeIds']);
+    final targetStudentProfileIds = _stringListValue(
+      data['targetStudentProfileIds'],
+    );
+    final targetUserIds = _stringListValue(data['targetUserIds']);
+
+    if (title == null ||
+        summary == null ||
+        body == null ||
+        announcementType == null ||
+        priority == null ||
+        status == null ||
+        audienceType == null ||
+        locationId == null ||
+        publishedAt == null ||
+        createdAt == null ||
+        updatedAt == null) {
+      return null;
+    }
+
+    if (locationId != selectedStudentProfile.locationId ||
+        status != 'published' ||
+        !_announcementTargetsSelectedAudience(
+          audienceType: audienceType,
+          targetBelts: targetBelts,
+          targetClassTypeIds: targetClassTypeIds,
+          targetStudentProfileIds: targetStudentProfileIds,
+          targetUserIds: targetUserIds,
+        )) {
+      return null;
+    }
+
+    return NotificationItem(
+      id: document.id,
+      locationId: locationId,
+      title: title,
+      summary: summary,
+      body: body,
+      timestamp: publishedAt,
+      isRead: false,
+      category: _categoryForAnnouncementType(announcementType),
+      priority: _priorityForAnnouncement(priority),
+      requiresAction: _boolValue(data['requiresAction']) ?? false,
+    );
+  }
+
+  bool _announcementTargetsSelectedAudience({
+    required String audienceType,
+    required List<String> targetBelts,
+    required List<String> targetClassTypeIds,
+    required List<String> targetStudentProfileIds,
+    required List<String> targetUserIds,
+  }) {
+    return switch (audienceType) {
+      'everyone' => true,
+      'belt' => targetBelts.contains(selectedStudentProfile.belt),
+      'classType' => _selectedProfileClassTypeIds.any(
+        targetClassTypeIds.contains,
+      ),
+      'students' =>
+        targetStudentProfileIds.isEmpty
+            ? currentUserAccount.role == UserAccountRole.student
+            : targetStudentProfileIds.contains(selectedStudentProfile.id),
+      'parents' => currentUserAccount.role == UserAccountRole.parent,
+      'specificUsers' => targetUserIds.contains(currentUserAccount.id),
+      'mixed' =>
+        targetBelts.contains(selectedStudentProfile.belt) ||
+            _selectedProfileClassTypeIds.any(targetClassTypeIds.contains) ||
+            targetStudentProfileIds.contains(selectedStudentProfile.id) ||
+            targetUserIds.contains(currentUserAccount.id),
+      _ => false,
+    };
+  }
+
+  Set<String> get _selectedProfileClassTypeIds {
+    return {
+      for (final sessions in _schedule.values)
+        for (final session in sessions)
+          if (session.isEligibleFor(selectedStudentProfile))
+            session.classTypeId,
+    };
+  }
 }
 
 List<int> _weekdaysStartingWith(int weekday) {
@@ -272,5 +470,26 @@ String _classTypeIdFor(String className) {
     'Adult' => 'adult',
     'Level 1 / Level 2 Sparring' || 'Teen/Adult Sparring' => 'sparring-class',
     _ => className.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
+  };
+}
+
+NotificationCategory _categoryForAnnouncementType(String announcementType) {
+  return switch (announcementType) {
+    'tournament' => NotificationCategory.tournament,
+    'scheduleChange' || 'schedule' => NotificationCategory.scheduleChange,
+    'beltTesting' || 'testing' => NotificationCategory.beltTesting,
+    'summerCamp' || 'camp' => NotificationCategory.summerCamp,
+    'holiday' || 'closure' => NotificationCategory.holiday,
+    'reminder' => NotificationCategory.reminder,
+    'curriculum' => NotificationCategory.curriculum,
+    _ => NotificationCategory.general,
+  };
+}
+
+NotificationPriority _priorityForAnnouncement(String priority) {
+  return switch (priority) {
+    'important' => NotificationPriority.important,
+    'critical' => NotificationPriority.critical,
+    _ => NotificationPriority.general,
   };
 }

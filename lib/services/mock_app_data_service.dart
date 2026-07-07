@@ -65,6 +65,12 @@ class MockAppDataService implements AppDataService {
   String? get scheduleErrorMessage => null;
 
   @override
+  bool get isAnnouncementsLoading => false;
+
+  @override
+  String? get announcementsErrorMessage => null;
+
+  @override
   List<ClassSession> scheduleForWeekday(int weekday) {
     return schedule[weekday] ?? const <ClassSession>[];
   }

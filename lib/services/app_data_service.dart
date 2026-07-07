@@ -19,6 +19,10 @@ abstract class AppDataService implements Listenable {
 
   String? get scheduleErrorMessage;
 
+  bool get isAnnouncementsLoading;
+
+  String? get announcementsErrorMessage;
+
   List<ClassSession> scheduleForWeekday(int weekday);
 
   ClassSession? nextClassForDashboard();

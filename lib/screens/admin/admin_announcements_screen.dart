@@ -64,34 +64,41 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final announcements = _filteredAnnouncements;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final announcements = _filteredAnnouncements;
 
-    return AdminPageShell(
-      selectedDestination: AdminNavDestination.announcements,
-      title: 'Announcements',
-      subtitle: 'Create announcements and notifications for families.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _AnnouncementsToolbar(
-            onCreateAnnouncement: () => _openAnnouncementSheet(),
+        return AdminPageShell(
+          selectedDestination: AdminNavDestination.announcements,
+          title: 'Announcements',
+          subtitle: 'Create announcements and notifications for families.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AnnouncementsToolbar(
+                onCreateAnnouncement: () => _openAnnouncementSheet(),
+              ),
+              const SizedBox(height: 14),
+              _FilterRow(
+                selectedFilter: _selectedFilter,
+                onSelected: (filter) {
+                  setState(() => _selectedFilter = filter);
+                },
+              ),
+              const SizedBox(height: 14),
+              _AnnouncementsPanel(
+                announcements: announcements,
+                isLoading: appDataService.isAnnouncementsLoading,
+                errorMessage: appDataService.announcementsErrorMessage,
+                onEdit: _openAnnouncementSheet,
+                onPreview: _previewAnnouncement,
+                onDelete: _confirmDelete,
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _FilterRow(
-            selectedFilter: _selectedFilter,
-            onSelected: (filter) {
-              setState(() => _selectedFilter = filter);
-            },
-          ),
-          const SizedBox(height: 14),
-          _AnnouncementsPanel(
-            announcements: announcements,
-            onEdit: _openAnnouncementSheet,
-            onPreview: _previewAnnouncement,
-            onDelete: _confirmDelete,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -312,12 +319,16 @@ class _FilterButton extends StatelessWidget {
 class _AnnouncementsPanel extends StatelessWidget {
   const _AnnouncementsPanel({
     required this.announcements,
+    required this.isLoading,
+    required this.errorMessage,
     required this.onEdit,
     required this.onPreview,
     required this.onDelete,
   });
 
   final List<_AdminAnnouncement> announcements;
+  final bool isLoading;
+  final String? errorMessage;
   final ValueChanged<_AdminAnnouncement> onEdit;
   final ValueChanged<_AdminAnnouncement> onPreview;
   final ValueChanged<_AdminAnnouncement> onDelete;
@@ -332,9 +343,17 @@ class _AnnouncementsPanel extends StatelessWidget {
           _PanelHeader(
             icon: Icons.campaign_outlined,
             title: 'Announcements',
-            detail: '${announcements.length} shown',
+            detail: isLoading
+                ? 'Loading announcements'
+                : '${announcements.length} shown',
           ),
-          if (announcements.isEmpty)
+          if (isLoading)
+            const _LoadingState(
+              message: 'Loading announcements from Firestore.',
+            )
+          else if (errorMessage != null)
+            _EmptyState(message: errorMessage!)
+          else if (announcements.isEmpty)
             const _EmptyState(message: 'No announcements match this filter.')
           else
             for (final announcement in announcements) ...[
@@ -909,6 +928,37 @@ class _EmptyState extends StatelessWidget {
           color: OtaColors.mutedText,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
