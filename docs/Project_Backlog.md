@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** July 3, 2026
+**Last Updated:** July 6, 2026
 
 ---
 
@@ -36,6 +36,7 @@
 - [x] Location ID field on backend-relevant models
 - [ ] Belt progression model
 - [x] Class scheduling model
+- [x] Shared `classTypeId` on class sessions for future bulk schedule actions
 - [x] Notification model
 
 ---
@@ -93,6 +94,36 @@ Tasks:
 
 ---
 
+# Firebase Data Migration
+
+Current Status:
+- [x] Firebase is configured and initialized in the Flutter app
+- [x] Firestore seed collection constants and seed service exist
+- [x] Development-only Firestore seed entrypoints exist
+- [x] `FirebaseAppDataService` exists behind `const bool useFirebase = false`
+- [x] Schedule data can be read from Firestore `classSessions`
+- [x] Firebase schedule reads use `snapshots()` and notify schedule screens when data changes
+- [x] Non-schedule app data still delegates to `MockAppDataService`
+
+Future Improvements:
+- [ ] Seed and validate production-like Firestore data before enabling Firebase mode
+- [ ] Confirm Firestore security rules for schedule reads
+- [ ] Flip `useFirebase` only after schedule seed data and rules are verified
+- [ ] Replace mock users with Firebase Auth and Firestore-backed user records
+- [ ] Replace mock student profiles with Firestore-backed profiles
+- [ ] Replace mock announcements with Firestore-backed announcements
+- [ ] Replace mock events and resources with Firestore-backed collections
+- [ ] Add Firebase-backed admin schedule writes
+- [ ] Add Firebase-backed bulk schedule edit/delete actions using `classTypeId`
+
+Priority:
+Medium
+
+Reason:
+The read path is now in place for schedule data, but the app should keep using mock data by default until seed data, Firestore rules, and admin write flows are ready.
+
+---
+
 # Technical Debt
 
 ## Schedule Screen Refactor
@@ -141,10 +172,12 @@ Future Improvements:
 - [x] Add AppDataService interface between UI and mock data
 - [x] Add MockAppDataService as the active data source
 - [x] Keep UI personalization driven by the selected student profile
+- [x] Add Firebase schedule service behind a provider switch
+- [x] Make student and admin schedule pages rebuild from service notifications
 - [ ] Decide the production app launch flow before authentication is added
 - [ ] Define parent/student profile switching behavior before Firebase integration
 - [ ] Add a no-linked-student-profile UI state for newly approved accounts
-- [ ] Replace MockAppDataService with FirebaseAppDataService when Firestore is introduced
+- [ ] Replace remaining MockAppDataService methods after each Firestore read path is ready
 - [ ] Centralize repeated card and surface styling tokens if UI duplication continues to grow
 - [ ] Keep notification attachments, links, and deep-link targets as UI placeholders until backend models are designed
 

@@ -156,60 +156,63 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedClasses = _selectedDayClasses;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final selectedClasses = _selectedDayClasses;
 
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: Column(
-                    children: [
-                      _DateNavigationHeader(
-                        selectedDate: _selectedDate,
-                        onPrevious: _goToPreviousDay,
-                        onNext: _goToNextDay,
-                        onDateTap: _pickDate,
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        children: [
+                          _DateNavigationHeader(
+                            selectedDate: _selectedDate,
+                            onPrevious: _goToPreviousDay,
+                            onNext: _goToNextDay,
+                            onDateTap: _pickDate,
+                          ),
+                          const SizedBox(height: 12),
+                          _NextEligibleBanner(nextClass: _nextEligibleClass),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      _NextEligibleBanner(nextClass: _nextEligibleClass),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: selectedClasses.isEmpty
-                      ? const _EmptyScheduleState()
-                      : _ScheduleTimeline(
-                          classes: selectedClasses,
-                          selectedDate: _selectedDate,
-                          isViewingToday: _isViewingToday,
-                          scrollController: _scrollController,
-                          hourHeight: _hourHeight,
-                          timelineGutterWidth: _timelineGutterWidth,
-                          eventGap: _eventGap,
-                          student: _student,
-                          nextEligibleSession: _nextEligibleClass,
-                          onClassTap: _showClassDetails,
-                        ),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: _ScheduleContent(
+                        selectedClasses: selectedClasses,
+                        selectedDate: _selectedDate,
+                        isViewingToday: _isViewingToday,
+                        scrollController: _scrollController,
+                        hourHeight: _hourHeight,
+                        timelineGutterWidth: _timelineGutterWidth,
+                        eventGap: _eventGap,
+                        student: _student,
+                        nextEligibleSession: _nextEligibleClass,
+                        onClassTap: _showClassDetails,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.schedule,
-      ),
+          ),
+          bottomNavigationBar: const OtaBottomNavBar(
+            selectedDestination: OtaBottomNavDestination.schedule,
+          ),
+        );
+      },
     );
   }
 
@@ -300,6 +303,71 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+class _ScheduleContent extends StatelessWidget {
+  const _ScheduleContent({
+    required this.selectedClasses,
+    required this.selectedDate,
+    required this.isViewingToday,
+    required this.scrollController,
+    required this.hourHeight,
+    required this.timelineGutterWidth,
+    required this.eventGap,
+    required this.student,
+    required this.nextEligibleSession,
+    required this.onClassTap,
+  });
+
+  final List<ClassSession> selectedClasses;
+  final DateTime selectedDate;
+  final bool isViewingToday;
+  final ScrollController scrollController;
+  final double hourHeight;
+  final double timelineGutterWidth;
+  final double eventGap;
+  final StudentProfile student;
+  final ClassSession? nextEligibleSession;
+  final ValueChanged<ClassSession> onClassTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduleErrorMessage = appDataService.scheduleErrorMessage;
+
+    if (appDataService.isScheduleLoading) {
+      return const _ScheduleStatusState(
+        icon: Icons.sync_rounded,
+        title: 'Loading schedule',
+        detail: 'Checking the latest class schedule.',
+        showProgress: true,
+      );
+    }
+
+    if (scheduleErrorMessage != null) {
+      return _ScheduleStatusState(
+        icon: Icons.cloud_off_rounded,
+        title: 'Schedule unavailable',
+        detail: scheduleErrorMessage,
+      );
+    }
+
+    if (selectedClasses.isEmpty) {
+      return const _EmptyScheduleState();
+    }
+
+    return _ScheduleTimeline(
+      classes: selectedClasses,
+      selectedDate: selectedDate,
+      isViewingToday: isViewingToday,
+      scrollController: scrollController,
+      hourHeight: hourHeight,
+      timelineGutterWidth: timelineGutterWidth,
+      eventGap: eventGap,
+      student: student,
+      nextEligibleSession: nextEligibleSession,
+      onClassTap: onClassTap,
     );
   }
 }
@@ -739,6 +807,78 @@ class _CurrentTimeIndicator extends StatelessWidget {
           ),
           Expanded(child: Container(height: 2, color: OtaColors.actionRed)),
         ],
+      ),
+    );
+  }
+}
+
+class _ScheduleStatusState extends StatelessWidget {
+  const _ScheduleStatusState({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.showProgress = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final bool showProgress;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: OtaColors.white,
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: OtaColors.navy.withValues(alpha: 0.08),
+                blurRadius: 24,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showProgress)
+                const CircularProgressIndicator()
+              else
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: OtaColors.softRed,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Icon(icon, color: OtaColors.maroon, size: 30),
+                ),
+              const SizedBox(height: 18),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: OtaColors.ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                detail,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

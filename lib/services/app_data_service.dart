@@ -1,10 +1,12 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 
-abstract class AppDataService {
+abstract class AppDataService implements Listenable {
   UserAccount get currentUserAccount;
 
   List<StudentProfile> get linkedStudentProfiles;
@@ -12,6 +14,10 @@ abstract class AppDataService {
   StudentProfile get selectedStudentProfile;
 
   Map<int, List<ClassSession>> get schedule;
+
+  bool get isScheduleLoading;
+
+  String? get scheduleErrorMessage;
 
   List<ClassSession> scheduleForWeekday(int weekday);
 

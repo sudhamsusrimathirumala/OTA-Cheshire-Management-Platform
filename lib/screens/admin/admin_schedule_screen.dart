@@ -17,36 +17,44 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sessions = [...appDataService.scheduleForWeekday(_selectedWeekday)]
-      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final sessions = [
+          ...appDataService.scheduleForWeekday(_selectedWeekday),
+        ]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 
-    return AdminPageShell(
-      selectedDestination: AdminNavDestination.schedule,
-      title: 'Schedule',
-      subtitle: 'Update class schedules shown to students and parents.',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _ScheduleToolbar(
-            onAddClass: () => _openClassSheet(),
-            onBulkAction: _openBulkActionSheet,
+        return AdminPageShell(
+          selectedDestination: AdminNavDestination.schedule,
+          title: 'Schedule',
+          subtitle: 'Update class schedules shown to students and parents.',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ScheduleToolbar(
+                onAddClass: () => _openClassSheet(),
+                onBulkAction: _openBulkActionSheet,
+              ),
+              const SizedBox(height: 14),
+              _DaySelector(
+                selectedWeekday: _selectedWeekday,
+                onSelected: (weekday) {
+                  setState(() => _selectedWeekday = weekday);
+                },
+              ),
+              const SizedBox(height: 14),
+              _SchedulePanel(
+                weekdayLabel: _weekdayLabel(_selectedWeekday),
+                sessions: sessions,
+                isLoading: appDataService.isScheduleLoading,
+                errorMessage: appDataService.scheduleErrorMessage,
+                onEdit: _openClassSheet,
+                onDelete: _confirmDelete,
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
-          _DaySelector(
-            selectedWeekday: _selectedWeekday,
-            onSelected: (weekday) {
-              setState(() => _selectedWeekday = weekday);
-            },
-          ),
-          const SizedBox(height: 14),
-          _SchedulePanel(
-            weekdayLabel: _weekdayLabel(_selectedWeekday),
-            sessions: sessions,
-            onEdit: _openClassSheet,
-            onDelete: _confirmDelete,
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -263,12 +271,16 @@ class _SchedulePanel extends StatelessWidget {
   const _SchedulePanel({
     required this.weekdayLabel,
     required this.sessions,
+    required this.isLoading,
+    required this.errorMessage,
     required this.onEdit,
     required this.onDelete,
   });
 
   final String weekdayLabel;
   final List<ClassSession> sessions;
+  final bool isLoading;
+  final String? errorMessage;
   final ValueChanged<ClassSession> onEdit;
   final ValueChanged<ClassSession> onDelete;
 
@@ -282,9 +294,15 @@ class _SchedulePanel extends StatelessWidget {
           _PanelHeader(
             icon: Icons.calendar_month_outlined,
             title: weekdayLabel,
-            detail: '${sessions.length} active classes',
+            detail: isLoading
+                ? 'Loading classes'
+                : '${sessions.length} active classes',
           ),
-          if (sessions.isEmpty)
+          if (isLoading)
+            const _LoadingState(message: 'Loading schedule from Firestore.')
+          else if (errorMessage != null)
+            _EmptyState(message: errorMessage!)
+          else if (sessions.isEmpty)
             const _EmptyState(message: 'No classes scheduled for this day.')
           else
             for (final session in sessions) ...[
@@ -622,150 +640,161 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final affectedSessions = _affectedSessions;
-    final showClassSelector = _action == _BulkScheduleAction.deleteClassInRange;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, child) {
+        final affectedSessions = _affectedSessions;
+        final showClassSelector =
+            _action == _BulkScheduleAction.deleteClassInRange;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const _SheetHeader(
-              title: 'Bulk Schedule Action',
-              subtitle: 'Mock bulk deletion. Changes are not saved yet.',
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: OtaColors.softRed,
-                border: Border.all(color: const Color(0xFFE7C8CE)),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'Use this for closures, vacation days, or removing one recurring class from a date range.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: OtaColors.maroon,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<_BulkScheduleAction>(
-              initialValue: _action,
-              decoration: _fieldDecoration('Bulk action'),
-              items: [
-                for (final action in _BulkScheduleAction.values)
-                  DropdownMenuItem<_BulkScheduleAction>(
-                    value: action,
-                    child: Text(action.label),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _action = value);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 560;
-                final fields = [
-                  _DatePickerField(
-                    label: 'Start date',
-                    date: _startDate,
-                    onChanged: (date) => setState(() => _startDate = date),
-                  ),
-                  _DatePickerField(
-                    label: 'End date',
-                    date: _endDate,
-                    onChanged: (date) => setState(() => _endDate = date),
-                  ),
-                ];
-
-                if (!twoColumns) {
-                  return Column(
-                    children: [
-                      fields.first,
-                      const SizedBox(height: 10),
-                      fields.last,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: fields.first),
-                    const SizedBox(width: 10),
-                    Expanded(child: fields.last),
-                  ],
-                );
-              },
-            ),
-            if (showClassSelector) ...[
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                initialValue: _selectedClassName.isEmpty
-                    ? null
-                    : _selectedClassName,
-                decoration: _fieldDecoration('Class to remove'),
-                items: [
-                  for (final className in _classNames)
-                    DropdownMenuItem<String>(
-                      value: className,
-                      child: Text(className),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedClassName = value);
-                  }
-                },
-              ),
-            ],
-            const SizedBox(height: 10),
-            TextField(
-              controller: _reasonController,
-              maxLines: 2,
-              decoration: _fieldDecoration('Internal reason / note'),
-            ),
-            const SizedBox(height: 14),
-            _BulkImpactPreview(affectedSessions: affectedSessions),
-            const SizedBox(height: 16),
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.viewInsetsOf(context).bottom,
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
+                const _SheetHeader(
+                  title: 'Bulk Schedule Action',
+                  subtitle: 'Mock bulk deletion. Changes are not saved yet.',
                 ),
-                FilledButton.icon(
-                  onPressed: () {
-                    // TODO: Apply this bulk deletion through Firebase writes.
-                    Navigator.of(context).pop(true);
-                  },
-                  icon: const Icon(Icons.playlist_remove_outlined, size: 18),
-                  label: const Text('Apply Mock Bulk Delete'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: OtaColors.maroon,
-                    foregroundColor: OtaColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
+                const SizedBox(height: 14),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: OtaColors.softRed,
+                    border: Border.all(color: const Color(0xFFE7C8CE)),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Use this for closures, vacation days, or removing one recurring class from a date range.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: OtaColors.maroon,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<_BulkScheduleAction>(
+                  initialValue: _action,
+                  decoration: _fieldDecoration('Bulk action'),
+                  items: [
+                    for (final action in _BulkScheduleAction.values)
+                      DropdownMenuItem<_BulkScheduleAction>(
+                        value: action,
+                        child: Text(action.label),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _action = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 10),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final twoColumns = constraints.maxWidth >= 560;
+                    final fields = [
+                      _DatePickerField(
+                        label: 'Start date',
+                        date: _startDate,
+                        onChanged: (date) => setState(() => _startDate = date),
+                      ),
+                      _DatePickerField(
+                        label: 'End date',
+                        date: _endDate,
+                        onChanged: (date) => setState(() => _endDate = date),
+                      ),
+                    ];
+
+                    if (!twoColumns) {
+                      return Column(
+                        children: [
+                          fields.first,
+                          const SizedBox(height: 10),
+                          fields.last,
+                        ],
+                      );
+                    }
+
+                    return Row(
+                      children: [
+                        Expanded(child: fields.first),
+                        const SizedBox(width: 10),
+                        Expanded(child: fields.last),
+                      ],
+                    );
+                  },
+                ),
+                if (showClassSelector) ...[
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedClassName.isEmpty
+                        ? null
+                        : _selectedClassName,
+                    decoration: _fieldDecoration('Class to remove'),
+                    items: [
+                      for (final className in _classNames)
+                        DropdownMenuItem<String>(
+                          value: className,
+                          child: Text(className),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => _selectedClassName = value);
+                      }
+                    },
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _reasonController,
+                  maxLines: 2,
+                  decoration: _fieldDecoration('Internal reason / note'),
+                ),
+                const SizedBox(height: 14),
+                _BulkImpactPreview(affectedSessions: affectedSessions),
+                const SizedBox(height: 16),
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Cancel'),
+                    ),
+                    FilledButton.icon(
+                      onPressed: () {
+                        // TODO: Apply this bulk deletion through Firebase writes.
+                        Navigator.of(context).pop(true);
+                      },
+                      icon: const Icon(
+                        Icons.playlist_remove_outlined,
+                        size: 18,
+                      ),
+                      label: const Text('Apply Mock Bulk Delete'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OtaColors.maroon,
+                        foregroundColor: OtaColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1144,6 +1173,37 @@ class _EmptyState extends StatelessWidget {
           color: OtaColors.mutedText,
           fontWeight: FontWeight.w700,
         ),
+      ),
+    );
+  }
+}
+
+class _LoadingState extends StatelessWidget {
+  const _LoadingState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

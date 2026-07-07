@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
@@ -11,21 +12,50 @@ import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
 import '../mock_app_data_service.dart';
 
-class FirebaseAppDataService implements AppDataService {
+class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   FirebaseAppDataService({
     FirebaseFirestore? firestore,
     AppDataService? fallbackService,
   }) : _firestore = firestore ?? FirebaseFirestore.instance,
        _fallbackService = fallbackService ?? const MockAppDataService() {
-    unawaited(refreshSchedule());
+    _listenToSchedule();
   }
 
   final FirebaseFirestore _firestore;
   final AppDataService _fallbackService;
   Map<int, List<ClassSession>> _schedule = const <int, List<ClassSession>>{};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _scheduleSubscription;
+  bool _isScheduleLoading = true;
+  String? _scheduleErrorMessage;
 
-  Future<void> refreshSchedule() async {
-    _schedule = await _loadScheduleFromFirestore();
+  void _listenToSchedule() {
+    _scheduleSubscription = _firestore
+        .collection(FirestoreCollections.classSessions)
+        .orderBy('weekday')
+        .orderBy('startMinutes')
+        .snapshots()
+        .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
+  }
+
+  void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _schedule = _scheduleFromSnapshot(snapshot);
+    _isScheduleLoading = false;
+    _scheduleErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleScheduleError(Object error) {
+    _schedule = const <int, List<ClassSession>>{};
+    _isScheduleLoading = false;
+    _scheduleErrorMessage = 'Unable to load schedule from Firestore.';
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    unawaited(_scheduleSubscription?.cancel());
+    super.dispose();
   }
 
   // TODO: Replace mock delegation with Firebase Auth and Firestore-backed users.
@@ -44,6 +74,12 @@ class FirebaseAppDataService implements AppDataService {
 
   @override
   Map<int, List<ClassSession>> get schedule => _schedule;
+
+  @override
+  bool get isScheduleLoading => _isScheduleLoading;
+
+  @override
+  String? get scheduleErrorMessage => _scheduleErrorMessage;
 
   @override
   List<ClassSession> scheduleForWeekday(int weekday) {
@@ -99,51 +135,39 @@ class FirebaseAppDataService implements AppDataService {
   @override
   List<NotificationItem> get notifications => _fallbackService.notifications;
 
-  Future<Map<int, List<ClassSession>>> _loadScheduleFromFirestore() async {
-    try {
-      final snapshot = await _firestore
-          .collection(FirestoreCollections.classSessions)
-          .orderBy('weekday')
-          .orderBy('startMinutes')
-          .get();
-
-      if (snapshot.docs.isEmpty) {
-        return const <int, List<ClassSession>>{};
-      }
-
-      final groupedSchedule = <int, List<ClassSession>>{};
-
-      for (final document in snapshot.docs) {
-        final session = _classSessionFromDocument(document);
-
-        if (session == null ||
-            session.locationId != selectedStudentProfile.locationId ||
-            !session.isPublished) {
-          continue;
-        }
-
-        final weekday = _intValue(document.data()['weekday']);
-        if (weekday == null) {
-          continue;
-        }
-
-        groupedSchedule
-            .putIfAbsent(weekday, () => <ClassSession>[])
-            .add(session);
-      }
-
-      return {
-        for (final entry in groupedSchedule.entries)
-          entry.key: List<ClassSession>.unmodifiable(
-            [...entry.value]
-              ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes)),
-          ),
-      };
-    } on FirebaseException {
-      return const <int, List<ClassSession>>{};
-    } catch (_) {
+  Map<int, List<ClassSession>> _scheduleFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
       return const <int, List<ClassSession>>{};
     }
+
+    final groupedSchedule = <int, List<ClassSession>>{};
+
+    for (final document in snapshot.docs) {
+      final session = _classSessionFromDocument(document);
+
+      if (session == null ||
+          session.locationId != selectedStudentProfile.locationId ||
+          !session.isPublished) {
+        continue;
+      }
+
+      final weekday = _intValue(document.data()['weekday']);
+      if (weekday == null) {
+        continue;
+      }
+
+      groupedSchedule.putIfAbsent(weekday, () => <ClassSession>[]).add(session);
+    }
+
+    return {
+      for (final entry in groupedSchedule.entries)
+        entry.key: List<ClassSession>.unmodifiable(
+          [...entry.value]
+            ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes)),
+        ),
+    };
   }
 
   ClassSession? _classSessionFromDocument(

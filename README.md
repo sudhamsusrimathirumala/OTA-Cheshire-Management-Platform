@@ -55,7 +55,7 @@ This project aims to create a single platform where students, parents, instructo
 
 - Flutter
 - Dart
-- Firebase (planned)
+- Firebase Core, Firestore, and Auth packages configured
 - Git
 - GitHub
 
@@ -81,19 +81,28 @@ This project aims to create a single platform where students, parents, instructo
 - Basic app models
 - User account and student profile data separation
 - App data service abstraction with mock implementation
+- Firebase app initialization and Android Firebase configuration
+- Firestore collection constants and mock-data seed service
+- Development-only Firestore seed entrypoints
+- Firebase schedule data service behind a feature switch
+- Stream-based Firestore schedule cache for `classSessions`
 - Mock student, schedule, curriculum, and notification data
 - Cheshire OTA belt structure cleanup
+- Admin control panel foundation
 - Project Architecture Planning
 
 ### In Progress
 
 - Application Documentation
 - System Design
+- Firebase data migration, starting with read-only schedule data
 
 ### Planned
 
 - Authentication System
-- Database Integration
+- Firestore security rules and production data validation
+- Admin schedule writes, including bulk edit/delete actions
+- Firebase-backed users, student profiles, announcements, events, and resources
 - Full Curriculum System
 - Full Notification System
 - Family Dashboard
@@ -137,6 +146,11 @@ lib/
 |-- services/
 |   |-- app_data_service.dart
 |   |-- app_data_service_provider.dart
+|   |-- firebase/
+|   |   `-- firebase_app_data_service.dart
+|   |-- firestore/
+|   |   |-- firestore_collections.dart
+|   |   `-- firestore_seed_service.dart
 |   `-- mock_app_data_service.dart
 |-- theme/
 |   `-- ota_colors.dart
@@ -154,6 +168,7 @@ lib/
 |   |-- ota_branded_scaffold.dart
 |   `-- ota_logo_mark.dart
 |-- main.dart
+|-- seed_firestore_main.dart
 `-- routes.dart
 
 docs/
@@ -161,7 +176,26 @@ docs/
 
 test/
 `-- widget_test.dart
+
+tool/
+`-- seed_firestore.dart
 ```
+
+---
+
+## Current Data Layer State
+
+The production app still defaults to `MockAppDataService` through
+`lib/services/app_data_service_provider.dart`.
+
+`FirebaseAppDataService` exists behind `const bool useFirebase = false`. When
+enabled later, it listens to the Firestore `classSessions` collection with
+`snapshots()`, keeps an internal schedule cache, and notifies the student and
+admin schedule screens when Firestore schedule data changes.
+
+All non-schedule data still delegates to `MockAppDataService`. Authentication,
+Firestore writes, admin schedule persistence, announcements, events, resources,
+users, and student profiles remain future work.
 
 ---
 

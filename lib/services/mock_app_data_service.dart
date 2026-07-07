@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../data/sample_curriculum.dart' as curriculum_data;
 import '../data/sample_notifications.dart';
 import '../data/sample_schedule.dart';
@@ -11,6 +13,12 @@ import 'app_data_service.dart';
 
 class MockAppDataService implements AppDataService {
   const MockAppDataService();
+
+  @override
+  void addListener(VoidCallback listener) {}
+
+  @override
+  void removeListener(VoidCallback listener) {}
 
   @override
   UserAccount get currentUserAccount => sampleUserAccount;
@@ -49,6 +57,12 @@ class MockAppDataService implements AppDataService {
             .toList(growable: false),
     };
   }
+
+  @override
+  bool get isScheduleLoading => false;
+
+  @override
+  String? get scheduleErrorMessage => null;
 
   @override
   List<ClassSession> scheduleForWeekday(int weekday) {
