@@ -14,6 +14,8 @@ class AcademyEvent {
     this.registrationUrl,
     this.registrationDeadline,
     this.isArchived = false,
+    this.linkedResourceIds = const <String>[],
+    this.primaryRegistrationResourceId,
   });
 
   final String id;
@@ -30,6 +32,8 @@ class AcademyEvent {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isArchived;
+  final List<String> linkedResourceIds;
+  final String? primaryRegistrationResourceId;
 
   bool get isRegistrationOpen {
     if (registrationUrl == null) {

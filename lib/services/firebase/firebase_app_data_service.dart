@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
+import '../../models/academy_resource.dart';
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
 import '../../models/notification_item.dart';
@@ -31,12 +32,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   List<NotificationItem> _notifications = const <NotificationItem>[];
   List<AcademyAnnouncement> _adminAnnouncements = const <AcademyAnnouncement>[];
   List<AcademyEvent> _events = const <AcademyEvent>[];
+  List<AcademyResource> _resources = const <AcademyResource>[];
   List<StudentProfile> _adminStudentProfiles = const <StudentProfile>[];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _scheduleSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _announcementsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _resourcesSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _adminStudentsSubscription;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
@@ -46,6 +50,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String? _announcementsErrorMessage;
   bool _isEventsLoading = true;
   String? _eventsErrorMessage;
+  bool _isResourcesLoading = true;
+  String? _resourcesErrorMessage;
   bool _isAdminStudentsLoading = true;
   String? _adminStudentsErrorMessage;
   bool _isUsingFallbackData = false;
@@ -62,6 +68,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _listenToSchedule(firestore);
       _listenToAnnouncements(firestore);
       _listenToEvents(firestore);
+      _listenToResources(firestore);
       _listenToAdminStudents(firestore);
     } catch (_) {
       _useFallbackDataForUnavailableFirebase();
@@ -73,15 +80,18 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _notifications = _fallbackService.notifications;
     _adminAnnouncements = _fallbackService.adminAnnouncements;
     _events = _fallbackService.events;
+    _resources = _fallbackService.resources;
     _adminStudentProfiles = _fallbackService.adminStudentProfiles;
     _isUsingFallbackData = true;
     _isScheduleLoading = false;
     _isAnnouncementsLoading = false;
     _isEventsLoading = false;
+    _isResourcesLoading = false;
     _isAdminStudentsLoading = false;
     _scheduleErrorMessage = null;
     _announcementsErrorMessage = null;
     _eventsErrorMessage = null;
+    _resourcesErrorMessage = null;
     _adminStudentsErrorMessage = null;
   }
 
@@ -109,6 +119,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .collection(FirestoreCollections.events)
         .snapshots()
         .listen(_handleEventsSnapshot, onError: _handleEventsError);
+  }
+
+  void _listenToResources(FirebaseFirestore firestore) {
+    _resourcesSubscription = firestore
+        .collection(FirestoreCollections.resources)
+        .snapshots()
+        .listen(_handleResourcesSnapshot, onError: _handleResourcesError);
   }
 
   void _listenToAdminStudents(FirebaseFirestore firestore) {
@@ -176,6 +193,21 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     notifyListeners();
   }
 
+  void _handleResourcesSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _resources = _resourcesFromSnapshot(snapshot);
+    _isUsingFallbackData = false;
+    _isResourcesLoading = false;
+    _resourcesErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleResourcesError(Object error) {
+    _resources = const <AcademyResource>[];
+    _isResourcesLoading = false;
+    _resourcesErrorMessage = 'Unable to load resources from Firestore.';
+    notifyListeners();
+  }
+
   void _handleAdminStudentsSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
@@ -199,6 +231,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
+    unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
     super.dispose();
   }
@@ -240,6 +273,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   String? get eventsErrorMessage => _eventsErrorMessage;
+
+  @override
+  bool get isResourcesLoading => _isResourcesLoading;
+
+  @override
+  String? get resourcesErrorMessage => _resourcesErrorMessage;
 
   @override
   bool get isAdminStudentsLoading => _isAdminStudentsLoading;
@@ -307,6 +346,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   List<AcademyEvent> get events => _events;
+
+  @override
+  List<AcademyResource> get resources => _resources;
 
   Map<int, List<ClassSession>> _scheduleFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
@@ -595,6 +637,67 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       registrationDeadline: _dateTimeValue(data['registrationDeadline']),
       isPublished: _boolValue(data['isPublished']) ?? false,
       showInResources: _boolValue(data['showInResources']) ?? false,
+      isArchived: _boolValue(data['isArchived']) ?? false,
+      linkedResourceIds: _stringListValue(data['linkedResourceIds']),
+      primaryRegistrationResourceId: _stringValue(
+        data['primaryRegistrationResourceId'],
+      ),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
+
+  List<AcademyResource> _resourcesFromSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    if (snapshot.docs.isEmpty) {
+      return const <AcademyResource>[];
+    }
+
+    final resources = <AcademyResource>[];
+
+    for (final document in snapshot.docs) {
+      final resource = _resourceFromDocument(document);
+      if (resource != null && resource.locationId == _adminLocationId) {
+        resources.add(resource);
+      }
+    }
+
+    resources.sort((a, b) {
+      final category = a.categoryLabel.compareTo(b.categoryLabel);
+      if (category != 0) {
+        return category;
+      }
+      return a.title.compareTo(b.title);
+    });
+    return List<AcademyResource>.unmodifiable(resources);
+  }
+
+  AcademyResource? _resourceFromDocument(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final title = _stringValue(data['title']);
+    final locationId = _stringValue(data['locationId']);
+    final createdAt = _dateTimeValue(data['createdAt']);
+    final updatedAt = _dateTimeValue(data['updatedAt']);
+
+    if (title == null ||
+        locationId == null ||
+        createdAt == null ||
+        updatedAt == null) {
+      return null;
+    }
+
+    return AcademyResource(
+      id: document.id,
+      title: title,
+      description: _stringValue(data['description']) ?? '',
+      resourceType: _stringValue(data['resourceType']) ?? 'general',
+      category: _stringValue(data['category']) ?? 'general',
+      linkUrl: _stringValue(data['linkUrl']) ?? _stringValue(data['url']),
+      locationId: locationId,
+      isPublished: _boolValue(data['isPublished']) ?? false,
       isArchived: _boolValue(data['isArchived']) ?? false,
       createdAt: createdAt,
       updatedAt: updatedAt,

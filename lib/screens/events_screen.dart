@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/academy_event.dart';
+import '../models/academy_resource.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 
@@ -26,6 +28,10 @@ class EventsScreen extends StatelessWidget {
                 )
                 .toList()
               ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+        final resourcesById = {
+          for (final resource in appDataService.resources)
+            resource.id: resource,
+        };
         final groupedEvents = _groupEventsByMonth(events);
 
         return Scaffold(
@@ -69,7 +75,10 @@ class EventsScreen extends StatelessWidget {
                                 _EventGroupHeader(label: group.key),
                                 const SizedBox(height: 8),
                                 for (final event in group.value) ...[
-                                  _EventCard(event: event),
+                                  _EventCard(
+                                    event: event,
+                                    resourcesById: resourcesById,
+                                  ),
                                   if (event != group.value.last)
                                     const SizedBox(height: 12),
                                 ],
@@ -140,82 +149,271 @@ class _EventsHeader extends StatelessWidget {
 }
 
 class _EventCard extends StatelessWidget {
-  const _EventCard({required this.event});
+  const _EventCard({required this.event, required this.resourcesById});
 
   final AcademyEvent event;
+  final Map<String, AcademyResource> resourcesById;
 
   @override
   Widget build(BuildContext context) {
-    return _SurfaceCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _DateBadge(date: event.startDateTime),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    _Badge(label: event.eventTypeLabel),
-                    _Badge(label: event.registrationLabel, isAccent: true),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            event.title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: OtaColors.ink,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _formatEventDateTime(event),
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: OtaColors.maroon,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            event.description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: OtaColors.mutedText,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-            ),
-          ),
-          if (event.registrationUrl != null) ...[
-            const SizedBox(height: 12),
+    final primaryResource = event.primaryRegistrationResourceId == null
+        ? null
+        : resourcesById[event.primaryRegistrationResourceId];
+
+    return InkWell(
+      onTap: () => _showEventDetails(context, event, resourcesById),
+      borderRadius: BorderRadius.circular(24),
+      child: _SurfaceCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(
-                  Icons.link_rounded,
-                  color: OtaColors.maroon,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
+                _DateBadge(date: event.startDateTime),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Registration link available',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: OtaColors.maroon,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _Badge(label: event.eventTypeLabel),
+                      _Badge(label: event.registrationLabel, isAccent: true),
+                    ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            Text(
+              event.title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: OtaColors.ink,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _formatEventDateTime(event),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: OtaColors.maroon,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              event.description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            if (primaryResource != null || event.registrationUrl != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.link_rounded,
+                    color: OtaColors.maroon,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      primaryResource?.title ?? 'Registration link available',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: OtaColors.maroon,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+void _showEventDetails(
+  BuildContext context,
+  AcademyEvent event,
+  Map<String, AcademyResource> resourcesById,
+) {
+  final linkedResources = [
+    for (final resourceId in event.linkedResourceIds)
+      if (resourcesById[resourceId] != null) resourcesById[resourceId]!,
+  ];
+  final primaryResource = event.primaryRegistrationResourceId == null
+      ? null
+      : resourcesById[event.primaryRegistrationResourceId];
+
+  showModalBottomSheet<void>(
+    context: context,
+    showDragHandle: true,
+    backgroundColor: OtaColors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) {
+      return SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                event.title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: OtaColors.ink,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _formatEventDateTime(event),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: OtaColors.maroon,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                event.description,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                ),
+              ),
+              if (primaryResource != null) ...[
+                const SizedBox(height: 18),
+                _DetailSectionTitle(label: 'Registration'),
+                _ResourceLinkTile(resource: primaryResource),
+              ] else if (event.registrationUrl != null) ...[
+                const SizedBox(height: 18),
+                _DetailSectionTitle(label: 'Registration'),
+                _CopyableLink(url: event.registrationUrl!),
+              ],
+              if (linkedResources.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                _DetailSectionTitle(label: 'Linked Resources'),
+                for (final resource in linkedResources) ...[
+                  _ResourceLinkTile(resource: resource),
+                  if (resource != linkedResources.last)
+                    const SizedBox(height: 8),
+                ],
+              ],
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _DetailSectionTitle extends StatelessWidget {
+  const _DetailSectionTitle({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: OtaColors.ink,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourceLinkTile extends StatelessWidget {
+  const _ResourceLinkTile({required this.resource});
+
+  final AcademyResource resource;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: OtaColors.blush,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            resource.title,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (resource.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              resource.description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          if (resource.linkUrl != null) ...[
+            const SizedBox(height: 8),
+            _CopyableLink(url: resource.linkUrl!),
           ],
         ],
       ),
+    );
+  }
+}
+
+class _CopyableLink extends StatelessWidget {
+  const _CopyableLink({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: SelectableText(
+            url,
+            maxLines: 2,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.maroon,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: url));
+            if (!context.mounted) {
+              return;
+            }
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('Link copied.')));
+          },
+          tooltip: 'Copy link',
+          icon: const Icon(Icons.copy_rounded),
+          color: OtaColors.maroon,
+        ),
+      ],
     );
   }
 }

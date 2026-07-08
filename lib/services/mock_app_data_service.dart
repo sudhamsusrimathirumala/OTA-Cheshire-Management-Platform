@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import '../data/sample_events.dart';
 import '../data/sample_curriculum.dart' as curriculum_data;
 import '../data/sample_notifications.dart';
+import '../data/sample_resources.dart';
 import '../data/sample_schedule.dart';
 import '../data/sample_student.dart';
 import '../models/academy_announcement.dart';
 import '../models/academy_event.dart';
+import '../models/academy_resource.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
@@ -91,6 +93,12 @@ class MockAppDataService implements AppDataService {
 
   @override
   String? get adminStudentsErrorMessage => null;
+
+  @override
+  bool get isResourcesLoading => false;
+
+  @override
+  String? get resourcesErrorMessage => null;
 
   @override
   List<ClassSession> scheduleForWeekday(int weekday) {
@@ -205,5 +213,21 @@ class MockAppDataService implements AppDataService {
               event.eventType != 'closure',
         )
         .toList(growable: false);
+  }
+
+  @override
+  List<AcademyResource> get resources {
+    return sampleAcademyResources
+        .where(
+          (resource) => resource.locationId == currentUserAccount.locationId,
+        )
+        .toList(growable: false)
+      ..sort((a, b) {
+        final category = a.categoryLabel.compareTo(b.categoryLabel);
+        if (category != 0) {
+          return category;
+        }
+        return a.title.compareTo(b.title);
+      });
   }
 }

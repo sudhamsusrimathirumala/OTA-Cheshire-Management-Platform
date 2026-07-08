@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
+import '../../models/academy_resource.dart';
 import '../firestore/firestore_collections.dart';
 
 class FirebaseAdminWriteService {
@@ -78,6 +79,8 @@ class FirebaseAdminWriteService {
       'registrationDeadline': data.registrationDeadline == null
           ? null
           : Timestamp.fromDate(data.registrationDeadline!),
+      'linkedResourceIds': List<String>.from(data.linkedResourceIds),
+      'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
       'isPublished': data.isPublished,
       'showInResources': data.showInResources,
       'isArchived': false,
@@ -134,6 +137,45 @@ class FirebaseAdminWriteService {
     await _database
         .collection(FirestoreCollections.classSessions)
         .doc(classSessionId)
+        .delete();
+  }
+
+  Future<void> saveResource(ResourceWriteData data) async {
+    final collection = _database.collection(FirestoreCollections.resources);
+    final document = data.id == null
+        ? collection.doc()
+        : collection.doc(data.id);
+    final now = DateTime.now();
+    final createdAt = data.createdAt ?? now;
+
+    await document.set({
+      'title': data.title,
+      'description': data.description,
+      'resourceType': data.resourceType,
+      'category': data.category,
+      'linkUrl': data.linkUrl,
+      'locationId': data.locationId,
+      'isPublished': data.isPublished,
+      'isArchived': data.isArchived,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> archiveResource(String resourceId) async {
+    await _database
+        .collection(FirestoreCollections.resources)
+        .doc(resourceId)
+        .set({
+          'isArchived': true,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteResource(String resourceId) async {
+    await _database
+        .collection(FirestoreCollections.resources)
+        .doc(resourceId)
         .delete();
   }
 }
@@ -226,6 +268,8 @@ class EventWriteData {
     this.id,
     this.registrationUrl,
     this.registrationDeadline,
+    this.linkedResourceIds = const <String>[],
+    this.primaryRegistrationResourceId,
     this.createdAt,
   });
 
@@ -241,6 +285,8 @@ class EventWriteData {
     required bool showInResources,
     String? registrationUrl,
     DateTime? registrationDeadline,
+    List<String>? linkedResourceIds,
+    String? primaryRegistrationResourceId,
   }) {
     return EventWriteData(
       id: event.id,
@@ -252,6 +298,9 @@ class EventWriteData {
       endDateTime: endDateTime,
       registrationUrl: registrationUrl,
       registrationDeadline: registrationDeadline,
+      linkedResourceIds: linkedResourceIds ?? event.linkedResourceIds,
+      primaryRegistrationResourceId:
+          primaryRegistrationResourceId ?? event.primaryRegistrationResourceId,
       isPublished: isPublished,
       showInResources: showInResources,
       createdAt: event.createdAt,
@@ -267,8 +316,61 @@ class EventWriteData {
   final DateTime endDateTime;
   final String? registrationUrl;
   final DateTime? registrationDeadline;
+  final List<String> linkedResourceIds;
+  final String? primaryRegistrationResourceId;
   final bool isPublished;
   final bool showInResources;
+  final DateTime? createdAt;
+}
+
+class ResourceWriteData {
+  const ResourceWriteData({
+    required this.title,
+    required this.description,
+    required this.resourceType,
+    required this.category,
+    required this.locationId,
+    required this.isPublished,
+    this.id,
+    this.linkUrl,
+    this.isArchived = false,
+    this.createdAt,
+  });
+
+  factory ResourceWriteData.fromResource(
+    AcademyResource resource, {
+    required String title,
+    required String description,
+    required String resourceType,
+    required String category,
+    required String locationId,
+    required bool isPublished,
+    String? linkUrl,
+    bool? isArchived,
+  }) {
+    return ResourceWriteData(
+      id: resource.id,
+      title: title,
+      description: description,
+      resourceType: resourceType,
+      category: category,
+      locationId: locationId,
+      linkUrl: linkUrl,
+      isPublished: isPublished,
+      isArchived: isArchived ?? resource.isArchived,
+      createdAt: resource.createdAt,
+    );
+  }
+
+  final String? id;
+  final String title;
+  final String description;
+  final String resourceType;
+  final String category;
+  final String? linkUrl;
+  final String locationId;
+  final bool isPublished;
+  final bool isArchived;
   final DateTime? createdAt;
 }
 

@@ -12,7 +12,8 @@ enum AdminNavDestination {
     OtaRoutes.adminAnnouncements,
     Icons.campaign_outlined,
   ),
-  schedule('Schedule', OtaRoutes.adminSchedule, Icons.calendar_month_outlined);
+  schedule('Schedule', OtaRoutes.adminSchedule, Icons.calendar_month_outlined),
+  resources('Resources', OtaRoutes.adminResources, Icons.folder_copy_outlined);
 
   const AdminNavDestination(this.label, this.route, this.icon);
 

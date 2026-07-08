@@ -2,11 +2,16 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
-import 'services/firestore/firestore_seed_service.dart';
+import 'services/firestore/firestore_migration_service.dart';
 
-// Development-only entrypoint for manually seeding Firestore.
+// Development-only entrypoint for manually migrating Firestore.
 // This is not connected to the production app UI.
 // This should not be used by normal users.
+//
+// Turn this off after the migration succeeds so this entrypoint cannot rerun it
+// accidentally during normal development launches.
+const bool _enableFirestoreMigration = true;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -19,7 +24,7 @@ class SeedFirestoreApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const MaterialApp(
-      title: 'Firestore Seeder',
+      title: 'Firestore Migration',
       debugShowCheckedModeBanner: false,
       home: _SeedFirestoreScreen(),
     );
@@ -34,27 +39,37 @@ class _SeedFirestoreScreen extends StatefulWidget {
 }
 
 class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
-  bool _isSeeding = false;
+  bool _isRunning = false;
   String? _message;
   bool _hasError = false;
 
-  Future<void> _seedFirestore() async {
+  Future<void> _runMigration() async {
+    if (!_enableFirestoreMigration) {
+      setState(() {
+        _message =
+            'Firestore migration is disabled. Set _enableFirestoreMigration to true to run it.';
+        _hasError = true;
+      });
+      return;
+    }
+
     setState(() {
-      _isSeeding = true;
+      _isRunning = true;
       _message = null;
       _hasError = false;
     });
 
     try {
-      await FirestoreSeedService().seedAll();
+      await FirestoreMigrationService().runMvpReadinessMigration();
 
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _isSeeding = false;
-        _message = 'Firestore seed complete.';
+        _isRunning = false;
+        _message =
+            'Firestore migration complete. Turn _enableFirestoreMigration off before using this entrypoint again.';
         _hasError = false;
       });
     } catch (error) {
@@ -63,8 +78,8 @@ class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
       }
 
       setState(() {
-        _isSeeding = false;
-        _message = 'Firestore seed failed: $error';
+        _isRunning = false;
+        _message = 'Firestore migration failed: $error';
         _hasError = true;
       });
     }
@@ -75,7 +90,7 @@ class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Firestore Seeder')),
+      appBar: AppBar(title: const Text('Firestore Migration')),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -83,19 +98,31 @@ class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Firestore Seeder',
+                'Firestore Migration',
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
               ),
+              const SizedBox(height: 12),
+              const Text(
+                'Runs merge/update-only MVP readiness changes. It does not wipe or fully reseed collections.',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 24),
-              if (_isSeeding) ...[
+              if (_isRunning) ...[
                 const CircularProgressIndicator(),
                 const SizedBox(height: 16),
-                const Text('Seeding Firestore...'),
+                const Text('Running Firestore migration...'),
               ] else
                 FilledButton(
-                  onPressed: _seedFirestore,
-                  child: const Text('Seed Firestore'),
+                  onPressed: _enableFirestoreMigration ? _runMigration : null,
+                  child: const Text('Run Migration'),
                 ),
+              if (!_enableFirestoreMigration) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'Migration is currently disabled in code.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
               if (_message != null) ...[
                 const SizedBox(height: 16),
                 Text(

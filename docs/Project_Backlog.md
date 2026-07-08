@@ -25,7 +25,7 @@
     - Support up to two overlapping classes
     - Google Calendar-inspired day timeline layout
 - [x] Curriculum page
-- [x] Resources placeholder page
+- [x] Firestore-backed Resources page
 - [x] Notifications page
 - [x] Profile page
 
@@ -121,12 +121,13 @@ Future Improvements:
 - [ ] Replace mock linked profile ownership with Firebase-backed user/profile relationships
 - [ ] Replace mock curriculum with Firestore-backed curriculum/resources
 - [x] Build student/parent-facing Events page from Firestore events
-- [x] Add student/parent-facing Resources placeholder
+- [x] Add student/parent-facing Firestore-backed Resources page
 - [x] Add Firebase-backed admin schedule writes
 - [ ] Add Firebase-backed bulk schedule edit/delete actions using `classTypeId`
 - [x] Add Firebase-backed admin announcement writes
 - [x] Add Firebase-backed admin event writes
-- [ ] Build full Firestore-backed student/parent Resources page
+- [x] Build full Firestore-backed student/parent Resources page
+- [x] Add first-class Admin Resources tab and Firestore writes
 - [ ] Add Firebase-backed admin student profile writes
 
 Priority:

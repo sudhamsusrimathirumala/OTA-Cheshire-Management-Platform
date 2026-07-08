@@ -8,7 +8,7 @@
 - Merge Critical priority into Important across admin and student UI.
 - Simplify Admin Events filters to Draft, Published, and Past.
 - Keep the student Events screen available and Firestore-backed.
-- Keep the student Resources placeholder available from dashboard and bottom navigation.
+- Keep the student Resources screen available from dashboard and bottom navigation.
 - Add a student weekly schedule view.
 - Keep Archive and Delete as separate admin actions.
 - Clean up dashboard next-class text so it is not misleading.
@@ -25,7 +25,7 @@
 ## Backlog after MVP
 
 - Full admin calendar redesign.
-- Full Firestore-backed Resources management.
+- Richer Firestore-backed Resources management with better attachment handling.
 - Firebase Auth.
 - User approval workflow.
 - Production Firestore rules.

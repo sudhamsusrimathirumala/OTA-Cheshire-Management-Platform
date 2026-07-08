@@ -14,5 +14,6 @@ abstract final class OtaRoutes {
   static const adminEvents = '/admin/events';
   static const adminAnnouncements = '/admin/announcements';
   static const adminSchedule = '/admin/schedule';
+  static const adminResources = '/admin/resources';
   static const adminProfile = '/admin/profile';
 }

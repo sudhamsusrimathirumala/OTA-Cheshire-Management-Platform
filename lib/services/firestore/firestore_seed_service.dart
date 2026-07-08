@@ -2,9 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../data/sample_events.dart';
 import '../../data/sample_notifications.dart';
+import '../../data/sample_resources.dart';
 import '../../data/sample_schedule.dart';
 import '../../data/sample_student.dart';
 import '../../models/academy_event.dart';
+import '../../models/academy_resource.dart';
 import '../../models/class_session.dart';
 import '../../models/notification_item.dart';
 import '../../models/student.dart';
@@ -112,36 +114,11 @@ class FirestoreSeedService {
 
   Future<void> _seedResources() async {
     final batch = _firestore.batch();
-    final now = FieldValue.serverTimestamp();
 
-    // TODO: Replace placeholder resource seed data with real resource models.
-    final resources = {
-      'student_handbook': {
-        'locationId': sampleUserAccount.locationId,
-        'title': 'Student Handbook',
-        'description': 'Placeholder family resource.',
-        'url': null,
-        'category': 'general',
-        'isPublished': false,
-        'createdAt': now,
-        'updatedAt': now,
-      },
-      'belt_testing_checklist': {
-        'locationId': sampleUserAccount.locationId,
-        'title': 'Belt Testing Checklist',
-        'description': 'Placeholder testing preparation resource.',
-        'url': null,
-        'category': 'beltTesting',
-        'isPublished': false,
-        'createdAt': now,
-        'updatedAt': now,
-      },
-    };
-
-    for (final resource in resources.entries) {
+    for (final resource in sampleAcademyResources) {
       batch.set(
-        _firestore.collection(FirestoreCollections.resources).doc(resource.key),
-        resource.value,
+        _firestore.collection(FirestoreCollections.resources).doc(resource.id),
+        _resourceData(resource),
       );
     }
 
@@ -256,10 +233,28 @@ Map<String, Object?> _eventData(AcademyEvent event) {
     'registrationDeadline': event.registrationDeadline == null
         ? null
         : Timestamp.fromDate(event.registrationDeadline!),
+    'linkedResourceIds': event.linkedResourceIds,
+    'primaryRegistrationResourceId': event.primaryRegistrationResourceId,
     'isPublished': event.isPublished,
     'showInResources': event.showInResources,
     'isArchived': event.isArchived,
     'createdAt': Timestamp.fromDate(event.createdAt),
     'updatedAt': Timestamp.fromDate(event.updatedAt),
+  };
+}
+
+Map<String, Object?> _resourceData(AcademyResource resource) {
+  // TODO: Replace sample resource seed data with production academy resources.
+  return {
+    'title': resource.title,
+    'description': resource.description,
+    'resourceType': resource.resourceType,
+    'category': resource.category,
+    'linkUrl': resource.linkUrl,
+    'locationId': resource.locationId,
+    'isPublished': resource.isPublished,
+    'isArchived': resource.isArchived,
+    'createdAt': Timestamp.fromDate(resource.createdAt),
+    'updatedAt': Timestamp.fromDate(resource.updatedAt),
   };
 }

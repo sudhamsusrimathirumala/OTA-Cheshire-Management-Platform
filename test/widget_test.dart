@@ -7,6 +7,7 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_announcemen
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_events_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_profile_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_resources_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
@@ -138,7 +139,12 @@ void main() {
 
     await tester.tap(find.text('Resources'));
     await tester.pumpAndSettle();
-    expect(find.text('Student resources are coming soon.'), findsOneWidget);
+    expect(
+      find.text(
+        'Academy forms, curriculum links, testing information, and registration links.',
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Notifications'));
     await tester.pumpAndSettle();
@@ -175,6 +181,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AdminScheduleScreen), findsOneWidget);
 
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Resources'));
+    await tester.tap(find.widgetWithText(TextButton, 'Resources'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminResourcesScreen), findsOneWidget);
+
+    await tester.ensureVisible(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.tap(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
@@ -381,6 +393,7 @@ class _AdminNavigationTestApp extends StatelessWidget {
         OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
         OtaRoutes.adminAnnouncements: (_) => const AdminAnnouncementsScreen(),
         OtaRoutes.adminSchedule: (_) => const AdminScheduleScreen(),
+        OtaRoutes.adminResources: (_) => const AdminResourcesScreen(),
         OtaRoutes.adminProfile: (_) => const AdminProfileScreen(),
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
       },

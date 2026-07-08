@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../models/academy_announcement.dart';
 import '../models/academy_event.dart';
+import '../models/academy_resource.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
@@ -35,6 +36,10 @@ abstract class AppDataService implements Listenable {
 
   String? get adminStudentsErrorMessage;
 
+  bool get isResourcesLoading;
+
+  String? get resourcesErrorMessage;
+
   List<ClassSession> scheduleForWeekday(int weekday);
 
   ClassSession? nextClassForDashboard();
@@ -52,4 +57,6 @@ abstract class AppDataService implements Listenable {
   List<AcademyAnnouncement> get adminAnnouncements;
 
   List<AcademyEvent> get events;
+
+  List<AcademyResource> get resources;
 }

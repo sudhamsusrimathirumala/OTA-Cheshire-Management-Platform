@@ -7,6 +7,7 @@ import 'screens/admin/admin_announcements_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_events_screen.dart';
 import 'screens/admin/admin_profile_screen.dart';
+import 'screens/admin/admin_resources_screen.dart';
 import 'screens/admin/admin_schedule_screen.dart';
 import 'screens/admin/admin_students_screen.dart';
 import 'screens/curriculum_screen.dart';
@@ -73,6 +74,7 @@ Route<dynamic>? _buildAdminRoute(RouteSettings settings) {
     OtaRoutes.adminEvents => (_) => const AdminEventsScreen(),
     OtaRoutes.adminAnnouncements => (_) => const AdminAnnouncementsScreen(),
     OtaRoutes.adminSchedule => (_) => const AdminScheduleScreen(),
+    OtaRoutes.adminResources => (_) => const AdminResourcesScreen(),
     OtaRoutes.adminProfile => (_) => const AdminProfileScreen(),
     _ => null,
   };

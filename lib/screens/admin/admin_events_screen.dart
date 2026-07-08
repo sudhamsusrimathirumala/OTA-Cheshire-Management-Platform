@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academy_event.dart';
+import '../../models/academy_resource.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
@@ -625,6 +626,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   late final TextEditingController _notesController;
   late _EventType _eventType;
   late bool _showInResources;
+  final _linkedResourceIds = <String>{};
+  String? _primaryRegistrationResourceId;
   String? _validationMessage;
 
   @override
@@ -652,6 +655,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
     _showInResources = event?.showInResources ?? false;
+    _linkedResourceIds.addAll(event?.linkedResourceIds ?? const <String>[]);
+    _primaryRegistrationResourceId = event?.primaryRegistrationResourceId;
   }
 
   @override
@@ -733,6 +738,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               label: 'Registration deadline',
               helperText: 'Optional. Use YYYY-MM-DD HH:MM or Jul 12, 6:00 PM.',
             ),
+            const SizedBox(height: 10),
+            _buildResourceLinkingSection(),
             const SizedBox(height: 10),
             _SwitchRow(
               title: 'Show in resources',
@@ -851,6 +858,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             endDateTime: endDateTime,
             registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
+            linkedResourceIds: _sortedValues(_linkedResourceIds),
+            primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
             showInResources: _showInResources,
           )
@@ -864,6 +873,8 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             endDateTime: endDateTime,
             registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
+            linkedResourceIds: _sortedValues(_linkedResourceIds),
+            primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
             showInResources: _showInResources,
           );
@@ -880,6 +891,125 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     }
 
     return appDataService.selectedStudentProfile.locationId;
+  }
+
+  Widget _buildResourceLinkingSection() {
+    final resources = _resourceOptions();
+    final primaryOptions = [
+      for (final resource in resources)
+        if (_linkedResourceIds.contains(resource.id) ||
+            resource.id == _primaryRegistrationResourceId)
+          resource,
+    ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFD0D5DD)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Linked Resources',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: null,
+            decoration: _fieldDecoration('Add resource'),
+            hint: const Text('Select an existing resource'),
+            items: [
+              for (final resource in resources)
+                DropdownMenuItem(
+                  value: resource.id,
+                  child: Text(resource.title),
+                ),
+            ],
+            onChanged: (resourceId) {
+              if (resourceId != null) {
+                setState(() {
+                  _linkedResourceIds.add(resourceId);
+                  _primaryRegistrationResourceId ??= resourceId;
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 10),
+          if (_linkedResourceIds.isEmpty)
+            Text(
+              'No linked resources selected.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final resource in resources)
+                  if (_linkedResourceIds.contains(resource.id))
+                    InputChip(
+                      label: Text(resource.title),
+                      onDeleted: () {
+                        setState(() {
+                          _linkedResourceIds.remove(resource.id);
+                          if (_primaryRegistrationResourceId == resource.id) {
+                            _primaryRegistrationResourceId = null;
+                          }
+                        });
+                      },
+                    ),
+              ],
+            ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue:
+                primaryOptions.any(
+                  (resource) => resource.id == _primaryRegistrationResourceId,
+                )
+                ? _primaryRegistrationResourceId
+                : null,
+            decoration: _fieldDecoration('Primary registration resource'),
+            hint: const Text('Optional'),
+            items: [
+              for (final resource in primaryOptions)
+                DropdownMenuItem(
+                  value: resource.id,
+                  child: Text(resource.title),
+                ),
+            ],
+            onChanged: (resourceId) {
+              setState(() => _primaryRegistrationResourceId = resourceId);
+            },
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'TODO: Replace legacy registration URL/show-in-resources fields after event-resource linking is fully adopted.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<AcademyResource> _resourceOptions() {
+    final locationId = _adminLocationId();
+    return appDataService.resources
+        .where((resource) => resource.locationId == locationId)
+        .toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
   }
 }
 
@@ -1327,6 +1457,10 @@ _EventType _eventTypeForId(String? eventType) {
     (type) => type.id == normalizedEventType,
     orElse: () => _EventType.specialEvent,
   );
+}
+
+List<String> _sortedValues(Set<String> values) {
+  return values.toList()..sort();
 }
 
 Map<String, List<AcademyEvent>> _groupEventsByMonth(List<AcademyEvent> events) {
