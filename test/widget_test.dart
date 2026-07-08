@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
+import 'package:ota_cheshire_management_platform/debug/debug_mock_role_state.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
@@ -17,6 +18,8 @@ import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 
 void main() {
+  tearDown(debugMockRoleState.resetForTesting);
+
   test(
     'teen adult sparring is stored in mock data but hidden from active schedule',
     () {
@@ -39,15 +42,12 @@ void main() {
     },
   );
 
-  testWidgets('app launches the admin dashboard for development', (
-    tester,
-  ) async {
+  testWidgets('app launches the student dashboard by default', (tester) async {
     await tester.pumpWidget(const OTAApp());
 
-    expect(find.byType(AdminDashboardScreen), findsOneWidget);
-    expect(find.text('OTA Cheshire Control Panel'), findsOneWidget);
-    expect(find.text("Today's Schedule"), findsOneWidget);
-    expect(find.text('Recent Admin Updates'), findsOneWidget);
+    expect(find.byType(StudentDashboardScreen), findsOneWidget);
+    expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
+    expect(find.text('Dashboard'), findsOneWidget);
   });
 
   testWidgets('welcome screen displays its primary actions', (tester) async {
@@ -57,6 +57,26 @@ void main() {
     expect(find.text('Olympic Taekwondo Academy'), findsOneWidget);
     expect(find.text('LOGIN'), findsOneWidget);
     expect(find.text('SIGN UP'), findsOneWidget);
+  });
+
+  testWidgets('debug role switcher opens mock admin and student routes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const _DebugRoleSwitcherTestApp());
+
+    await tester.tap(find.text('Admin'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    debugMockRoleState.switchTo(DebugMockRole.admin);
+    await tester.pumpWidget(const _DebugRoleSwitcherTestApp());
+
+    await tester.tap(find.text('Student'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(StudentDashboardScreen), findsOneWidget);
   });
 
   testWidgets('student dashboard displays key student information', (
@@ -124,7 +144,7 @@ void main() {
   });
 
   testWidgets('admin navigation opens every admin destination', (tester) async {
-    await tester.pumpWidget(const OTAApp());
+    await tester.pumpWidget(const _AdminNavigationTestApp());
 
     await tester.tap(find.widgetWithText(TextButton, 'Students'));
     await tester.pumpAndSettle();
@@ -290,6 +310,40 @@ class _StudentNavigationTestApp extends StatelessWidget {
         OtaRoutes.curriculum: (_) => const CurriculumScreen(),
         OtaRoutes.notifications: (_) => const NotificationsScreen(),
         OtaRoutes.profile: (_) => const ProfileScreen(),
+      },
+    );
+  }
+}
+
+class _AdminNavigationTestApp extends StatelessWidget {
+  const _AdminNavigationTestApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      initialRoute: OtaRoutes.adminDashboard,
+      routes: {
+        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
+        OtaRoutes.adminStudents: (_) => const AdminStudentsScreen(),
+        OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
+        OtaRoutes.adminAnnouncements: (_) => const AdminAnnouncementsScreen(),
+        OtaRoutes.adminSchedule: (_) => const AdminScheduleScreen(),
+      },
+    );
+  }
+}
+
+class _DebugRoleSwitcherTestApp extends StatelessWidget {
+  const _DebugRoleSwitcherTestApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      initialRoute: OtaRoutes.welcome,
+      routes: {
+        OtaRoutes.welcome: (_) => const WelcomeScreen(),
+        OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
+        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
       },
     );
   }

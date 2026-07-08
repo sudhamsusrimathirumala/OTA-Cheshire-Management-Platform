@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
+import 'debug/debug_mock_role_state.dart';
 import 'routes.dart';
 import 'screens/admin/admin_announcements_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -24,10 +25,6 @@ void main() async {
   runApp(const OTAApp());
 }
 
-// TODO: Replace this mock launch switch with Firebase Auth and UserAccount.role
-// based routing when real authentication is added.
-const bool _launchAdminForDevelopment = true;
-
 class OTAApp extends StatelessWidget {
   const OTAApp({super.key});
 
@@ -43,9 +40,7 @@ class OTAApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      initialRoute: _launchAdminForDevelopment
-          ? OtaRoutes.adminDashboard
-          : OtaRoutes.dashboard,
+      initialRoute: debugMockRoleState.initialRoute,
       routes: {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),

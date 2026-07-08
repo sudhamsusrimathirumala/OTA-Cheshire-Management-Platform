@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
+import '../widgets/debug_role_switcher.dart';
 import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
@@ -20,9 +22,12 @@ class WelcomeScreen extends StatelessWidget {
               ? (constraints.maxWidth * 0.38).clamp(240.0, 280.0)
               : (constraints.maxWidth * 0.48).clamp(150.0, 230.0);
           final availableHeight = constraints.maxHeight - 48;
-          final contentHeight = availableHeight > logoSize + 400
-              ? availableHeight
+          final minimumContentHeight = kDebugMode
+              ? logoSize + 430
               : logoSize + 400;
+          final contentHeight = availableHeight > minimumContentHeight
+              ? availableHeight
+              : minimumContentHeight;
 
           return SingleChildScrollView(
             padding: EdgeInsets.symmetric(
@@ -58,6 +63,10 @@ class WelcomeScreen extends StatelessWidget {
                         letterSpacing: 0.3,
                       ),
                     ),
+                    if (kDebugMode) ...[
+                      const SizedBox(height: 24),
+                      const DebugRoleSwitcher(),
+                    ],
                     const Spacer(),
                     const SizedBox(height: 48),
                     OtaActionButton(
