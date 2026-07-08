@@ -94,6 +94,7 @@ class ProfileActionRow extends StatelessWidget {
     required this.icon,
     required this.label,
     this.value,
+    this.onTap,
     this.isDestructive = false,
     this.showDivider = true,
     super.key,
@@ -102,6 +103,7 @@ class ProfileActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String? value;
+  final VoidCallback? onTap;
   final bool isDestructive;
   final bool showDivider;
 
@@ -113,9 +115,7 @@ class ProfileActionRow extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(22),
-        onTap: () {
-          // TODO: Implement profile action when account features are ready.
-        },
+        onTap: onTap,
         child: _ProfileBaseRow(
           icon: icon,
           iconColor: foregroundColor,

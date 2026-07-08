@@ -319,6 +319,22 @@ class _AdminTopHeader extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              IconButton.filledTonal(
+                onPressed: () {
+                  Navigator.of(context).pushNamed(OtaRoutes.adminProfile);
+                },
+                style: IconButton.styleFrom(
+                  backgroundColor: OtaColors.white,
+                  foregroundColor: OtaColors.maroon,
+                  side: const BorderSide(color: Color(0xFFE9D2D7)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                icon: const Icon(Icons.person_outline_rounded),
+                tooltip: 'Admin profile',
+              ),
             ],
           ),
         ),

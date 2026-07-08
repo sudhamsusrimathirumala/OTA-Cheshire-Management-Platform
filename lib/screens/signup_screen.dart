@@ -1,9 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
 import '../theme/ota_colors.dart';
-import '../widgets/debug_role_switcher.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_auth_switch_link.dart';
 import '../widgets/ota_auth_text_field.dart';
@@ -66,10 +64,6 @@ class SignupScreen extends StatelessWidget {
                         color: OtaColors.white.withValues(alpha: 0.86),
                       ),
                     ),
-                    if (kDebugMode) ...[
-                      const SizedBox(height: 24),
-                      const DebugRoleSwitcher(),
-                    ],
                     const SizedBox(height: 28),
                     const OtaAuthTextField(
                       label: 'First Name',

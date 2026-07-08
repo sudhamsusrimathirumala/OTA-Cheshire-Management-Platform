@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
+import '../routes.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -248,29 +249,41 @@ class _SettingsActionsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ProfileSection(
+    return ProfileSection(
       title: 'Settings & Actions',
       children: [
-        ProfileActionRow(icon: Icons.edit_rounded, label: 'Edit Profile'),
-        ProfileActionRow(
+        const ProfileActionRow(icon: Icons.edit_rounded, label: 'Edit Profile'),
+        const ProfileActionRow(
           icon: Icons.switch_account_rounded,
           label: 'Switch Profile',
           value: 'Coming later',
         ),
-        ProfileActionRow(
+        const ProfileActionRow(
           icon: Icons.notifications_rounded,
           label: 'Notification Preferences',
         ),
-        ProfileActionRow(icon: Icons.lock_rounded, label: 'Privacy & Account'),
-        ProfileActionRow(
+        const ProfileActionRow(
+          icon: Icons.lock_rounded,
+          label: 'Privacy & Account',
+        ),
+        const ProfileActionRow(
           icon: Icons.help_rounded,
           label: 'Help / Contact Academy',
         ),
-        ProfileActionRow(
+        const ProfileActionRow(
           icon: Icons.logout_rounded,
           label: 'Sign Out',
           isDestructive: true,
+        ),
+        ProfileActionRow(
+          icon: Icons.home_rounded,
+          label: 'Exit to Welcome',
           showDivider: false,
+          onTap: () {
+            Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil(OtaRoutes.welcome, (_) => false);
+          },
         ),
       ],
     );

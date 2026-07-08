@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
-import 'package:ota_cheshire_management_platform/debug/debug_mock_role_state.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_events_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
@@ -18,8 +18,6 @@ import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 
 void main() {
-  tearDown(debugMockRoleState.resetForTesting);
-
   test(
     'teen adult sparring is stored in mock data but hidden from active schedule',
     () {
@@ -42,12 +40,15 @@ void main() {
     },
   );
 
-  testWidgets('app launches the student dashboard by default', (tester) async {
+  testWidgets('app launches the admin dashboard for development', (
+    tester,
+  ) async {
     await tester.pumpWidget(const OTAApp());
 
-    expect(find.byType(StudentDashboardScreen), findsOneWidget);
-    expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
-    expect(find.text('Dashboard'), findsOneWidget);
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    expect(find.text('OTA Cheshire Control Panel'), findsOneWidget);
+    expect(find.text("Today's Schedule"), findsOneWidget);
+    expect(find.text('Recent Admin Updates'), findsOneWidget);
   });
 
   testWidgets('welcome screen displays its primary actions', (tester) async {
@@ -55,28 +56,29 @@ void main() {
 
     expect(find.text('WELCOME'), findsOneWidget);
     expect(find.text('Olympic Taekwondo Academy'), findsOneWidget);
+    expect(find.text('Student View'), findsOneWidget);
+    expect(find.text('Admin View'), findsOneWidget);
     expect(find.text('LOGIN'), findsOneWidget);
     expect(find.text('SIGN UP'), findsOneWidget);
   });
 
-  testWidgets('debug role switcher opens mock admin and student routes', (
+  testWidgets('welcome debug view buttons open student and admin dashboards', (
     tester,
   ) async {
-    await tester.pumpWidget(const _DebugRoleSwitcherTestApp());
+    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
 
-    await tester.tap(find.text('Admin'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(AdminDashboardScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    debugMockRoleState.switchTo(DebugMockRole.admin);
-    await tester.pumpWidget(const _DebugRoleSwitcherTestApp());
-
-    await tester.tap(find.text('Student'));
+    await tester.tap(find.text('Student View'));
     await tester.pumpAndSettle();
 
     expect(find.byType(StudentDashboardScreen), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
+
+    await tester.tap(find.text('Admin View'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdminDashboardScreen), findsOneWidget);
   });
 
   testWidgets('student dashboard displays key student information', (
@@ -165,6 +167,24 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
+  });
+
+  testWidgets('admin profile icon opens profile and exits to welcome', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const _AdminNavigationTestApp());
+
+    await tester.tap(find.byTooltip('Admin profile'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AdminProfileScreen), findsOneWidget);
+    expect(find.text('Admin Profile'), findsOneWidget);
+    expect(find.text('Exit to Welcome'), findsOneWidget);
+
+    await tester.tap(find.text('Exit to Welcome'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 
   testWidgets('admin schedule page displays class management controls', (
@@ -281,7 +301,15 @@ void main() {
   testWidgets('profile screen displays student and account settings', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
+    await tester.pumpWidget(
+      MaterialApp(
+        initialRoute: OtaRoutes.profile,
+        routes: {
+          OtaRoutes.profile: (_) => const ProfileScreen(),
+          OtaRoutes.welcome: (_) => const WelcomeScreen(),
+        },
+      ),
+    );
 
     expect(find.text('Sudhamsu'), findsWidgets);
     expect(find.text('Red-Black Belt • OTA Cheshire'), findsOneWidget);
@@ -294,6 +322,18 @@ void main() {
 
     expect(find.text('Settings & Actions'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
+    expect(find.text('Exit to Welcome'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('Exit to Welcome'),
+      240,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exit to Welcome'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 }
 
@@ -328,13 +368,15 @@ class _AdminNavigationTestApp extends StatelessWidget {
         OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
         OtaRoutes.adminAnnouncements: (_) => const AdminAnnouncementsScreen(),
         OtaRoutes.adminSchedule: (_) => const AdminScheduleScreen(),
+        OtaRoutes.adminProfile: (_) => const AdminProfileScreen(),
+        OtaRoutes.welcome: (_) => const WelcomeScreen(),
       },
     );
   }
 }
 
-class _DebugRoleSwitcherTestApp extends StatelessWidget {
-  const _DebugRoleSwitcherTestApp();
+class _WelcomeViewButtonTestApp extends StatelessWidget {
+  const _WelcomeViewButtonTestApp();
 
   @override
   Widget build(BuildContext context) {
