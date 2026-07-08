@@ -177,6 +177,7 @@ Map<String, Object?> _studentProfileData(Student profile) {
     'locationId': profile.locationId,
     'guardianUserIds': profile.guardianUserIds,
     'selfUserId': profile.selfUserId,
+    'preferredClassGroupIds': profile.preferredClassGroupIds,
     'stickerProgress': {
       'current': profile.stickerCount,
       'required': profile.stickersRequired,

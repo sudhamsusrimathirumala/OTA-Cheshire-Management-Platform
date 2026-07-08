@@ -10,9 +10,11 @@ import 'screens/admin/admin_profile_screen.dart';
 import 'screens/admin/admin_schedule_screen.dart';
 import 'screens/admin/admin_students_screen.dart';
 import 'screens/curriculum_screen.dart';
+import 'screens/events_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/resources_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/student_dashboard_screen.dart';
@@ -51,6 +53,8 @@ class OTAApp extends StatelessWidget {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
         OtaRoutes.schedule: (_) => const ScheduleScreen(),
+        OtaRoutes.events: (_) => const EventsScreen(),
+        OtaRoutes.resources: (_) => const ResourcesScreen(),
         OtaRoutes.curriculum: (_) => const CurriculumScreen(),
         OtaRoutes.notifications: (_) => const NotificationsScreen(),
         OtaRoutes.profile: (_) => const ProfileScreen(),

@@ -111,6 +111,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                 errorMessage: appDataService.announcementsErrorMessage,
                 onEdit: _openAnnouncementSheet,
                 onPreview: _previewAnnouncement,
+                onArchive: _confirmArchive,
                 onDelete: _confirmDelete,
               ),
             ],
@@ -227,7 +228,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     );
   }
 
-  Future<void> _confirmDelete(_AdminAnnouncement announcement) async {
+  Future<void> _confirmArchive(_AdminAnnouncement announcement) async {
     final shouldArchive = await showDialog<bool>(
       context: context,
       builder: (context) {
@@ -282,6 +283,65 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Unable to archive announcement.')),
+      );
+    }
+  }
+
+  Future<void> _confirmDelete(_AdminAnnouncement announcement) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Permanently delete announcement?'),
+          content: Text(
+            'This will permanently delete "${announcement.title}" from Firestore. This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: OtaColors.actionRed,
+                foregroundColor: OtaColors.white,
+              ),
+              child: const Text('Delete Permanently'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldDelete != true) {
+      return;
+    }
+
+    if (!useFirebase) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${announcement.title} mock deleted.')),
+      );
+      return;
+    }
+
+    try {
+      await _writeService.deleteAnnouncement(announcement.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${announcement.title} deleted.')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to delete announcement.')),
       );
     }
   }
@@ -391,6 +451,7 @@ class _AnnouncementsPanel extends StatelessWidget {
     required this.errorMessage,
     required this.onEdit,
     required this.onPreview,
+    required this.onArchive,
     required this.onDelete,
   });
 
@@ -399,6 +460,7 @@ class _AnnouncementsPanel extends StatelessWidget {
   final String? errorMessage;
   final ValueChanged<_AdminAnnouncement> onEdit;
   final ValueChanged<_AdminAnnouncement> onPreview;
+  final ValueChanged<_AdminAnnouncement> onArchive;
   final ValueChanged<_AdminAnnouncement> onDelete;
 
   @override
@@ -429,6 +491,7 @@ class _AnnouncementsPanel extends StatelessWidget {
                 announcement: announcement,
                 onEdit: () => onEdit(announcement),
                 onPreview: () => onPreview(announcement),
+                onArchive: () => onArchive(announcement),
                 onDelete: () => onDelete(announcement),
               ),
               if (announcement != announcements.last)
@@ -445,12 +508,14 @@ class _AnnouncementRow extends StatelessWidget {
     required this.announcement,
     required this.onEdit,
     required this.onPreview,
+    required this.onArchive,
     required this.onDelete,
   });
 
   final _AdminAnnouncement announcement;
   final VoidCallback onEdit;
   final VoidCallback onPreview;
+  final VoidCallback onArchive;
   final VoidCallback onDelete;
 
   @override
@@ -461,16 +526,22 @@ class _AnnouncementRow extends StatelessWidget {
       _AnnouncementStatus.published => _BadgeTone.success,
       _AnnouncementStatus.archived => _BadgeTone.navy,
     };
+    final accentColor = switch (announcement.priority) {
+      NotificationPriority.critical => OtaColors.actionRed,
+      NotificationPriority.important => OtaColors.maroon,
+      NotificationPriority.general => switch (announcement.status) {
+        _AnnouncementStatus.draft => const Color(0xFFD79A16),
+        _AnnouncementStatus.archived => const Color(0xFF98A2B3),
+        _AnnouncementStatus.published => OtaColors.navy,
+      },
+    };
 
     return Container(
       decoration: BoxDecoration(
         color: announcement.priority == NotificationPriority.critical
             ? const Color(0xFFFFF4F4)
-            : announcement.status == _AnnouncementStatus.draft
-            ? const Color(0xFFFFFAEB)
-            : announcement.status == _AnnouncementStatus.archived
-            ? const Color(0xFFF2F4F7)
             : OtaColors.white,
+        border: Border(left: BorderSide(color: accentColor, width: 4)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: LayoutBuilder(
@@ -491,6 +562,8 @@ class _AnnouncementRow extends StatelessWidget {
               _ActionLink(label: 'Edit', onPressed: onEdit),
               const SizedBox(width: 2),
               _ActionLink(label: 'Preview', onPressed: onPreview),
+              const SizedBox(width: 2),
+              _ActionLink(label: 'Archive', onPressed: onArchive),
               const SizedBox(width: 2),
               _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
             ],
@@ -577,6 +650,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   late NotificationCategory _category;
   late NotificationPriority _priority;
   late _Audience _audience;
+  late bool _requiresAction;
   final _targetBelts = <String>{};
   final _targetClassTypeIds = <String>{};
   final _targetStudentProfileIds = <String>{};
@@ -594,6 +668,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _studentSearchController = TextEditingController();
     _category = announcement?.category ?? NotificationCategory.general;
     _priority = announcement?.priority ?? NotificationPriority.general;
+    _requiresAction = announcement?.source.requiresAction ?? false;
     _audience = _audienceForFirestoreValue(announcement?.source.audienceType);
     _targetBelts.addAll(announcement?.source.targetBelts ?? const <String>[]);
     _targetClassTypeIds.addAll(
@@ -706,44 +781,46 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               },
             ),
             const SizedBox(height: 14),
-            Text(
-              'Audience',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: OtaColors.ink,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
+            DropdownButtonFormField<_Audience>(
+              initialValue: _audience,
+              decoration: _fieldDecoration('Audience'),
+              items: [
                 for (final audience in _Audience.values)
-                  ChoiceChip(
-                    label: Text(audience.label),
-                    selected: audience == _audience,
-                    showCheckmark: false,
-                    selectedColor: OtaColors.navy,
-                    backgroundColor: OtaColors.white,
-                    side: BorderSide(
-                      color: audience == _audience
-                          ? OtaColors.navy
-                          : const Color(0xFFD0D5DD),
-                    ),
-                    labelStyle: TextStyle(
-                      color: audience == _audience
-                          ? OtaColors.white
-                          : OtaColors.ink,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    onSelected: (_) {
-                      setState(() => _audience = audience);
-                    },
+                  DropdownMenuItem<_Audience>(
+                    value: audience,
+                    child: Text(audience.label),
                   ),
               ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _audience = value);
+                }
+              },
             ),
             const SizedBox(height: 10),
             _buildAudienceTargeting(),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              value: _requiresAction,
+              onChanged: (value) => setState(() => _requiresAction = value),
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              activeThumbColor: OtaColors.maroon,
+              title: Text(
+                'Requires action',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.ink,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              subtitle: Text(
+                'Shows an action-needed badge on family notification details.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
             if (_validationMessage != null) ...[
               _ValidationMessage(message: _validationMessage!),
@@ -806,48 +883,75 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       return const _AudienceHint(message: 'No belt levels are available yet.');
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final belt in belts)
-          _targetChip(
-            label: belt,
-            selected: _targetBelts.contains(belt),
-            onSelected: (selected) {
+        DropdownButtonFormField<String>(
+          initialValue: null,
+          decoration: _fieldDecoration('Add belt rank'),
+          hint: const Text('Select a belt rank'),
+          items: [
+            for (final belt in belts)
+              DropdownMenuItem<String>(value: belt, child: Text(belt)),
+          ],
+          onChanged: (belt) {
+            if (belt != null) {
               setState(() {
-                selected ? _targetBelts.add(belt) : _targetBelts.remove(belt);
+                _targetBelts.add(belt);
               });
-            },
-          ),
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        _SelectedTargetList(
+          emptyMessage: 'No belt ranks selected.',
+          selectedLabels: _sortedValues(_targetBelts),
+          onRemove: (label) => setState(() => _targetBelts.remove(label)),
+        ),
       ],
     );
   }
 
   Widget _buildClassTypeTargeting() {
     final classTypes = _classTypeOptions();
-    if (classTypes.isEmpty) {
-      return const _AudienceHint(
-        message: 'No class types are available from the schedule yet.',
-      );
-    }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final classType in classTypes)
-          _targetChip(
-            label: classType.label,
-            selected: _targetClassTypeIds.contains(classType.id),
-            onSelected: (selected) {
+        DropdownButtonFormField<String>(
+          initialValue: null,
+          decoration: _fieldDecoration('Add class group'),
+          hint: const Text('Select a class group'),
+          items: [
+            for (final classType in classTypes)
+              DropdownMenuItem<String>(
+                value: classType.id,
+                child: Text(classType.label),
+              ),
+          ],
+          onChanged: (classTypeId) {
+            if (classTypeId != null) {
               setState(() {
-                selected
-                    ? _targetClassTypeIds.add(classType.id)
-                    : _targetClassTypeIds.remove(classType.id);
+                _targetClassTypeIds.add(classTypeId);
               });
-            },
-          ),
+            }
+          },
+        ),
+        const SizedBox(height: 8),
+        _SelectedTargetList(
+          emptyMessage: 'No class groups selected.',
+          selectedLabels: [
+            for (final classTypeId in _sortedValues(_targetClassTypeIds))
+              _classGroupLabelFor(classTypeId),
+          ],
+          onRemove: (label) {
+            final classType = classTypes.firstWhere(
+              (option) => option.label == label,
+              orElse: () => _TargetOption(id: label, label: label),
+            );
+            setState(() => _targetClassTypeIds.remove(classType.id));
+          },
+        ),
       ],
     );
   }
@@ -874,50 +978,50 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 8),
-        if (students.isEmpty)
-          const _AudienceHint(message: 'No students match that search.')
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final student in students)
-                _targetChip(
-                  label: '${student.name} - ${student.belt}',
-                  selected: _targetStudentProfileIds.contains(student.id),
-                  onSelected: (selected) {
-                    setState(() {
-                      selected
-                          ? _targetStudentProfileIds.add(student.id)
-                          : _targetStudentProfileIds.remove(student.id);
-                    });
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: students.isEmpty
+              ? const _AudienceHint(message: 'No students match that search.')
+              : ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: students.length,
+                  separatorBuilder: (context, index) =>
+                      const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final student = students[index];
+                    return CheckboxListTile(
+                      value: _targetStudentProfileIds.contains(student.id),
+                      onChanged: (selected) {
+                        setState(() {
+                          selected == true
+                              ? _targetStudentProfileIds.add(student.id)
+                              : _targetStudentProfileIds.remove(student.id);
+                        });
+                      },
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      activeColor: OtaColors.maroon,
+                      title: Text(student.name),
+                      subtitle: Text(student.belt),
+                    );
                   },
                 ),
-            ],
-          ),
+        ),
+        const SizedBox(height: 8),
+        _SelectedTargetList(
+          emptyMessage: 'No students selected.',
+          selectedLabels: [
+            for (final student in _studentOptions())
+              if (_targetStudentProfileIds.contains(student.id)) student.name,
+          ],
+          onRemove: (name) {
+            final student = _studentOptions().firstWhere(
+              (student) => student.name == name,
+            );
+            setState(() => _targetStudentProfileIds.remove(student.id));
+          },
+        ),
       ],
-    );
-  }
-
-  Widget _targetChip({
-    required String label,
-    required bool selected,
-    required ValueChanged<bool> onSelected,
-  }) {
-    return FilterChip(
-      label: Text(label),
-      selected: selected,
-      showCheckmark: false,
-      selectedColor: const Color(0xFFF4E5E8),
-      backgroundColor: OtaColors.white,
-      side: BorderSide(
-        color: selected ? OtaColors.maroon : const Color(0xFFD0D5DD),
-      ),
-      labelStyle: TextStyle(
-        color: selected ? OtaColors.maroon : OtaColors.ink,
-        fontWeight: FontWeight.w800,
-      ),
-      onSelected: onSelected,
     );
   }
 
@@ -940,16 +1044,10 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   List<_TargetOption> _classTypeOptions() {
-    final classTypes = <String, String>{};
-    for (final sessions in appDataService.schedule.values) {
-      for (final session in sessions) {
-        final classTypeId = session.classTypeId.trim();
-        if (classTypeId.isNotEmpty) {
-          classTypes.putIfAbsent(classTypeId, () => session.className);
-        }
-      }
-    }
-
+    final classTypes = {
+      for (final classGroup in _announcementClassGroups)
+        classGroup.id: classGroup.label,
+    };
     for (final classTypeId in _targetClassTypeIds) {
       classTypes.putIfAbsent(classTypeId, () => _labelForId(classTypeId));
     }
@@ -1039,6 +1137,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             priority: _priority.name,
             status: status,
             locationId: locationId,
+            requiresAction: _requiresAction,
             audienceType: _audience.firestoreValue,
             targetBelts: targetBelts,
             targetClassTypeIds: targetClassTypeIds,
@@ -1054,6 +1153,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             priority: _priority.name,
             status: status,
             locationId: locationId,
+            requiresAction: _requiresAction,
             audienceType: _audience.firestoreValue,
             targetBelts: targetBelts,
             targetClassTypeIds: targetClassTypeIds,
@@ -1351,6 +1451,56 @@ class _AudienceHint extends StatelessWidget {
   }
 }
 
+class _SelectedTargetList extends StatelessWidget {
+  const _SelectedTargetList({
+    required this.emptyMessage,
+    required this.selectedLabels,
+    required this.onRemove,
+  });
+
+  final String emptyMessage;
+  final List<String> selectedLabels;
+  final ValueChanged<String> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedLabels.isEmpty) {
+      return _AudienceHint(message: emptyMessage);
+    }
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        children: [
+          for (final label in selectedLabels) ...[
+            ListTile(
+              dense: true,
+              title: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              trailing: IconButton(
+                onPressed: () => onRemove(label),
+                tooltip: 'Remove',
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            if (label != selectedLabels.last)
+              const Divider(height: 1, color: Color(0xFFE4E7EC)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -1438,10 +1588,20 @@ class _TargetOption {
   final String label;
 }
 
+const _announcementClassGroups = [
+  _TargetOption(id: 'little-tigers', label: 'Little Tigers'),
+  _TargetOption(id: 'teen-adult', label: 'Teen and Adult'),
+  _TargetOption(id: 'level-1', label: 'Level 1'),
+  _TargetOption(id: 'level-2', label: 'Level 2'),
+  _TargetOption(id: 'level-3', label: 'Level 3'),
+  _TargetOption(id: 'level-4', label: 'Level 4'),
+  _TargetOption(id: 'level-1-2-sparring', label: 'Level 1/2 Sparring'),
+];
+
 enum _Audience {
   everyone('Everyone', 'everyone'),
   belt('Specific belt', 'belt'),
-  classType('Specific class type', 'classType'),
+  classType('Specific class group', 'classType'),
   students('Specific student', 'students');
 
   const _Audience(this.label, this.firestoreValue);
@@ -1506,6 +1666,15 @@ String _labelForId(String id) {
   return words
       .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
       .join(' ');
+}
+
+String _classGroupLabelFor(String id) {
+  return _announcementClassGroups
+      .firstWhere(
+        (classGroup) => classGroup.id == id,
+        orElse: () => _TargetOption(id: id, label: _labelForId(id)),
+      )
+      .label;
 }
 
 _BadgeTone _priorityTone(NotificationPriority priority) {

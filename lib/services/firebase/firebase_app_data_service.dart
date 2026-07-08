@@ -530,6 +530,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       publishedAt: _dateTimeValue(data['publishedAt']),
       createdAt: createdAt,
       updatedAt: updatedAt,
+      requiresAction: _boolValue(data['requiresAction']) ?? false,
       targetBelts: _stringListValue(data['targetBelts']),
       targetClassTypeIds: _stringListValue(data['targetClassTypeIds']),
       targetStudentProfileIds: _stringListValue(
@@ -552,7 +553,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       final event = _eventFromDocument(document);
       if (event != null &&
           event.locationId == _adminLocationId &&
-          !event.isArchived) {
+          !event.isArchived &&
+          event.eventType != 'closure') {
         events.add(event);
       }
     }
@@ -648,6 +650,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       nextRank: _stringValue(stickerProgressMap['nextRank']) ?? 'Next rank',
       guardianUserIds: _stringListValue(data['guardianUserIds']),
       selfUserId: _stringValue(data['selfUserId']),
+      preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
       promotionHistory: _stringListValue(data['promotionHistory']),
       testingNotes: _stringListValue(data['testingNotes']),
       isActive: _boolValue(data['isActive']) ?? true,
@@ -666,7 +669,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     return switch (audienceType) {
       'everyone' => true,
       'belt' => targetBelts.contains(selectedStudentProfile.belt),
-      'classType' => _selectedProfileClassTypeIds.any(
+      'classType' => _selectedProfileClassGroupIds.any(
         targetClassTypeIds.contains,
       ),
       'students' =>
@@ -677,15 +680,16 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       'specificUsers' => targetUserIds.contains(currentUserAccount.id),
       'mixed' =>
         targetBelts.contains(selectedStudentProfile.belt) ||
-            _selectedProfileClassTypeIds.any(targetClassTypeIds.contains) ||
+            _selectedProfileClassGroupIds.any(targetClassTypeIds.contains) ||
             targetStudentProfileIds.contains(selectedStudentProfile.id) ||
             targetUserIds.contains(currentUserAccount.id),
       _ => false,
     };
   }
 
-  Set<String> get _selectedProfileClassTypeIds {
+  Set<String> get _selectedProfileClassGroupIds {
     return {
+      ...selectedStudentProfile.preferredClassGroupIds,
       for (final sessions in _schedule.values)
         for (final session in sessions)
           if (session.isEligibleFor(selectedStudentProfile))

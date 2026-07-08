@@ -35,8 +35,6 @@ class NotificationDetailScreen extends StatelessWidget {
                         _NotificationHeroCard(notification: notification),
                         const SizedBox(height: 16),
                         _NotificationMessageCard(notification: notification),
-                        const SizedBox(height: 16),
-                        const _FutureReadyLinksCard(),
                       ],
                     ),
                   ),
@@ -189,93 +187,6 @@ class _NotificationMessageCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _FutureReadyLinksCard extends StatelessWidget {
-  const _FutureReadyLinksCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: OtaColors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: OtaColors.navy.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Future Resources',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              color: OtaColors.ink,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const _FutureResourceRow(
-            icon: Icons.attach_file_rounded,
-            label: 'Attachments',
-          ),
-          const SizedBox(height: 10),
-          const _FutureResourceRow(
-            icon: Icons.event_rounded,
-            label: 'Event or schedule links',
-          ),
-          const SizedBox(height: 10),
-          const _FutureResourceRow(
-            icon: Icons.menu_book_rounded,
-            label: 'Curriculum links',
-          ),
-          const SizedBox(height: 10),
-          const _FutureResourceRow(
-            icon: Icons.open_in_new_rounded,
-            label: 'External resources',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FutureResourceRow extends StatelessWidget {
-  const _FutureResourceRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, color: OtaColors.maroon, size: 20),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: OtaColors.mutedText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Text(
-          'Coming later',
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: OtaColors.mutedText,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ],
     );
   }
 }

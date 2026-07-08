@@ -145,6 +145,11 @@ class _NextClassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final weekdayLabel = nextClass == null
+        ? 'No upcoming class'
+        : _weekdayLabel(nextClass!.startTime.weekday);
+    final timeLabel = nextClass?.timeRangeLabel ?? '--';
+
     return _DashboardCard(
       padding: EdgeInsets.zero,
       child: Container(
@@ -201,17 +206,24 @@ class _NextClassCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 18),
-                  Row(
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        'Today',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: OtaColors.white.withValues(alpha: 0.88),
-                              fontWeight: FontWeight.w700,
-                            ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 140),
+                        child: Text(
+                          weekdayLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: OtaColors.white.withValues(alpha: 0.88),
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
                       ),
-                      const SizedBox(width: 12),
                       Container(
                         width: 5,
                         height: 5,
@@ -220,20 +232,28 @@ class _NextClassCard extends StatelessWidget {
                           shape: BoxShape.circle,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Text(
-                        nextClass?.startLabel ?? '--',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: OtaColors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 260),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            timeLabel,
+                            maxLines: 1,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(
+                                  color: OtaColors.white,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    'Mon, Wed, Fri',
+                    nextClass?.eligibilityLabel ??
+                        'Check the schedule for updates.',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: OtaColors.white.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w600,
@@ -292,8 +312,10 @@ class _BeltProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 22),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            spacing: 10,
+            runSpacing: 4,
+            alignment: WrapAlignment.spaceBetween,
             children: [
               Text(
                 'Sticker Progress',
@@ -371,6 +393,8 @@ class _NotificationsCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'OTA Updates',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: OtaColors.ink,
                           fontWeight: FontWeight.w800,
@@ -439,11 +463,11 @@ class _QuickActionsGrid extends StatelessWidget {
       OtaRoutes.schedule,
     ),
     _QuickActionData(
-      Icons.menu_book_rounded,
-      'Curriculum',
-      OtaRoutes.curriculum,
+      Icons.folder_copy_rounded,
+      'Resources',
+      OtaRoutes.resources,
     ),
-    _QuickActionData(Icons.emoji_events_rounded, 'Events'),
+    _QuickActionData(Icons.emoji_events_rounded, 'Events', OtaRoutes.events),
     _QuickActionData(Icons.chat_bubble_rounded, 'Message OTA'),
   ];
 
@@ -461,7 +485,7 @@ class _QuickActionsGrid extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: constraints.maxWidth >= 560 ? 1.04 : 1.12,
+            childAspectRatio: constraints.maxWidth >= 560 ? 1.04 : 0.96,
           ),
           itemBuilder: (context, index) {
             final action = _actions[index];
@@ -504,6 +528,8 @@ class _QuickActionTile extends StatelessWidget {
               Text(
                 action.label,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                   color: OtaColors.ink,
                   fontWeight: FontWeight.w800,
@@ -682,4 +708,17 @@ class _QuickActionData {
   final IconData icon;
   final String label;
   final String? route;
+}
+
+String _weekdayLabel(int weekday) {
+  return switch (weekday) {
+    DateTime.monday => 'Monday',
+    DateTime.tuesday => 'Tuesday',
+    DateTime.wednesday => 'Wednesday',
+    DateTime.thursday => 'Thursday',
+    DateTime.friday => 'Friday',
+    DateTime.saturday => 'Saturday',
+    DateTime.sunday => 'Sunday',
+    _ => 'Next class',
+  };
 }

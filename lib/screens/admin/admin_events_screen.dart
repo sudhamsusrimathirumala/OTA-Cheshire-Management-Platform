@@ -36,6 +36,10 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     final now = DateTime.now();
 
     return events.where((event) {
+      if (event.eventType == 'closure') {
+        return false;
+      }
+
       return switch (_selectedFilter) {
         _EventFilter.all => true,
         _EventFilter.published => event.isPublished,
@@ -77,6 +81,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 onEdit: _openEventSheet,
                 onPreview: _previewEvent,
                 onArchive: _confirmArchive,
+                onDelete: _confirmDelete,
               ),
             ],
           ),
@@ -239,6 +244,65 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
       ).showSnackBar(const SnackBar(content: Text('Unable to archive event.')));
     }
   }
+
+  Future<void> _confirmDelete(AcademyEvent event) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Permanently delete event?'),
+          content: Text(
+            'This will permanently delete "${event.title}" from Firestore. This cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: OtaColors.actionRed,
+                foregroundColor: OtaColors.white,
+              ),
+              child: const Text('Delete Permanently'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldDelete != true) {
+      return;
+    }
+
+    if (!useFirebase) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${event.title} mock deleted.')));
+      return;
+    }
+
+    try {
+      await _writeService.deleteEvent(event.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('${event.title} deleted.')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to delete event.')));
+    }
+  }
 }
 
 class _EventsToolbar extends StatelessWidget {
@@ -315,6 +379,7 @@ class _EventsPanel extends StatelessWidget {
     required this.onEdit,
     required this.onPreview,
     required this.onArchive,
+    required this.onDelete,
   });
 
   final List<AcademyEvent> events;
@@ -323,6 +388,7 @@ class _EventsPanel extends StatelessWidget {
   final ValueChanged<AcademyEvent> onEdit;
   final ValueChanged<AcademyEvent> onPreview;
   final ValueChanged<AcademyEvent> onArchive;
+  final ValueChanged<AcademyEvent> onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -349,6 +415,7 @@ class _EventsPanel extends StatelessWidget {
                 onEdit: () => onEdit(event),
                 onPreview: () => onPreview(event),
                 onArchive: () => onArchive(event),
+                onDelete: () => onDelete(event),
               ),
               if (event != events.last)
                 const Divider(height: 1, color: Color(0xFFE1E4EA)),
@@ -365,12 +432,14 @@ class _EventRow extends StatelessWidget {
     required this.onEdit,
     required this.onPreview,
     required this.onArchive,
+    required this.onDelete,
   });
 
   final AcademyEvent event;
   final VoidCallback onEdit;
   final VoidCallback onPreview;
   final VoidCallback onArchive;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -412,6 +481,8 @@ class _EventRow extends StatelessWidget {
                 onPressed: onArchive,
                 isDanger: true,
               ),
+              const SizedBox(width: 2),
+              _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
             ],
           );
 
@@ -532,6 +603,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
+    final isEditingPublished = isEditing && widget.event!.isPublished;
     final publishButtonLabel = isEditing && widget.event!.isPublished
         ? 'Update Published Event'
         : 'Publish Event';
@@ -621,17 +693,18 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                OutlinedButton(
-                  onPressed: () => _submit(_EventSaveAction.draft),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: OtaColors.maroon,
-                    side: const BorderSide(color: OtaColors.maroon),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
+                if (!isEditingPublished)
+                  OutlinedButton(
+                    onPressed: () => _submit(_EventSaveAction.draft),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OtaColors.maroon,
+                      side: const BorderSide(color: OtaColors.maroon),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
+                    child: const Text('Save Draft'),
                   ),
-                  child: const Text('Save Draft'),
-                ),
                 FilledButton(
                   onPressed: () => _submit(_EventSaveAction.publish),
                   style: FilledButton.styleFrom(

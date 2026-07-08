@@ -156,6 +156,7 @@ class MockAppDataService implements AppDataService {
               publishedAt: notification.timestamp,
               createdAt: notification.timestamp,
               updatedAt: notification.timestamp,
+              requiresAction: notification.requiresAction,
             ),
           ),
           AcademyAnnouncement(
@@ -198,7 +199,11 @@ class MockAppDataService implements AppDataService {
   @override
   List<AcademyEvent> get events {
     return sampleAcademyEvents
-        .where((event) => event.locationId == currentUserAccount.locationId)
+        .where(
+          (event) =>
+              event.locationId == currentUserAccount.locationId &&
+              event.eventType != 'closure',
+        )
         .toList(growable: false);
   }
 }

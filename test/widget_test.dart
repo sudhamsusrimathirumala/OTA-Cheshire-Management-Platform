@@ -97,6 +97,19 @@ void main() {
     expect(find.text('Message OTA'), findsOneWidget);
   });
 
+  testWidgets('student dashboard fits narrow mobile width', (tester) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Quick Actions'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('schedule screen displays timeline and class blocks', (
     tester,
   ) async {
@@ -290,7 +303,7 @@ void main() {
     expect(find.text('Critical'), findsWidgets);
     expect(find.text('Tournament'), findsWidgets);
     expect(find.text('Message'), findsOneWidget);
-    expect(find.text('Future Resources'), findsOneWidget);
+    expect(find.text('Future Resources'), findsNothing);
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();

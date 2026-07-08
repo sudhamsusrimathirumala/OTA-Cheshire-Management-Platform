@@ -10,6 +10,7 @@ class Student {
     required this.nextRank,
     this.guardianUserIds = const <String>[],
     this.selfUserId,
+    this.preferredClassGroupIds = const <String>[],
     this.promotionHistory = const <String>[],
     this.testingNotes = const <String>[],
     this.isActive = true,
@@ -27,6 +28,7 @@ class Student {
   final String nextRank;
   final List<String> guardianUserIds;
   final String? selfUserId;
+  final List<String> preferredClassGroupIds;
   final List<String> promotionHistory;
   final List<String> testingNotes;
   final bool isActive;

@@ -26,6 +26,7 @@ class FirebaseAdminWriteService {
       'body': data.body,
       'announcementType': data.announcementType,
       'priority': data.priority,
+      'requiresAction': data.requiresAction,
       'status': data.status,
       'audienceType': data.audienceType,
       'locationId': data.locationId,
@@ -49,6 +50,13 @@ class FirebaseAdminWriteService {
           'status': 'archived',
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteAnnouncement(String announcementId) async {
+    await _database
+        .collection(FirestoreCollections.announcements)
+        .doc(announcementId)
+        .delete();
   }
 
   Future<void> saveEvent(EventWriteData data) async {
@@ -84,6 +92,13 @@ class FirebaseAdminWriteService {
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     }, SetOptions(merge: true));
   }
+
+  Future<void> deleteEvent(String eventId) async {
+    await _database
+        .collection(FirestoreCollections.events)
+        .doc(eventId)
+        .delete();
+  }
 }
 
 class AnnouncementWriteData {
@@ -95,6 +110,7 @@ class AnnouncementWriteData {
     required this.priority,
     required this.status,
     required this.locationId,
+    required this.requiresAction,
     this.audienceType = 'everyone',
     this.targetBelts = const <String>[],
     this.targetClassTypeIds = const <String>[],
@@ -114,6 +130,7 @@ class AnnouncementWriteData {
     required String priority,
     required String status,
     required String locationId,
+    bool? requiresAction,
     String? audienceType,
     List<String>? targetBelts,
     List<String>? targetClassTypeIds,
@@ -129,6 +146,7 @@ class AnnouncementWriteData {
       priority: priority,
       status: status,
       locationId: locationId,
+      requiresAction: requiresAction ?? announcement.requiresAction,
       audienceType: audienceType ?? announcement.audienceType,
       targetBelts: targetBelts ?? announcement.targetBelts,
       targetClassTypeIds: targetClassTypeIds ?? announcement.targetClassTypeIds,
@@ -148,6 +166,7 @@ class AnnouncementWriteData {
   final String priority;
   final String status;
   final String locationId;
+  final bool requiresAction;
   final String audienceType;
   final List<String> targetBelts;
   final List<String> targetClassTypeIds;

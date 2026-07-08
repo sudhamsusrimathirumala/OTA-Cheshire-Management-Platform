@@ -14,6 +14,7 @@ class AcademyAnnouncement {
     required this.createdAt,
     required this.updatedAt,
     this.publishedAt,
+    this.requiresAction = false,
     this.targetBelts = const <String>[],
     this.targetClassTypeIds = const <String>[],
     this.targetStudentProfileIds = const <String>[],
@@ -32,6 +33,7 @@ class AcademyAnnouncement {
   final DateTime? publishedAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool requiresAction;
   final List<String> targetBelts;
   final List<String> targetClassTypeIds;
   final List<String> targetStudentProfileIds;
