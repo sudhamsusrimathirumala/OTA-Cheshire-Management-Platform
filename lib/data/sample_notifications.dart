@@ -25,7 +25,7 @@ final sampleNotifications = [
     timestamp: DateTime(2026, 6, 23, 14, 30),
     isRead: false,
     category: NotificationCategory.tournament,
-    priority: NotificationPriority.critical,
+    priority: NotificationPriority.important,
     requiresAction: true,
   ),
   NotificationItem(
@@ -52,7 +52,7 @@ final sampleNotifications = [
     timestamp: DateTime(2026, 6, 21, 18, 15),
     isRead: false,
     category: NotificationCategory.beltTesting,
-    priority: NotificationPriority.critical,
+    priority: NotificationPriority.important,
     requiresAction: true,
   ),
   NotificationItem(

@@ -6,7 +6,7 @@ import '../theme/ota_colors.dart';
 enum OtaBottomNavDestination {
   dashboard,
   schedule,
-  curriculum,
+  resources,
   notifications,
   profile,
 }
@@ -34,9 +34,9 @@ class OtaBottomNavBar extends StatelessWidget {
           label: 'Schedule',
         ),
         NavigationDestination(
-          icon: Icon(Icons.menu_book_outlined),
-          selectedIcon: Icon(Icons.menu_book_rounded),
-          label: 'Curriculum',
+          icon: Icon(Icons.folder_copy_outlined),
+          selectedIcon: Icon(Icons.folder_copy_rounded),
+          label: 'Resources',
         ),
         NavigationDestination(
           icon: Icon(Icons.notifications_outlined),
@@ -61,8 +61,8 @@ class OtaBottomNavBar extends StatelessWidget {
             Navigator.of(context).pushReplacementNamed(OtaRoutes.dashboard);
           case OtaBottomNavDestination.schedule:
             Navigator.of(context).pushReplacementNamed(OtaRoutes.schedule);
-          case OtaBottomNavDestination.curriculum:
-            Navigator.of(context).pushReplacementNamed(OtaRoutes.curriculum);
+          case OtaBottomNavDestination.resources:
+            Navigator.of(context).pushReplacementNamed(OtaRoutes.resources);
           case OtaBottomNavDestination.notifications:
             Navigator.of(context).pushReplacementNamed(OtaRoutes.notifications);
           case OtaBottomNavDestination.profile:

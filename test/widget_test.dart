@@ -12,6 +12,7 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_students_sc
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/resources_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
@@ -135,12 +136,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ScheduleScreen), findsOneWidget);
 
-    await tester.tap(find.text('Curriculum'));
+    await tester.tap(find.text('Resources'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Review belt requirements and training material'),
-      findsOneWidget,
-    );
+    expect(find.text('Student resources are coming soon.'), findsOneWidget);
 
     await tester.tap(find.text('Notifications'));
     await tester.pumpAndSettle();
@@ -220,16 +218,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Class name'), findsOneWidget);
-    expect(find.text('Save Mock Class'), findsOneWidget);
+    expect(find.text('Save Class'), findsOneWidget);
 
-    await tester.tap(find.text('Cancel'));
+    await tester.tapAt(const Offset(20, 20));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Bulk Actions'));
     await tester.tap(find.text('Bulk Actions'));
     await tester.pumpAndSettle();
 
     expect(find.text('Bulk Schedule Action'), findsOneWidget);
     expect(find.text('Delete all classes in date range'), findsOneWidget);
-    expect(find.text('Apply Mock Bulk Delete'), findsOneWidget);
+    expect(find.text('Close Preview'), findsOneWidget);
   });
 
   testWidgets('admin announcements page displays filters and mock form', (
@@ -300,7 +299,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Notification Detail'), findsOneWidget);
-    expect(find.text('Critical'), findsWidgets);
+    expect(find.text('Important'), findsWidgets);
     expect(find.text('Tournament'), findsWidgets);
     expect(find.text('Message'), findsOneWidget);
     expect(find.text('Future Resources'), findsNothing);
@@ -360,6 +359,7 @@ class _StudentNavigationTestApp extends StatelessWidget {
       routes: {
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
         OtaRoutes.schedule: (_) => const ScheduleScreen(),
+        OtaRoutes.resources: (_) => const ResourcesScreen(),
         OtaRoutes.curriculum: (_) => const CurriculumScreen(),
         OtaRoutes.notifications: (_) => const NotificationsScreen(),
         OtaRoutes.profile: (_) => const ProfileScreen(),

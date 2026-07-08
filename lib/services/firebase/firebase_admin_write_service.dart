@@ -99,6 +99,43 @@ class FirebaseAdminWriteService {
         .doc(eventId)
         .delete();
   }
+
+  Future<void> saveClassSession(ClassSessionWriteData data) async {
+    final collection = _database.collection(FirestoreCollections.classSessions);
+    final document = data.id == null
+        ? collection.doc()
+        : collection.doc(data.id);
+    final now = DateTime.now();
+    final createdAt = data.createdAt ?? now;
+
+    await document.set({
+      'className': data.className,
+      'classTypeId': data.classTypeId,
+      'locationId': data.locationId,
+      'weekday': data.weekday,
+      'startTime': Timestamp.fromDate(data.startTime),
+      'endTime': Timestamp.fromDate(data.endTime),
+      'startMinutes': data.startMinutes,
+      'endMinutes': data.endMinutes,
+      'eligibleBelts': List<String>.from(data.eligibleBelts),
+      'description': data.description,
+      'eligibilityNote': data.eligibilityNote,
+      'isActive': data.isActive,
+      'isPreferred': data.isPreferred,
+      'resumesOn': data.resumesOn == null
+          ? null
+          : Timestamp.fromDate(data.resumesOn!),
+      'createdAt': Timestamp.fromDate(createdAt),
+      'updatedAt': Timestamp.fromDate(now),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteClassSession(String classSessionId) async {
+    await _database
+        .collection(FirestoreCollections.classSessions)
+        .doc(classSessionId)
+        .delete();
+  }
 }
 
 class AnnouncementWriteData {
@@ -233,4 +270,42 @@ class EventWriteData {
   final bool isPublished;
   final bool showInResources;
   final DateTime? createdAt;
+}
+
+class ClassSessionWriteData {
+  const ClassSessionWriteData({
+    required this.className,
+    required this.classTypeId,
+    required this.locationId,
+    required this.weekday,
+    required this.startTime,
+    required this.endTime,
+    required this.eligibleBelts,
+    required this.description,
+    required this.isActive,
+    required this.isPreferred,
+    this.id,
+    this.eligibilityNote,
+    this.resumesOn,
+    this.createdAt,
+  });
+
+  final String? id;
+  final String className;
+  final String classTypeId;
+  final String locationId;
+  final int weekday;
+  final DateTime startTime;
+  final DateTime endTime;
+  final List<String> eligibleBelts;
+  final String description;
+  final String? eligibilityNote;
+  final bool isActive;
+  final bool isPreferred;
+  final DateTime? resumesOn;
+  final DateTime? createdAt;
+
+  int get startMinutes => startTime.hour * 60 + startTime.minute;
+
+  int get endMinutes => endTime.hour * 60 + endTime.minute;
 }

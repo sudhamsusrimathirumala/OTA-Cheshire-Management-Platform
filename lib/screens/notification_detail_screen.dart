@@ -200,7 +200,7 @@ class _DetailBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final backgroundColor = switch (priority) {
-      NotificationPriority.critical => OtaColors.actionRed,
+      NotificationPriority.critical => OtaColors.maroon,
       NotificationPriority.important => OtaColors.maroon,
       _ => OtaColors.softRed,
     };

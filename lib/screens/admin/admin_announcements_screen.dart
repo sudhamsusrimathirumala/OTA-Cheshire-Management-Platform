@@ -9,14 +9,7 @@ import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
-enum _AnnouncementFilter {
-  all,
-  draft,
-  published,
-  archived,
-  important,
-  critical,
-}
+enum _AnnouncementFilter { all, draft, published, archived, important }
 
 enum _AnnouncementStatus { draft, published, archived }
 
@@ -67,13 +60,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         _announcements
             .where(
               (announcement) =>
-                  announcement.priority == NotificationPriority.important,
-            )
-            .toList(growable: false),
-      _AnnouncementFilter.critical =>
-        _announcements
-            .where(
-              (announcement) =>
+                  announcement.priority == NotificationPriority.important ||
                   announcement.priority == NotificationPriority.critical,
             )
             .toList(growable: false),
@@ -527,8 +514,8 @@ class _AnnouncementRow extends StatelessWidget {
       _AnnouncementStatus.archived => _BadgeTone.navy,
     };
     final accentColor = switch (announcement.priority) {
-      NotificationPriority.critical => OtaColors.actionRed,
-      NotificationPriority.important => OtaColors.maroon,
+      NotificationPriority.important ||
+      NotificationPriority.critical => OtaColors.maroon,
       NotificationPriority.general => switch (announcement.status) {
         _AnnouncementStatus.draft => const Color(0xFFD79A16),
         _AnnouncementStatus.archived => const Color(0xFF98A2B3),
@@ -538,9 +525,7 @@ class _AnnouncementRow extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: announcement.priority == NotificationPriority.critical
-            ? const Color(0xFFFFF4F4)
-            : OtaColors.white,
+        color: OtaColors.white,
         border: Border(left: BorderSide(color: accentColor, width: 4)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -556,15 +541,11 @@ class _AnnouncementRow extends StatelessWidget {
               _Badge(label: announcement.status.label, tone: statusTone),
             ],
           );
-          final actions = Row(
-            mainAxisSize: MainAxisSize.min,
+          final actions = Wrap(
             children: [
               _ActionLink(label: 'Edit', onPressed: onEdit),
-              const SizedBox(width: 2),
               _ActionLink(label: 'Preview', onPressed: onPreview),
-              const SizedBox(width: 2),
               _ActionLink(label: 'Archive', onPressed: onArchive),
-              const SizedBox(width: 2),
               _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
             ],
           );
@@ -667,12 +648,16 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _bodyController = TextEditingController(text: announcement?.body ?? '');
     _studentSearchController = TextEditingController();
     _category = announcement?.category ?? NotificationCategory.general;
-    _priority = announcement?.priority ?? NotificationPriority.general;
+    _priority = announcement?.priority == NotificationPriority.critical
+        ? NotificationPriority.important
+        : announcement?.priority ?? NotificationPriority.general;
     _requiresAction = announcement?.source.requiresAction ?? false;
     _audience = _audienceForFirestoreValue(announcement?.source.audienceType);
     _targetBelts.addAll(announcement?.source.targetBelts ?? const <String>[]);
     _targetClassTypeIds.addAll(
-      announcement?.source.targetClassTypeIds ?? const <String>[],
+      (announcement?.source.targetClassTypeIds ?? const <String>[]).map(
+        _normalizeClassGroupId,
+      ),
     );
     _targetStudentProfileIds.addAll(
       announcement?.source.targetStudentProfileIds ?? const <String>[],
@@ -747,7 +732,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                     initialValue: _priority,
                     decoration: _fieldDecoration('Priority'),
                     items: [
-                      for (final priority in NotificationPriority.values)
+                      for (final priority in _announcementPriorityOptions)
                         DropdownMenuItem<NotificationPriority>(
                           value: priority,
                           child: Text(priority.label),
@@ -1565,7 +1550,7 @@ class _BadgeColors {
   final Color foreground;
 }
 
-enum _BadgeTone { navy, success, warning, important, critical }
+enum _BadgeTone { navy, success, warning, important }
 
 enum _AnnouncementSaveAction { draft, publish }
 
@@ -1598,6 +1583,11 @@ const _announcementClassGroups = [
   _TargetOption(id: 'level-1-2-sparring', label: 'Level 1/2 Sparring'),
 ];
 
+const _announcementPriorityOptions = [
+  NotificationPriority.general,
+  NotificationPriority.important,
+];
+
 enum _Audience {
   everyone('Everyone', 'everyone'),
   belt('Specific belt', 'belt'),
@@ -1618,7 +1608,6 @@ extension on _AnnouncementFilter {
       _AnnouncementFilter.published => 'Published',
       _AnnouncementFilter.archived => 'Archived',
       _AnnouncementFilter.important => 'Important',
-      _AnnouncementFilter.critical => 'Critical',
     };
   }
 }
@@ -1677,11 +1666,18 @@ String _classGroupLabelFor(String id) {
       .label;
 }
 
+String _normalizeClassGroupId(String id) {
+  return switch (id) {
+    'black-belt' || 'teen-black-belt' || 'adult' => 'teen-adult',
+    _ => id,
+  };
+}
+
 _BadgeTone _priorityTone(NotificationPriority priority) {
   return switch (priority) {
     NotificationPriority.general => _BadgeTone.navy,
     NotificationPriority.important => _BadgeTone.important,
-    NotificationPriority.critical => _BadgeTone.critical,
+    NotificationPriority.critical => _BadgeTone.important,
   };
 }
 
@@ -1706,11 +1702,6 @@ _BadgeColors _badgeColors(_BadgeTone tone) {
       background: OtaColors.softRed,
       border: Color(0xFFE7C8CE),
       foreground: OtaColors.maroon,
-    ),
-    _BadgeTone.critical => const _BadgeColors(
-      background: Color(0xFFFFE4E8),
-      border: Color(0xFFF0A0AA),
-      foreground: OtaColors.actionRed,
     ),
   };
 }

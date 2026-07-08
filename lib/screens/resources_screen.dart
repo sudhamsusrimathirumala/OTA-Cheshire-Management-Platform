@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/ota_colors.dart';
+import '../widgets/ota_bottom_nav_bar.dart';
 
 class ResourcesScreen extends StatelessWidget {
   const ResourcesScreen({super.key});
@@ -65,12 +66,23 @@ class ResourcesScreen extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Academy forms, curriculum links, testing information, and registration links will appear here.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: OtaColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
         ),
+      ),
+      bottomNavigationBar: const OtaBottomNavBar(
+        selectedDestination: OtaBottomNavDestination.resources,
       ),
     );
   }

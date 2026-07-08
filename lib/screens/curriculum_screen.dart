@@ -91,7 +91,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
         ),
       ),
       bottomNavigationBar: const OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.curriculum,
+        selectedDestination: OtaBottomNavDestination.resources,
       ),
     );
   }

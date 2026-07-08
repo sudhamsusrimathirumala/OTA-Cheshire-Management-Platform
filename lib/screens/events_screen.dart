@@ -12,6 +12,7 @@ class EventsScreen extends StatelessWidget {
     return AnimatedBuilder(
       animation: appDataService,
       builder: (context, child) {
+        final now = DateTime.now();
         final locationId = appDataService.selectedStudentProfile.locationId;
         final events =
             appDataService.events
@@ -19,10 +20,13 @@ class EventsScreen extends StatelessWidget {
                   (event) =>
                       event.isPublished &&
                       !event.isArchived &&
-                      event.locationId == locationId,
+                      event.eventType != 'closure' &&
+                      event.locationId == locationId &&
+                      !event.endDateTime.isBefore(now),
                 )
                 .toList()
               ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+        final groupedEvents = _groupEventsByMonth(events);
 
         return Scaffold(
           backgroundColor: OtaColors.blush,
@@ -56,15 +60,21 @@ class EventsScreen extends StatelessWidget {
                             else if (events.isEmpty)
                               const _StatusCard(
                                 icon: Icons.event_busy_rounded,
-                                title: 'No events right now',
+                                title: 'No upcoming events right now.',
                                 detail:
                                     'Published academy events will appear here.',
                               )
                             else
-                              for (final event in events) ...[
-                                _EventCard(event: event),
-                                if (event != events.last)
-                                  const SizedBox(height: 12),
+                              for (final group in groupedEvents.entries) ...[
+                                _EventGroupHeader(label: group.key),
+                                const SizedBox(height: 8),
+                                for (final event in group.value) ...[
+                                  _EventCard(event: event),
+                                  if (event != group.value.last)
+                                    const SizedBox(height: 12),
+                                ],
+                                if (group.key != groupedEvents.keys.last)
+                                  const SizedBox(height: 16),
                               ],
                           ],
                         ),
@@ -140,12 +150,21 @@ class _EventCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _Badge(label: event.eventTypeLabel),
-              _Badge(label: event.registrationLabel, isAccent: true),
+              _DateBadge(date: event.startDateTime),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _Badge(label: event.eventTypeLabel),
+                    _Badge(label: event.registrationLabel, isAccent: true),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -195,6 +214,59 @@ class _EventCard extends StatelessWidget {
               ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventGroupHeader extends StatelessWidget {
+  const _EventGroupHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        color: OtaColors.ink,
+        fontWeight: FontWeight.w900,
+      ),
+    );
+  }
+}
+
+class _DateBadge extends StatelessWidget {
+  const _DateBadge({required this.date});
+
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 58,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: OtaColors.softRed,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            _monthNames[date.month - 1].toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: OtaColors.maroon,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            date.day.toString(),
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -316,6 +388,19 @@ String _formatTime(DateTime dateTime) {
   return '$hour:$minute $period';
 }
 
+Map<String, List<AcademyEvent>> _groupEventsByMonth(List<AcademyEvent> events) {
+  final groupedEvents = <String, List<AcademyEvent>>{};
+
+  for (final event in events) {
+    final key =
+        '${_fullMonthNames[event.startDateTime.month - 1]} '
+        '${event.startDateTime.year}';
+    groupedEvents.putIfAbsent(key, () => <AcademyEvent>[]).add(event);
+  }
+
+  return groupedEvents;
+}
+
 const _monthNames = [
   'Jan',
   'Feb',
@@ -329,4 +414,19 @@ const _monthNames = [
   'Oct',
   'Nov',
   'Dec',
+];
+
+const _fullMonthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];

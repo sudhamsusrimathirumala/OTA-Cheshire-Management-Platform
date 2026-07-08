@@ -63,7 +63,6 @@ class AcademyEvent {
       'summerCamp' || 'summer-camp' => 'Summer Camp',
       'beltTesting' || 'belt-testing' => 'Belt Testing',
       'seminar' => 'Seminar',
-      'closure' => 'Closure',
       _ => 'Special Event',
     };
   }

@@ -7,7 +7,7 @@ extension NotificationPriorityVisuals on NotificationPriority {
     return switch (this) {
       NotificationPriority.general => 'General',
       NotificationPriority.important => 'Important',
-      NotificationPriority.critical => 'Critical',
+      NotificationPriority.critical => 'Important',
     };
   }
 }

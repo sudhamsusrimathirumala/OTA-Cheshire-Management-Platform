@@ -63,7 +63,7 @@ class AcademyAnnouncement {
   NotificationPriority get notificationPriority {
     return switch (priority) {
       'important' => NotificationPriority.important,
-      'critical' => NotificationPriority.critical,
+      'critical' => NotificationPriority.important,
       _ => NotificationPriority.general,
     };
   }

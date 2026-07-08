@@ -6,7 +6,7 @@ import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
-enum _EventFilter { all, published, draft, registrationOpen, upcoming, past }
+enum _EventFilter { draft, published, past }
 
 enum _EventType {
   parentNightOut('Parent Night Out'),
@@ -30,7 +30,7 @@ class AdminEventsScreen extends StatefulWidget {
 
 class _AdminEventsScreenState extends State<AdminEventsScreen> {
   final _writeService = FirebaseAdminWriteService();
-  var _selectedFilter = _EventFilter.all;
+  var _selectedFilter = _EventFilter.published;
 
   List<AcademyEvent> _filteredEvents(List<AcademyEvent> events) {
     final now = DateTime.now();
@@ -40,12 +40,14 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         return false;
       }
 
+      if (event.isArchived) {
+        return false;
+      }
+
       return switch (_selectedFilter) {
-        _EventFilter.all => true,
-        _EventFilter.published => event.isPublished,
         _EventFilter.draft => !event.isPublished,
-        _EventFilter.registrationOpen => event.isRegistrationOpen,
-        _EventFilter.upcoming => event.startDateTime.isAfter(now),
+        _EventFilter.published =>
+          event.isPublished && !event.endDateTime.isBefore(now),
         _EventFilter.past => event.endDateTime.isBefore(now),
       };
     }).toList()..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
@@ -392,6 +394,8 @@ class _EventsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final groupedEvents = _groupEventsByMonth(events);
+
     return _AdminPanel(
       padding: EdgeInsets.zero,
       child: Column(
@@ -409,18 +413,43 @@ class _EventsPanel extends StatelessWidget {
           else if (events.isEmpty)
             const _EmptyState(message: 'No events found.')
           else
-            for (final event in events) ...[
-              _EventRow(
-                event: event,
-                onEdit: () => onEdit(event),
-                onPreview: () => onPreview(event),
-                onArchive: () => onArchive(event),
-                onDelete: () => onDelete(event),
-              ),
-              if (event != events.last)
-                const Divider(height: 1, color: Color(0xFFE1E4EA)),
+            for (final group in groupedEvents.entries) ...[
+              _EventGroupHeader(label: group.key),
+              for (final event in group.value) ...[
+                _EventRow(
+                  event: event,
+                  onEdit: () => onEdit(event),
+                  onPreview: () => onPreview(event),
+                  onArchive: () => onArchive(event),
+                  onDelete: () => onDelete(event),
+                ),
+                if (event != group.value.last)
+                  const Divider(height: 1, color: Color(0xFFE1E4EA)),
+              ],
             ],
         ],
+      ),
+    );
+  }
+}
+
+class _EventGroupHeader extends StatelessWidget {
+  const _EventGroupHeader({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      color: const Color(0xFFF8FAFC),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: OtaColors.navy,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -469,19 +498,15 @@ class _EventRow extends StatelessWidget {
                 const _Badge(label: 'Link', tone: _BadgeTone.success),
             ],
           );
-          final actions = Row(
-            mainAxisSize: MainAxisSize.min,
+          final actions = Wrap(
             children: [
               _ActionLink(label: 'Edit', onPressed: onEdit),
-              const SizedBox(width: 2),
               _ActionLink(label: 'Preview', onPressed: onPreview),
-              const SizedBox(width: 2),
               _ActionLink(
                 label: 'Archive',
                 onPressed: onArchive,
                 isDanger: true,
               ),
-              const SizedBox(width: 2),
               _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
             ],
           );
@@ -512,6 +537,8 @@ class _EventRow extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _DateBadge(date: event.startDateTime),
+                const SizedBox(height: 8),
                 titleBlock,
                 const SizedBox(height: 8),
                 Text(event.dateRangeLabel, style: _metaStyle(context)),
@@ -525,6 +552,8 @@ class _EventRow extends StatelessWidget {
 
           return Row(
             children: [
+              _DateBadge(date: event.startDateTime),
+              const SizedBox(width: 12),
               Expanded(flex: 4, child: titleBlock),
               SizedBox(
                 width: 148,
@@ -547,6 +576,43 @@ class _EventFormSheet extends StatefulWidget {
 
   @override
   State<_EventFormSheet> createState() => _EventFormSheetState();
+}
+
+class _DateBadge extends StatelessWidget {
+  const _DateBadge({required this.date});
+
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 54,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: OtaColors.softRed,
+        border: Border.all(color: const Color(0xFFE7C8CE)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        children: [
+          Text(
+            _monthNames[date.month - 1].toUpperCase(),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: OtaColors.maroon,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          Text(
+            date.day.toString(),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _EventFormSheetState extends State<_EventFormSheet> {
@@ -1229,11 +1295,8 @@ class _EventFormResult {
 extension on _EventFilter {
   String get label {
     return switch (this) {
-      _EventFilter.all => 'All',
-      _EventFilter.published => 'Published',
       _EventFilter.draft => 'Draft',
-      _EventFilter.registrationOpen => 'Registration Open',
-      _EventFilter.upcoming => 'Upcoming',
+      _EventFilter.published => 'Published',
       _EventFilter.past => 'Past',
     };
   }
@@ -1264,6 +1327,19 @@ _EventType _eventTypeForId(String? eventType) {
     (type) => type.id == normalizedEventType,
     orElse: () => _EventType.specialEvent,
   );
+}
+
+Map<String, List<AcademyEvent>> _groupEventsByMonth(List<AcademyEvent> events) {
+  final groupedEvents = <String, List<AcademyEvent>>{};
+
+  for (final event in events) {
+    final key =
+        '${_fullMonthNames[event.startDateTime.month - 1]} '
+        '${event.startDateTime.year}';
+    groupedEvents.putIfAbsent(key, () => <AcademyEvent>[]).add(event);
+  }
+
+  return groupedEvents;
 }
 
 _BadgeColors _badgeColors(_BadgeTone tone) {
@@ -1391,4 +1467,19 @@ const _monthNames = [
   'Oct',
   'Nov',
   'Dec',
+];
+
+const _fullMonthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ];

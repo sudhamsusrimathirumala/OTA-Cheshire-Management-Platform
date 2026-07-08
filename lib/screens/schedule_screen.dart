@@ -6,6 +6,8 @@ import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
+enum _ScheduleViewMode { day, week }
+
 class ScheduleScreen extends StatefulWidget {
   const ScheduleScreen({this.initialDate, super.key});
 
@@ -22,6 +24,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   final ScrollController _scrollController = ScrollController();
   late DateTime _selectedDate;
+  var _viewMode = _ScheduleViewMode.day;
 
   @override
   void initState() {
@@ -68,7 +71,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void _goToPreviousDay() {
     setState(() {
       _selectedDate = DateUtils.dateOnly(
-        _selectedDate.subtract(const Duration(days: 1)),
+        _selectedDate.subtract(
+          Duration(days: _viewMode == _ScheduleViewMode.week ? 7 : 1),
+        ),
       );
     });
     _scrollAfterDateChange();
@@ -77,10 +82,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   void _goToNextDay() {
     setState(() {
       _selectedDate = DateUtils.dateOnly(
-        _selectedDate.add(const Duration(days: 1)),
+        _selectedDate.add(
+          Duration(days: _viewMode == _ScheduleViewMode.week ? 7 : 1),
+        ),
       );
     });
     _scrollAfterDateChange();
+  }
+
+  void _setViewMode(_ScheduleViewMode viewMode) {
+    setState(() => _viewMode = viewMode);
+    if (viewMode == _ScheduleViewMode.day) {
+      _scrollAfterDateChange();
+    }
   }
 
   Future<void> _pickDate() async {
@@ -180,6 +194,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                             onDateTap: _pickDate,
                           ),
                           const SizedBox(height: 12),
+                          _ScheduleViewToggle(
+                            selectedViewMode: _viewMode,
+                            onChanged: _setViewMode,
+                          ),
+                          const SizedBox(height: 12),
                           _NextEligibleBanner(nextClass: _nextEligibleClass),
                         ],
                       ),
@@ -193,6 +212,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       child: _ScheduleContent(
                         selectedClasses: selectedClasses,
                         selectedDate: _selectedDate,
+                        viewMode: _viewMode,
                         isViewingToday: _isViewingToday,
                         scrollController: _scrollController,
                         hourHeight: _hourHeight,
@@ -311,6 +331,7 @@ class _ScheduleContent extends StatelessWidget {
   const _ScheduleContent({
     required this.selectedClasses,
     required this.selectedDate,
+    required this.viewMode,
     required this.isViewingToday,
     required this.scrollController,
     required this.hourHeight,
@@ -323,6 +344,7 @@ class _ScheduleContent extends StatelessWidget {
 
   final List<ClassSession> selectedClasses;
   final DateTime selectedDate;
+  final _ScheduleViewMode viewMode;
   final bool isViewingToday;
   final ScrollController scrollController;
   final double hourHeight;
@@ -353,8 +375,16 @@ class _ScheduleContent extends StatelessWidget {
       );
     }
 
+    if (viewMode == _ScheduleViewMode.week) {
+      return _WeekScheduleView(
+        selectedDate: selectedDate,
+        student: student,
+        onClassTap: onClassTap,
+      );
+    }
+
     if (selectedClasses.isEmpty) {
-      return const _EmptyScheduleState();
+      return const _EmptyDayScheduleState();
     }
 
     return _ScheduleTimeline(
@@ -427,6 +457,50 @@ class _DateNavigationHeader extends StatelessWidget {
   }
 }
 
+class _ScheduleViewToggle extends StatelessWidget {
+  const _ScheduleViewToggle({
+    required this.selectedViewMode,
+    required this.onChanged,
+  });
+
+  final _ScheduleViewMode selectedViewMode;
+  final ValueChanged<_ScheduleViewMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<_ScheduleViewMode>(
+      segments: const [
+        ButtonSegment<_ScheduleViewMode>(
+          value: _ScheduleViewMode.day,
+          label: Text('Day'),
+          icon: Icon(Icons.view_day_outlined),
+        ),
+        ButtonSegment<_ScheduleViewMode>(
+          value: _ScheduleViewMode.week,
+          label: Text('Week'),
+          icon: Icon(Icons.view_week_outlined),
+        ),
+      ],
+      selected: {selectedViewMode},
+      onSelectionChanged: (selection) => onChanged(selection.first),
+      style: ButtonStyle(
+        backgroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return OtaColors.maroon;
+          }
+          return OtaColors.white;
+        }),
+        foregroundColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return OtaColors.white;
+          }
+          return OtaColors.ink;
+        }),
+      ),
+    );
+  }
+}
+
 class _NextEligibleBanner extends StatelessWidget {
   const _NextEligibleBanner({required this.nextClass});
 
@@ -465,6 +539,249 @@ class _NextEligibleBanner extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _WeekScheduleView extends StatelessWidget {
+  const _WeekScheduleView({
+    required this.selectedDate,
+    required this.student,
+    required this.onClassTap,
+  });
+
+  final DateTime selectedDate;
+  final StudentProfile student;
+  final ValueChanged<ClassSession> onClassTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final weekDates = _weekDatesFor(selectedDate);
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        children: [
+          for (final date in weekDates) ...[
+            _WeekDaySection(
+              date: date,
+              sessions: [...appDataService.scheduleForWeekday(date.weekday)]
+                ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes)),
+              student: student,
+              onClassTap: onClassTap,
+            ),
+            if (date != weekDates.last) const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekDaySection extends StatelessWidget {
+  const _WeekDaySection({
+    required this.date,
+    required this.sessions,
+    required this.student,
+    required this.onClassTap,
+  });
+
+  final DateTime date;
+  final List<ClassSession> sessions;
+  final StudentProfile student;
+  final ValueChanged<ClassSession> onClassTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _weekdayLabel(date.weekday),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Text(
+                _formatShortDate(date),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (sessions.isEmpty)
+            Text(
+              'No classes scheduled.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            for (final session in sessions) ...[
+              _WeekClassRow(
+                session: session,
+                student: student,
+                onTap: () => onClassTap(session),
+              ),
+              if (session != sessions.last) const SizedBox(height: 8),
+            ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekClassRow extends StatelessWidget {
+  const _WeekClassRow({
+    required this.session,
+    required this.student,
+    required this.onTap,
+  });
+
+  final ClassSession session;
+  final StudentProfile student;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEligible = session.isEligibleFor(student);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isEligible ? OtaColors.softRed : const Color(0xFFF8FAFC),
+          border: Border.all(
+            color: isEligible ? OtaColors.maroon : const Color(0xFFE1E4EA),
+          ),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    session.className,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: OtaColors.ink,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (isEligible)
+                  const Icon(
+                    Icons.star_rounded,
+                    color: Color(0xFFD9A441),
+                    size: 18,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _WeekMeta(
+                  icon: Icons.schedule_rounded,
+                  label: session.timeRangeLabel,
+                ),
+                _WeekMeta(
+                  icon: Icons.workspace_premium_rounded,
+                  label: session.eligibilityLabel,
+                ),
+                if (session.isPreferred) const _WeekBadge(label: 'Preferred'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WeekMeta extends StatelessWidget {
+  const _WeekMeta({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: OtaColors.maroon),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WeekBadge extends StatelessWidget {
+  const _WeekBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: OtaColors.maroon,
+          fontWeight: FontWeight.w900,
+        ),
       ),
     );
   }
@@ -884,8 +1201,8 @@ class _ScheduleStatusState extends StatelessWidget {
   }
 }
 
-class _EmptyScheduleState extends StatelessWidget {
-  const _EmptyScheduleState();
+class _EmptyDayScheduleState extends StatelessWidget {
+  const _EmptyDayScheduleState();
 
   @override
   Widget build(BuildContext context) {
@@ -931,28 +1248,13 @@ class _EmptyScheduleState extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 8),
               Text(
-                'Next Available Class:',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: OtaColors.mutedText,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Monday • 4:00 PM',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: OtaColors.maroon,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Little Tiger',
+                'Check another day or switch to Week view for the full academy schedule.',
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w700,
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
@@ -1065,6 +1367,22 @@ double _currentTimeTop(double hourHeight) {
 
 String _formatFullDate(DateTime date) {
   return '${_weekdayLabel(date.weekday)}, ${_monthNames[date.month - 1]} ${date.day}';
+}
+
+String _formatShortDate(DateTime date) {
+  return '${_monthNames[date.month - 1].substring(0, 3)} ${date.day}';
+}
+
+List<DateTime> _weekDatesFor(DateTime selectedDate) {
+  final startOfWeek = DateUtils.dateOnly(
+    selectedDate.subtract(
+      Duration(days: selectedDate.weekday - DateTime.monday),
+    ),
+  );
+  return [
+    for (var offset = 0; offset < DateTime.daysPerWeek; offset++)
+      startOfWeek.add(Duration(days: offset)),
+  ];
 }
 
 String _formatHour(int hour) {

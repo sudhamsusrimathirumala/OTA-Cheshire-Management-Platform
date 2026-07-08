@@ -670,7 +670,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       'everyone' => true,
       'belt' => targetBelts.contains(selectedStudentProfile.belt),
       'classType' => _selectedProfileClassGroupIds.any(
-        targetClassTypeIds.contains,
+        _normalizedTargetClassTypeIds(targetClassTypeIds).contains,
       ),
       'students' =>
         targetStudentProfileIds.isEmpty
@@ -680,7 +680,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       'specificUsers' => targetUserIds.contains(currentUserAccount.id),
       'mixed' =>
         targetBelts.contains(selectedStudentProfile.belt) ||
-            _selectedProfileClassGroupIds.any(targetClassTypeIds.contains) ||
+            _selectedProfileClassGroupIds.any(
+              _normalizedTargetClassTypeIds(targetClassTypeIds).contains,
+            ) ||
             targetStudentProfileIds.contains(selectedStudentProfile.id) ||
             targetUserIds.contains(currentUserAccount.id),
       _ => false,
@@ -689,11 +691,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   Set<String> get _selectedProfileClassGroupIds {
     return {
-      ...selectedStudentProfile.preferredClassGroupIds,
-      for (final sessions in _schedule.values)
-        for (final session in sessions)
-          if (session.isEligibleFor(selectedStudentProfile))
-            session.classTypeId,
+      ...selectedStudentProfile.preferredClassGroupIds.map(
+        _normalizeClassGroupId,
+      ),
+      ..._inferredClassGroupIdsForBelt(selectedStudentProfile.belt),
     };
   }
 
@@ -752,6 +753,32 @@ List<String> _stringListValue(Object? value) {
   return value.whereType<String>().toList(growable: false);
 }
 
+Set<String> _normalizedTargetClassTypeIds(List<String> targetClassTypeIds) {
+  return targetClassTypeIds.map(_normalizeClassGroupId).toSet();
+}
+
+String _normalizeClassGroupId(String id) {
+  return switch (id) {
+    'black-belt' || 'teen-black-belt' || 'adult' => 'teen-adult',
+    'sparring-class' => 'level-1-2-sparring',
+    _ => id,
+  };
+}
+
+Set<String> _inferredClassGroupIdsForBelt(String belt) {
+  return switch (belt) {
+    'White' || 'White-Yellow' || 'Yellow' => {'level-1'},
+    'Yellow-Green' || 'Green' || 'Green-Blue' => {'level-2'},
+    'Blue' || 'Blue-Red' => {'level-3'},
+    'Red' ||
+    'Red-Yellow' ||
+    'Red-Green' ||
+    'Red-Blue' ||
+    'Red-Black' => {'level-4'},
+    _ => const <String>{},
+  };
+}
+
 String _classTypeIdFor(String className) {
   return switch (className) {
     'Little Tiger (Age 3-5)' => 'little-tiger',
@@ -759,10 +786,11 @@ String _classTypeIdFor(String className) {
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',
     'Level 4' => 'level-4',
-    'Black Belt' => 'black-belt',
-    'Teen & Black Belt' => 'teen-black-belt',
-    'Adult' => 'adult',
-    'Level 1 / Level 2 Sparring' || 'Teen/Adult Sparring' => 'sparring-class',
+    'Black Belt' ||
+    'Teen & Black Belt' ||
+    'Adult' ||
+    'Teen/Adult Sparring' => 'teen-adult',
+    'Level 1 / Level 2 Sparring' => 'level-1-2-sparring',
     _ => className.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
   };
 }
@@ -783,7 +811,7 @@ NotificationCategory _categoryForAnnouncementType(String announcementType) {
 NotificationPriority _priorityForAnnouncement(String priority) {
   return switch (priority) {
     'important' => NotificationPriority.important,
-    'critical' => NotificationPriority.critical,
+    'critical' => NotificationPriority.important,
     _ => NotificationPriority.general,
   };
 }

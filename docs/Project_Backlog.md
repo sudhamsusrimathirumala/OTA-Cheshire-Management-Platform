@@ -1,6 +1,6 @@
 # OTA Cheshire Management Platform - Project Backlog
 
-**Last Updated:** July 7, 2026
+**Last Updated:** July 8, 2026
 
 ---
 
@@ -25,6 +25,7 @@
     - Support up to two overlapping classes
     - Google Calendar-inspired day timeline layout
 - [x] Curriculum page
+- [x] Resources placeholder page
 - [x] Notifications page
 - [x] Profile page
 
@@ -119,12 +120,13 @@ Future Improvements:
 - [ ] Resolve guardian user IDs to display names on Admin Students
 - [ ] Replace mock linked profile ownership with Firebase-backed user/profile relationships
 - [ ] Replace mock curriculum with Firestore-backed curriculum/resources
-- [ ] Build student/parent-facing Events page from Firestore events
-- [ ] Build student/parent-facing Resources page from Firestore resources
-- [ ] Add Firebase-backed admin schedule writes
+- [x] Build student/parent-facing Events page from Firestore events
+- [x] Add student/parent-facing Resources placeholder
+- [x] Add Firebase-backed admin schedule writes
 - [ ] Add Firebase-backed bulk schedule edit/delete actions using `classTypeId`
-- [ ] Add Firebase-backed admin announcement writes
-- [ ] Add Firebase-backed admin event writes
+- [x] Add Firebase-backed admin announcement writes
+- [x] Add Firebase-backed admin event writes
+- [ ] Build full Firestore-backed student/parent Resources page
 - [ ] Add Firebase-backed admin student profile writes
 
 Priority:
@@ -248,7 +250,7 @@ Blue -> Blue-Red
 - [x] Suggested levels:
   - General
   - Important
-  - Critical
+- [x] Critical is merged into Important in user-facing UI; old Firestore `critical` values display as Important.
 - [x] User-facing notification cards should visually reflect priority.
 
 ---
@@ -316,6 +318,7 @@ Purely visual enhancement that does not affect functionality.
 
 ## Schedule Screen
 - [x] Google Calendar-inspired day timeline
+- [x] Day / Week schedule toggle
 - [x] Date navigation and date picker
 - [x] Current-time indicator
 - [x] Time-scaled class blocks
@@ -340,8 +343,8 @@ Purely visual enhancement that does not affect functionality.
 
 ## Notification Detail Screen
 - [x] Full notification title, category, priority, timestamp, and body
-- [x] Important and critical priority styling
-- [x] Future-ready placeholder resource sections
+- [x] Important priority styling
+- [x] Removed future resource placeholder sections from notification detail
 
 ## Profile Screen
 - [x] Student identity header
@@ -358,6 +361,8 @@ Purely visual enhancement that does not affect functionality.
 - [x] Admin students directory page
 - [x] Admin events management page
 - [x] Live Firestore reads for admin schedule, announcements, events, and student directory
+- [x] Firestore writes for admin announcements, events, and class sessions
+- [x] Archive and Delete are separate admin actions where supported
 
 ---
 

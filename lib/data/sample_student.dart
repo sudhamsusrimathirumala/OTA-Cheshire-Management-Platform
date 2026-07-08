@@ -12,7 +12,7 @@ const sampleStudent = Student(
   stickersRequired: 3,
   nextRank: 'Black',
   guardianUserIds: ['user_parent_demo'],
-  preferredClassGroupIds: ['teen-adult', 'black-belt'],
+  preferredClassGroupIds: ['teen-adult', 'level-4'],
 );
 
 const sampleStudentProfiles = [
@@ -27,7 +27,7 @@ const sampleStudentProfiles = [
     stickersRequired: 4,
     nextRank: 'Green',
     guardianUserIds: ['guardian_patel'],
-    preferredClassGroupIds: ['level-1'],
+    preferredClassGroupIds: ['level-2'],
   ),
   Student(
     id: 'student_aarav',
@@ -51,7 +51,7 @@ const sampleStudentProfiles = [
     stickersRequired: 4,
     nextRank: 'Blue-Red',
     guardianUserIds: ['guardian_rivera'],
-    preferredClassGroupIds: ['teen-adult', 'level-3'],
+    preferredClassGroupIds: ['level-3'],
   ),
   Student(
     id: 'student_daniel',
@@ -62,7 +62,7 @@ const sampleStudentProfiles = [
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'Second Dan',
-    preferredClassGroupIds: ['teen-adult', 'black-belt'],
+    preferredClassGroupIds: ['teen-adult'],
   ),
 ];
 

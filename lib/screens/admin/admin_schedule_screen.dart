@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/class_session.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -13,6 +14,7 @@ class AdminScheduleScreen extends StatefulWidget {
 }
 
 class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
+  final _writeService = FirebaseAdminWriteService();
   var _selectedWeekday = DateTime.now().weekday;
 
   @override
@@ -59,7 +61,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   }
 
   Future<void> _openClassSheet([ClassSession? session]) async {
-    final saved = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<ClassSessionWriteData>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -75,17 +77,31 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       },
     );
 
-    if (!mounted || saved != true) {
+    if (!mounted || result == null) {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          session == null ? 'Mock class saved.' : 'Mock class update saved.',
+    try {
+      await _writeService.saveClassSession(result);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(session == null ? 'Class saved.' : 'Class updated.'),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to save class.')));
+    }
   }
 
   Future<void> _openBulkActionSheet() async {
@@ -107,7 +123,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Mock bulk schedule action recorded.')),
+      const SnackBar(content: Text('Bulk schedule actions are not live yet.')),
     );
   }
 
@@ -118,7 +134,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
         return AlertDialog(
           title: const Text('Delete class?'),
           content: Text(
-            'This mock action will not remove ${session.className} yet.',
+            'This will permanently delete ${session.className} from the schedule.',
           ),
           actions: [
             TextButton(
@@ -127,14 +143,13 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
             ),
             FilledButton(
               onPressed: () {
-                // TODO: Delete this class through Firebase schedule writes.
                 Navigator.of(context).pop(true);
               },
               style: FilledButton.styleFrom(
                 backgroundColor: OtaColors.maroon,
                 foregroundColor: OtaColors.white,
               ),
-              child: const Text('Delete Mock Class'),
+              child: const Text('Delete Class'),
             ),
           ],
         );
@@ -145,9 +160,25 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${session.className} mock delete confirmed.')),
-    );
+    try {
+      await _writeService.deleteClassSession(session.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Class deleted.')));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Unable to delete class.')));
+    }
   }
 }
 
@@ -414,9 +445,12 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   late final TextEditingController _startTimeController;
   late final TextEditingController _endTimeController;
   late final TextEditingController _beltsController;
+  late final TextEditingController _descriptionController;
   late final TextEditingController _eligibilityNoteController;
-  late final TextEditingController _locationIdController;
   late int _weekday;
+  late bool _isActive;
+  late bool _isPreferred;
+  String? _validationMessage;
 
   @override
   void initState() {
@@ -435,12 +469,14 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _beltsController = TextEditingController(
       text: session?.eligibleBelts.join(', ') ?? '',
     );
+    _descriptionController = TextEditingController(
+      text: session?.description ?? '',
+    );
     _eligibilityNoteController = TextEditingController(
       text: session?.eligibilityNote ?? '',
     );
-    _locationIdController = TextEditingController(
-      text: session?.locationId ?? appDataService.currentUserAccount.locationId,
-    );
+    _isActive = session?.isPublished ?? true;
+    _isPreferred = session?.isPreferred ?? false;
   }
 
   @override
@@ -449,8 +485,8 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _startTimeController.dispose();
     _endTimeController.dispose();
     _beltsController.dispose();
+    _descriptionController.dispose();
     _eligibilityNoteController.dispose();
-    _locationIdController.dispose();
     super.dispose();
   }
 
@@ -468,7 +504,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
           children: [
             _SheetHeader(
               title: isEditing ? 'Edit Class' : 'Add Class',
-              subtitle: 'Mock form only. Changes are not saved yet.',
+              subtitle: 'Class sessions save to the Firestore schedule.',
             ),
             const SizedBox(height: 14),
             _AdminTextField(
@@ -530,6 +566,13 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
             _AdminTextField(
               controller: _beltsController,
               label: 'Eligible belts',
+              helperText: 'Comma-separated belt ranks.',
+            ),
+            const SizedBox(height: 10),
+            _AdminTextField(
+              controller: _descriptionController,
+              label: 'Description',
+              maxLines: 2,
             ),
             const SizedBox(height: 10),
             _AdminTextField(
@@ -537,24 +580,32 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
               label: 'Eligibility note',
             ),
             const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _locationIdController,
-              label: 'Location ID',
+            _SwitchRow(
+              title: 'Active class',
+              value: _isActive,
+              onChanged: (value) => setState(() => _isActive = value),
+            ),
+            _SwitchRow(
+              title: 'Preferred class',
+              value: _isPreferred,
+              onChanged: (value) => setState(() => _isPreferred = value),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            if (_validationMessage != null) ...[
+              _ValidationMessage(message: _validationMessage!),
+              const SizedBox(height: 10),
+            ],
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   child: const Text('Cancel'),
                 ),
-                const SizedBox(width: 8),
                 FilledButton(
-                  onPressed: () {
-                    // TODO: Persist class create/update through Firebase.
-                    Navigator.of(context).pop(true);
-                  },
+                  onPressed: _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: OtaColors.maroon,
                     foregroundColor: OtaColors.white,
@@ -562,7 +613,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: const Text('Save Mock Class'),
+                  child: Text(isEditing ? 'Update Class' : 'Save Class'),
                 ),
               ],
             ),
@@ -570,6 +621,66 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
         ),
       ),
     );
+  }
+
+  void _submit() {
+    final className = _classNameController.text.trim();
+    final startTime = _parseClassTime(_startTimeController.text, _weekday);
+    final endTime = _parseClassTime(_endTimeController.text, _weekday);
+
+    if (className.isEmpty) {
+      setState(() => _validationMessage = 'Class name is required.');
+      return;
+    }
+
+    if (startTime == null) {
+      setState(() => _validationMessage = 'Start time is required.');
+      return;
+    }
+
+    if (endTime == null) {
+      setState(() => _validationMessage = 'End time is required.');
+      return;
+    }
+
+    if (!endTime.isAfter(startTime)) {
+      setState(() => _validationMessage = 'End time must be after start time.');
+      return;
+    }
+
+    final session = widget.session;
+    final classTypeId = session != null && session.className.trim() == className
+        ? session.classTypeId
+        : _classTypeIdForClassName(className);
+    final data = ClassSessionWriteData(
+      id: session?.id,
+      className: className,
+      classTypeId: classTypeId,
+      locationId: _adminLocationId(),
+      weekday: _weekday,
+      startTime: startTime,
+      endTime: endTime,
+      eligibleBelts: _parseCommaSeparated(_beltsController.text),
+      description: _descriptionController.text.trim(),
+      eligibilityNote: _eligibilityNoteController.text.trim().isEmpty
+          ? null
+          : _eligibilityNoteController.text.trim(),
+      isActive: _isActive,
+      isPreferred: _isPreferred,
+      resumesOn: session?.resumesOn,
+    );
+
+    Navigator.of(context).pop(data);
+  }
+
+  String _adminLocationId() {
+    final accountLocationId = appDataService.currentUserAccount.locationId
+        .trim();
+    if (accountLocationId.isNotEmpty) {
+      return accountLocationId;
+    }
+
+    return appDataService.selectedStudentProfile.locationId;
   }
 }
 
@@ -659,7 +770,8 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
               children: [
                 const _SheetHeader(
                   title: 'Bulk Schedule Action',
-                  subtitle: 'Mock bulk deletion. Changes are not saved yet.',
+                  subtitle:
+                      'Preview only. Bulk schedule deletes are not implemented yet.',
                 ),
                 const SizedBox(height: 14),
                 Container(
@@ -772,14 +884,13 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
                     ),
                     FilledButton.icon(
                       onPressed: () {
-                        // TODO: Apply this bulk deletion through Firebase writes.
-                        Navigator.of(context).pop(true);
+                        Navigator.of(context).pop(false);
                       },
                       icon: const Icon(
                         Icons.playlist_remove_outlined,
                         size: 18,
                       ),
-                      label: const Text('Apply Mock Bulk Delete'),
+                      label: const Text('Close Preview'),
                       style: FilledButton.styleFrom(
                         backgroundColor: OtaColors.maroon,
                         foregroundColor: OtaColors.white,
@@ -1213,6 +1324,32 @@ class _LoadingState extends StatelessWidget {
   }
 }
 
+class _ValidationMessage extends StatelessWidget {
+  const _ValidationMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4F4),
+        border: Border.all(color: const Color(0xFFF0A0AA)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: OtaColors.actionRed,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -1245,16 +1382,54 @@ class _SheetHeader extends StatelessWidget {
 }
 
 class _AdminTextField extends StatelessWidget {
-  const _AdminTextField({required this.controller, required this.label});
+  const _AdminTextField({
+    required this.controller,
+    required this.label,
+    this.helperText,
+    this.maxLines = 1,
+  });
 
   final TextEditingController controller;
   final String label;
+  final String? helperText;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      decoration: _fieldDecoration(label),
+      maxLines: maxLines,
+      decoration: _fieldDecoration(label, helperText: helperText),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      onChanged: onChanged,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      activeThumbColor: OtaColors.maroon,
+      title: Text(
+        title,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: OtaColors.ink,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -1311,9 +1486,10 @@ _BadgeColors _badgeColors(_BadgeTone tone) {
   };
 }
 
-InputDecoration _fieldDecoration(String label) {
+InputDecoration _fieldDecoration(String label, {String? helperText}) {
   return InputDecoration(
     labelText: label,
+    helperText: helperText,
     border: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(4)),
     ),
@@ -1340,6 +1516,94 @@ String _formatTime(DateTime time) {
   final displayHour = time.hour % 12 == 0 ? 12 : time.hour % 12;
   final displayMinute = time.minute.toString().padLeft(2, '0');
   return '$displayHour:$displayMinute $period';
+}
+
+DateTime? _parseClassTime(String value, int weekday) {
+  final normalized = value.trim().toLowerCase().replaceAll(' ', '');
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  final twelveHourMatch = RegExp(
+    r'^(\d{1,2}):(\d{2})(am|pm)$',
+  ).firstMatch(normalized);
+  if (twelveHourMatch != null) {
+    final hourValue = int.tryParse(twelveHourMatch.group(1)!);
+    final minute = int.tryParse(twelveHourMatch.group(2)!);
+    final period = twelveHourMatch.group(3)!;
+
+    if (hourValue == null ||
+        minute == null ||
+        hourValue < 1 ||
+        hourValue > 12 ||
+        minute < 0 ||
+        minute > 59) {
+      return null;
+    }
+
+    final hour = period == 'pm'
+        ? (hourValue == 12 ? 12 : hourValue + 12)
+        : (hourValue == 12 ? 0 : hourValue);
+    return _dateTimeForWeekdayAndClock(weekday, hour, minute);
+  }
+
+  final twentyFourHourMatch = RegExp(
+    r'^(\d{1,2}):(\d{2})$',
+  ).firstMatch(normalized);
+  if (twentyFourHourMatch == null) {
+    return null;
+  }
+
+  final hour = int.tryParse(twentyFourHourMatch.group(1)!);
+  final minute = int.tryParse(twentyFourHourMatch.group(2)!);
+  if (hour == null ||
+      minute == null ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59) {
+    return null;
+  }
+
+  return _dateTimeForWeekdayAndClock(weekday, hour, minute);
+}
+
+DateTime _dateTimeForWeekdayAndClock(int weekday, int hour, int minute) {
+  return DateTime(2026, 6, 21 + weekday, hour, minute);
+}
+
+List<String> _parseCommaSeparated(String value) {
+  return value
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList(growable: false);
+}
+
+String _classTypeIdForClassName(String className) {
+  final normalized = className.trim();
+  return switch (normalized) {
+    'Little Tiger (Age 3-5)' || 'Little Tiger' => 'little-tiger',
+    'Level 1' => 'level-1',
+    'Level 2' => 'level-2',
+    'Level 3' => 'level-3',
+    'Level 4' => 'level-4',
+    'Black Belt' ||
+    'Teen & Black Belt' ||
+    'Adult' ||
+    'Teen/Adult Sparring' => 'teen-adult',
+    'Level 1 / Level 2 Sparring' => 'level-1-2-sparring',
+    _ => _slugForClassName(normalized),
+  };
+}
+
+String _slugForClassName(String className) {
+  final slug = className
+      .toLowerCase()
+      .replaceAll('&', 'and')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return slug.isEmpty ? 'class-session' : slug;
 }
 
 String _formatDate(DateTime date) {
