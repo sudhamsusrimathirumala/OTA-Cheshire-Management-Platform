@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/academy_announcement.dart';
 import '../../models/notification_item.dart';
+import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
@@ -572,11 +573,13 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _summaryController;
   late final TextEditingController _bodyController;
-  late final TextEditingController _dateTimeController;
+  late final TextEditingController _studentSearchController;
   late NotificationCategory _category;
   late NotificationPriority _priority;
-  late _AnnouncementStatus _status;
-  var _audience = _Audience.allFamilies;
+  late _Audience _audience;
+  final _targetBelts = <String>{};
+  final _targetClassTypeIds = <String>{};
+  final _targetStudentProfileIds = <String>{};
   String? _validationMessage;
 
   @override
@@ -588,12 +591,17 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       text: announcement?.summary ?? '',
     );
     _bodyController = TextEditingController(text: announcement?.body ?? '');
-    _dateTimeController = TextEditingController(
-      text: announcement == null ? '' : _formatDateTime(announcement.timestamp),
-    );
+    _studentSearchController = TextEditingController();
     _category = announcement?.category ?? NotificationCategory.general;
     _priority = announcement?.priority ?? NotificationPriority.general;
-    _status = announcement?.status ?? _AnnouncementStatus.draft;
+    _audience = _audienceForFirestoreValue(announcement?.source.audienceType);
+    _targetBelts.addAll(announcement?.source.targetBelts ?? const <String>[]);
+    _targetClassTypeIds.addAll(
+      announcement?.source.targetClassTypeIds ?? const <String>[],
+    );
+    _targetStudentProfileIds.addAll(
+      announcement?.source.targetStudentProfileIds ?? const <String>[],
+    );
   }
 
   @override
@@ -601,13 +609,20 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _titleController.dispose();
     _summaryController.dispose();
     _bodyController.dispose();
-    _dateTimeController.dispose();
+    _studentSearchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.announcement != null;
+    final announcementStatus = widget.announcement?.status;
+    final canSaveDraft =
+        !isEditing || announcementStatus == _AnnouncementStatus.draft;
+    final publishButtonLabel =
+        isEditing && announcementStatus == _AnnouncementStatus.published
+        ? 'Update Published Announcement'
+        : 'Publish Announcement';
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -690,52 +705,6 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                 );
               },
             ),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 620;
-                final fields = [
-                  DropdownButtonFormField<_AnnouncementStatus>(
-                    initialValue: _status,
-                    decoration: _fieldDecoration('Status'),
-                    items: [
-                      for (final status in _AnnouncementStatus.values)
-                        DropdownMenuItem<_AnnouncementStatus>(
-                          value: status,
-                          child: Text(status.label),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _status = value);
-                      }
-                    },
-                  ),
-                  _AdminTextField(
-                    controller: _dateTimeController,
-                    label: 'Date/time placeholder',
-                  ),
-                ];
-
-                if (!twoColumns) {
-                  return Column(
-                    children: [
-                      fields.first,
-                      const SizedBox(height: 10),
-                      fields.last,
-                    ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: fields.first),
-                    const SizedBox(width: 10),
-                    Expanded(child: fields.last),
-                  ],
-                );
-              },
-            ),
             const SizedBox(height: 14),
             Text(
               'Audience',
@@ -773,6 +742,8 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                   ),
               ],
             ),
+            const SizedBox(height: 10),
+            _buildAudienceTargeting(),
             const SizedBox(height: 16),
             if (_validationMessage != null) ...[
               _ValidationMessage(message: _validationMessage!),
@@ -787,17 +758,18 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text('Cancel'),
                 ),
-                OutlinedButton(
-                  onPressed: () => _submit(_AnnouncementSaveAction.draft),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: OtaColors.maroon,
-                    side: const BorderSide(color: OtaColors.maroon),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
+                if (canSaveDraft)
+                  OutlinedButton(
+                    onPressed: () => _submit(_AnnouncementSaveAction.draft),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OtaColors.maroon,
+                      side: const BorderSide(color: OtaColors.maroon),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
+                    child: const Text('Save Draft'),
                   ),
-                  child: const Text('Save Draft'),
-                ),
                 FilledButton(
                   onPressed: () => _submit(_AnnouncementSaveAction.publish),
                   style: FilledButton.styleFrom(
@@ -807,7 +779,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: const Text('Publish Announcement'),
+                  child: Text(publishButtonLabel),
                 ),
               ],
             ),
@@ -815,6 +787,206 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
         ),
       ),
     );
+  }
+
+  Widget _buildAudienceTargeting() {
+    return switch (_audience) {
+      _Audience.everyone => const _AudienceHint(
+        message: 'Everyone at this location will see this announcement.',
+      ),
+      _Audience.belt => _buildBeltTargeting(),
+      _Audience.classType => _buildClassTypeTargeting(),
+      _Audience.students => _buildStudentTargeting(),
+    };
+  }
+
+  Widget _buildBeltTargeting() {
+    final belts = _beltOptions();
+    if (belts.isEmpty) {
+      return const _AudienceHint(message: 'No belt levels are available yet.');
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final belt in belts)
+          _targetChip(
+            label: belt,
+            selected: _targetBelts.contains(belt),
+            onSelected: (selected) {
+              setState(() {
+                selected ? _targetBelts.add(belt) : _targetBelts.remove(belt);
+              });
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildClassTypeTargeting() {
+    final classTypes = _classTypeOptions();
+    if (classTypes.isEmpty) {
+      return const _AudienceHint(
+        message: 'No class types are available from the schedule yet.',
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final classType in classTypes)
+          _targetChip(
+            label: classType.label,
+            selected: _targetClassTypeIds.contains(classType.id),
+            onSelected: (selected) {
+              setState(() {
+                selected
+                    ? _targetClassTypeIds.add(classType.id)
+                    : _targetClassTypeIds.remove(classType.id);
+              });
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStudentTargeting() {
+    final query = _studentSearchController.text.trim().toLowerCase();
+    final students = _studentOptions()
+        .where((student) {
+          if (query.isEmpty) {
+            return true;
+          }
+
+          return student.name.toLowerCase().contains(query) ||
+              student.belt.toLowerCase().contains(query);
+        })
+        .toList(growable: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: _studentSearchController,
+          decoration: _fieldDecoration('Search students'),
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: 8),
+        if (students.isEmpty)
+          const _AudienceHint(message: 'No students match that search.')
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final student in students)
+                _targetChip(
+                  label: '${student.name} - ${student.belt}',
+                  selected: _targetStudentProfileIds.contains(student.id),
+                  onSelected: (selected) {
+                    setState(() {
+                      selected
+                          ? _targetStudentProfileIds.add(student.id)
+                          : _targetStudentProfileIds.remove(student.id);
+                    });
+                  },
+                ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  Widget _targetChip({
+    required String label,
+    required bool selected,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return FilterChip(
+      label: Text(label),
+      selected: selected,
+      showCheckmark: false,
+      selectedColor: const Color(0xFFF4E5E8),
+      backgroundColor: OtaColors.white,
+      side: BorderSide(
+        color: selected ? OtaColors.maroon : const Color(0xFFD0D5DD),
+      ),
+      labelStyle: TextStyle(
+        color: selected ? OtaColors.maroon : OtaColors.ink,
+        fontWeight: FontWeight.w800,
+      ),
+      onSelected: onSelected,
+    );
+  }
+
+  List<String> _beltOptions() {
+    final belts = <String>{
+      for (final student in appDataService.adminStudentProfiles)
+        if (student.belt.trim().isNotEmpty) student.belt.trim(),
+      ..._targetBelts,
+    };
+    final ordered = <String>[];
+
+    for (final belt in appDataService.curriculumBeltOrder) {
+      if (belts.remove(belt)) {
+        ordered.add(belt);
+      }
+    }
+
+    final remaining = belts.toList()..sort();
+    return [...ordered, ...remaining];
+  }
+
+  List<_TargetOption> _classTypeOptions() {
+    final classTypes = <String, String>{};
+    for (final sessions in appDataService.schedule.values) {
+      for (final session in sessions) {
+        final classTypeId = session.classTypeId.trim();
+        if (classTypeId.isNotEmpty) {
+          classTypes.putIfAbsent(classTypeId, () => session.className);
+        }
+      }
+    }
+
+    for (final classTypeId in _targetClassTypeIds) {
+      classTypes.putIfAbsent(classTypeId, () => _labelForId(classTypeId));
+    }
+
+    final options = [
+      for (final entry in classTypes.entries)
+        _TargetOption(id: entry.key, label: entry.value),
+    ]..sort((a, b) => a.label.compareTo(b.label));
+    return options;
+  }
+
+  List<StudentProfile> _studentOptions() {
+    return [...appDataService.adminStudentProfiles]
+      ..sort((a, b) => a.name.compareTo(b.name));
+  }
+
+  String? _targetingValidationMessage() {
+    return switch (_audience) {
+      _Audience.everyone => null,
+      _Audience.belt =>
+        _targetBelts.isEmpty ? 'Select at least one belt level.' : null,
+      _Audience.classType =>
+        _targetClassTypeIds.isEmpty ? 'Select at least one class type.' : null,
+      _Audience.students =>
+        _targetStudentProfileIds.isEmpty
+            ? 'Select at least one student.'
+            : null,
+    };
+  }
+
+  String _adminLocationId() {
+    final accountLocationId = appDataService.currentUserAccount.locationId;
+    if (accountLocationId.trim().isNotEmpty) {
+      return accountLocationId;
+    }
+
+    return appDataService.selectedStudentProfile.locationId;
   }
 
   void _submit(_AnnouncementSaveAction action) {
@@ -837,13 +1009,26 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       return;
     }
 
+    final targetingMessage = _targetingValidationMessage();
+    if (targetingMessage != null) {
+      setState(() => _validationMessage = targetingMessage);
+      return;
+    }
+
+    final targetBelts = _audience == _Audience.belt
+        ? _sortedValues(_targetBelts)
+        : <String>[];
+    final targetClassTypeIds = _audience == _Audience.classType
+        ? _sortedValues(_targetClassTypeIds)
+        : <String>[];
+    final targetStudentProfileIds = _audience == _Audience.students
+        ? _sortedValues(_targetStudentProfileIds)
+        : <String>[];
     final status = action == _AnnouncementSaveAction.publish
         ? 'published'
         : 'draft';
     final announcement = widget.announcement;
-    final locationId =
-        announcement?.locationId ??
-        appDataService.currentUserAccount.locationId;
+    final locationId = announcement?.locationId ?? _adminLocationId();
 
     final data = announcement == null
         ? AnnouncementWriteData(
@@ -854,6 +1039,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             priority: _priority.name,
             status: status,
             locationId: locationId,
+            audienceType: _audience.firestoreValue,
+            targetBelts: targetBelts,
+            targetClassTypeIds: targetClassTypeIds,
+            targetStudentProfileIds: targetStudentProfileIds,
+            targetUserIds: const <String>[],
           )
         : AnnouncementWriteData.fromAnnouncement(
             announcement.source,
@@ -864,6 +1054,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             priority: _priority.name,
             status: status,
             locationId: locationId,
+            audienceType: _audience.firestoreValue,
+            targetBelts: targetBelts,
+            targetClassTypeIds: targetClassTypeIds,
+            targetStudentProfileIds: targetStudentProfileIds,
+            targetUserIds: const <String>[],
           );
 
     Navigator.of(context).pop(
@@ -1130,6 +1325,32 @@ class _ValidationMessage extends StatelessWidget {
   }
 }
 
+class _AudienceHint extends StatelessWidget {
+  const _AudienceHint({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFE4E7EC)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(
+        message,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: OtaColors.mutedText,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader({required this.title, required this.subtitle});
 
@@ -1210,15 +1431,23 @@ class _AnnouncementFormResult {
   final bool isEditing;
 }
 
-enum _Audience {
-  allFamilies('All Families'),
-  specificBeltLevels('Specific Belt Levels'),
-  specificClass('Specific Class'),
-  individualStudent('Individual Student');
+class _TargetOption {
+  const _TargetOption({required this.id, required this.label});
 
-  const _Audience(this.label);
+  final String id;
+  final String label;
+}
+
+enum _Audience {
+  everyone('Everyone', 'everyone'),
+  belt('Specific belt', 'belt'),
+  classType('Specific class type', 'classType'),
+  students('Specific student', 'students');
+
+  const _Audience(this.label, this.firestoreValue);
 
   final String label;
+  final String firestoreValue;
 }
 
 extension on _AnnouncementFilter {
@@ -1250,6 +1479,33 @@ _AnnouncementStatus _statusForAnnouncement(String status) {
     'archived' => _AnnouncementStatus.archived,
     _ => _AnnouncementStatus.draft,
   };
+}
+
+_Audience _audienceForFirestoreValue(String? audienceType) {
+  return switch (audienceType) {
+    'belt' => _Audience.belt,
+    'classType' => _Audience.classType,
+    'students' => _Audience.students,
+    _ => _Audience.everyone,
+  };
+}
+
+List<String> _sortedValues(Set<String> values) {
+  return values.toList()..sort();
+}
+
+String _labelForId(String id) {
+  final words = id
+      .split(RegExp(r'[-_\s]+'))
+      .where((word) => word.isNotEmpty)
+      .toList(growable: false);
+  if (words.isEmpty) {
+    return id;
+  }
+
+  return words
+      .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
 }
 
 _BadgeTone _priorityTone(NotificationPriority priority) {

@@ -14,7 +14,6 @@ enum _EventType {
   summerCamp('Summer Camp'),
   beltTesting('Belt Testing'),
   seminar('Seminar'),
-  closure('Closure'),
   specialEvent('Special Event');
 
   const _EventType(this.label);
@@ -484,12 +483,10 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _startController;
   late final TextEditingController _endController;
-  late final TextEditingController _locationController;
   late final TextEditingController _registrationUrlController;
   late final TextEditingController _registrationDeadlineController;
   late final TextEditingController _notesController;
   late _EventType _eventType;
-  late bool _isPublished;
   late bool _showInResources;
   String? _validationMessage;
 
@@ -507,9 +504,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _endController = TextEditingController(
       text: event == null ? '' : _formatDateTime(event.endDateTime),
     );
-    _locationController = TextEditingController(
-      text: event?.locationId ?? 'ota-cheshire',
-    );
     _registrationUrlController = TextEditingController(
       text: event?.registrationUrl ?? '',
     );
@@ -520,7 +514,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     );
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
-    _isPublished = event?.isPublished ?? false;
     _showInResources = event?.showInResources ?? false;
   }
 
@@ -530,7 +523,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _descriptionController.dispose();
     _startController.dispose();
     _endController.dispose();
-    _locationController.dispose();
     _registrationUrlController.dispose();
     _registrationDeadlineController.dispose();
     _notesController.dispose();
@@ -540,6 +532,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
+    final publishButtonLabel = isEditing && widget.event!.isPublished
+        ? 'Update Published Event'
+        : 'Publish Event';
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -576,20 +571,18 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               },
             ),
             const SizedBox(height: 10),
+            // TODO: Replace these text fields with Flutter date/time pickers.
             _TwoColumnFields(
               first: _AdminTextField(
                 controller: _startController,
                 label: 'Start date/time',
+                helperText: 'Use YYYY-MM-DD HH:MM or Jul 12, 6:00 PM.',
               ),
               second: _AdminTextField(
                 controller: _endController,
                 label: 'End date/time',
+                helperText: 'Leave blank to default to one hour.',
               ),
-            ),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _locationController,
-              label: 'Location ID',
             ),
             const SizedBox(height: 10),
             _AdminTextField(
@@ -600,13 +593,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             _AdminTextField(
               controller: _registrationDeadlineController,
               label: 'Registration deadline',
+              helperText: 'Optional. Use YYYY-MM-DD HH:MM or Jul 12, 6:00 PM.',
             ),
             const SizedBox(height: 10),
-            _SwitchRow(
-              title: 'Published',
-              value: _isPublished,
-              onChanged: (value) => setState(() => _isPublished = value),
-            ),
             _SwitchRow(
               title: 'Show in resources',
               value: _showInResources,
@@ -652,7 +641,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: const Text('Publish Event'),
+                  child: Text(publishButtonLabel),
                 ),
               ],
             ),
@@ -665,9 +654,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   void _submit(_EventSaveAction action) {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
-    final locationId = _locationController.text.trim().isEmpty
-        ? appDataService.currentUserAccount.locationId
-        : _locationController.text.trim();
+    final locationId = _adminLocationId();
     final startDateTime = _parseDateTimeInput(_startController.text);
     final endDateTime = _endController.text.trim().isEmpty
         ? startDateTime?.add(const Duration(hours: 1))
@@ -745,6 +732,15 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     Navigator.of(context).pop(
       _EventFormResult(action: action, data: data, isEditing: event != null),
     );
+  }
+
+  String _adminLocationId() {
+    final accountLocationId = appDataService.currentUserAccount.locationId;
+    if (accountLocationId.trim().isNotEmpty) {
+      return accountLocationId;
+    }
+
+    return appDataService.selectedStudentProfile.locationId;
   }
 }
 
@@ -1024,11 +1020,13 @@ class _AdminTextField extends StatelessWidget {
   const _AdminTextField({
     required this.controller,
     required this.label,
+    this.helperText,
     this.maxLines = 1,
   });
 
   final TextEditingController controller;
   final String label;
+  final String? helperText;
   final int maxLines;
 
   @override
@@ -1036,7 +1034,7 @@ class _AdminTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      decoration: _fieldDecoration(label),
+      decoration: _fieldDecoration(label, helperText: helperText),
     );
   }
 }
@@ -1176,7 +1174,6 @@ extension on _EventType {
       _EventType.summerCamp => 'summerCamp',
       _EventType.beltTesting => 'beltTesting',
       _EventType.seminar => 'seminar',
-      _EventType.closure => 'closure',
       _EventType.specialEvent => 'specialEvent',
     };
   }
@@ -1226,9 +1223,10 @@ _BadgeColors _badgeColors(_BadgeTone tone) {
   };
 }
 
-InputDecoration _fieldDecoration(String label) {
+InputDecoration _fieldDecoration(String label, {String? helperText}) {
   return InputDecoration(
     labelText: label,
+    helperText: helperText,
     border: const OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(4)),
     ),

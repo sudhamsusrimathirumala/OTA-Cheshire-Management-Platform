@@ -18,9 +18,7 @@ class FirebaseAdminWriteService {
         : collection.doc(data.id);
     final now = DateTime.now();
     final createdAt = data.createdAt ?? now;
-    final publishedAt = data.status == 'published'
-        ? now
-        : data.publishedAt ?? now;
+    final publishedAt = data.publishedAt ?? now;
 
     await document.set({
       'title': data.title,
@@ -29,15 +27,17 @@ class FirebaseAdminWriteService {
       'announcementType': data.announcementType,
       'priority': data.priority,
       'status': data.status,
-      'audienceType': 'everyone',
+      'audienceType': data.audienceType,
       'locationId': data.locationId,
       'publishedAt': Timestamp.fromDate(publishedAt),
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(now),
-      'targetBelts': <String>[],
-      'targetClassTypeIds': <String>[],
-      'targetStudentProfileIds': <String>[],
-      'targetUserIds': <String>[],
+      'targetBelts': List<String>.from(data.targetBelts),
+      'targetClassTypeIds': List<String>.from(data.targetClassTypeIds),
+      'targetStudentProfileIds': List<String>.from(
+        data.targetStudentProfileIds,
+      ),
+      'targetUserIds': List<String>.from(data.targetUserIds),
     }, SetOptions(merge: true));
   }
 
@@ -95,6 +95,11 @@ class AnnouncementWriteData {
     required this.priority,
     required this.status,
     required this.locationId,
+    this.audienceType = 'everyone',
+    this.targetBelts = const <String>[],
+    this.targetClassTypeIds = const <String>[],
+    this.targetStudentProfileIds = const <String>[],
+    this.targetUserIds = const <String>[],
     this.id,
     this.publishedAt,
     this.createdAt,
@@ -109,6 +114,11 @@ class AnnouncementWriteData {
     required String priority,
     required String status,
     required String locationId,
+    String? audienceType,
+    List<String>? targetBelts,
+    List<String>? targetClassTypeIds,
+    List<String>? targetStudentProfileIds,
+    List<String>? targetUserIds,
   }) {
     return AnnouncementWriteData(
       id: announcement.id,
@@ -119,6 +129,12 @@ class AnnouncementWriteData {
       priority: priority,
       status: status,
       locationId: locationId,
+      audienceType: audienceType ?? announcement.audienceType,
+      targetBelts: targetBelts ?? announcement.targetBelts,
+      targetClassTypeIds: targetClassTypeIds ?? announcement.targetClassTypeIds,
+      targetStudentProfileIds:
+          targetStudentProfileIds ?? announcement.targetStudentProfileIds,
+      targetUserIds: targetUserIds ?? announcement.targetUserIds,
       publishedAt: announcement.publishedAt,
       createdAt: announcement.createdAt,
     );
@@ -132,6 +148,11 @@ class AnnouncementWriteData {
   final String priority;
   final String status;
   final String locationId;
+  final String audienceType;
+  final List<String> targetBelts;
+  final List<String> targetClassTypeIds;
+  final List<String> targetStudentProfileIds;
+  final List<String> targetUserIds;
   final DateTime? publishedAt;
   final DateTime? createdAt;
 }
