@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../data/sample_resources.dart';
 import '../../data/sample_student.dart';
@@ -11,24 +12,38 @@ class FirestoreMigrationService {
 
   final FirebaseFirestore _firestore;
 
-  Future<void> runMvpReadinessMigration() async {
-    await addPreferredClassGroupIdsToStudentProfiles();
-    await normalizeClassSessionClassTypeIds();
-    await backfillClassSessionBulkGroupIds();
-    await normalizeAnnouncements();
-    await backfillEventFields();
-    await backfillResourceFields();
-    await ensureOtaCheshireLocation();
-    await createStarterResourcesIfMissing();
+  Future<FirestoreMigrationResult> runMvpReadinessMigration() async {
+    final studentProfilesUpdated =
+        await addPreferredClassGroupIdsToStudentProfiles();
+    final classTypeIdsNormalized = await normalizeClassSessionClassTypeIds();
+    final bulkGroupResult = await backfillClassSessionBulkGroupIds();
+    final announcementsUpdated = await normalizeAnnouncements();
+    final eventsUpdated = await backfillEventFields();
+    final resourcesUpdated = await backfillResourceFields();
+    final locationsUpdated = await ensureOtaCheshireLocation();
+    final starterResourcesCreated = await createStarterResourcesIfMissing();
+    final result = FirestoreMigrationResult(
+      studentProfilesUpdated: studentProfilesUpdated,
+      classTypeIdsNormalized: classTypeIdsNormalized,
+      bulkGroupIdsAdded: bulkGroupResult.added,
+      bulkGroupIdsRepaired: bulkGroupResult.repaired,
+      announcementsUpdated: announcementsUpdated,
+      eventsUpdated: eventsUpdated,
+      resourcesUpdated: resourcesUpdated,
+      locationsUpdated: locationsUpdated,
+      starterResourcesCreated: starterResourcesCreated,
+    );
+    debugPrint(result.logSummary);
+    return result;
   }
 
-  Future<void> addPreferredClassGroupIdsToStudentProfiles() async {
+  Future<int> addPreferredClassGroupIdsToStudentProfiles() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.studentProfiles)
         .get();
 
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var updatedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
@@ -49,21 +64,22 @@ class FirestoreMigrationService {
         'preferredClassGroupIds': preferredClassGroupIds,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      hasWrites = true;
+      updatedCount++;
     }
 
-    if (hasWrites) {
+    if (updatedCount > 0) {
       await batch.commit();
     }
+    return updatedCount;
   }
 
-  Future<void> normalizeClassSessionClassTypeIds() async {
+  Future<int> normalizeClassSessionClassTypeIds() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.classSessions)
         .get();
 
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var updatedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
@@ -82,21 +98,22 @@ class FirestoreMigrationService {
         'classTypeId': normalizedClassTypeId,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      hasWrites = true;
+      updatedCount++;
     }
 
-    if (hasWrites) {
+    if (updatedCount > 0) {
       await batch.commit();
     }
+    return updatedCount;
   }
 
-  Future<void> normalizeAnnouncements() async {
+  Future<int> normalizeAnnouncements() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.announcements)
         .get();
 
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var updatedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
@@ -135,47 +152,55 @@ class FirestoreMigrationService {
 
       updates['updatedAt'] = FieldValue.serverTimestamp();
       batch.set(document.reference, updates, SetOptions(merge: true));
-      hasWrites = true;
+      updatedCount++;
     }
 
-    if (hasWrites) {
+    if (updatedCount > 0) {
       await batch.commit();
     }
+    return updatedCount;
   }
 
-  Future<void> backfillClassSessionBulkGroupIds() async {
+  Future<BulkGroupMigrationResult> backfillClassSessionBulkGroupIds() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.classSessions)
         .get();
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var addedCount = 0;
+    var repairedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
-      if (_stringValue(data['bulkGroupId']) != null) {
+      final currentBulkGroupId = _stringValue(data['bulkGroupId']);
+      final normalizedBulkGroupId = migrationBulkGroupId(data);
+      if (currentBulkGroupId == normalizedBulkGroupId) {
         continue;
       }
 
-      final stableId = migrationBulkGroupId(data);
       batch.set(document.reference, {
-        'bulkGroupId': '$stableId-standard',
+        'bulkGroupId': normalizedBulkGroupId,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-      hasWrites = true;
+      if (currentBulkGroupId == null) {
+        addedCount++;
+      } else {
+        repairedCount++;
+      }
     }
 
-    if (hasWrites) {
+    if (addedCount + repairedCount > 0) {
       await batch.commit();
     }
+    return BulkGroupMigrationResult(added: addedCount, repaired: repairedCount);
   }
 
-  Future<void> backfillEventFields() async {
+  Future<int> backfillEventFields() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.events)
         .get();
 
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var updatedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
@@ -199,21 +224,22 @@ class FirestoreMigrationService {
 
       updates['updatedAt'] = FieldValue.serverTimestamp();
       batch.set(document.reference, updates, SetOptions(merge: true));
-      hasWrites = true;
+      updatedCount++;
     }
 
-    if (hasWrites) {
+    if (updatedCount > 0) {
       await batch.commit();
     }
+    return updatedCount;
   }
 
-  Future<void> backfillResourceFields() async {
+  Future<int> backfillResourceFields() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.resources)
         .get();
 
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var updatedCount = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
@@ -224,15 +250,16 @@ class FirestoreMigrationService {
 
       updates['updatedAt'] = FieldValue.serverTimestamp();
       batch.set(document.reference, updates, SetOptions(merge: true));
-      hasWrites = true;
+      updatedCount++;
     }
 
-    if (hasWrites) {
+    if (updatedCount > 0) {
       await batch.commit();
     }
+    return updatedCount;
   }
 
-  Future<void> ensureOtaCheshireLocation() async {
+  Future<int> ensureOtaCheshireLocation() async {
     final reference = _firestore
         .collection(FirestoreCollections.locations)
         .doc('ota-cheshire');
@@ -241,12 +268,15 @@ class FirestoreMigrationService {
     final updates = migrationLocationBackfill(data);
     if (updates.isNotEmpty) {
       await reference.set(updates, SetOptions(merge: true));
+      return 1;
     }
+    return 0;
   }
 
-  Future<void> createStarterResourcesIfMissing() async {
+  Future<int> createStarterResourcesIfMissing() async {
     final batch = _firestore.batch();
-    var hasWrites = false;
+    var writeCount = 0;
+    var createdCount = 0;
 
     for (final resource in sampleAcademyResources) {
       final reference = _firestore
@@ -266,22 +296,84 @@ class FirestoreMigrationService {
         if (updates.isNotEmpty) {
           updates['updatedAt'] = FieldValue.serverTimestamp();
           batch.set(reference, updates, SetOptions(merge: true));
-          hasWrites = true;
+          writeCount++;
         }
         continue;
       }
 
       batch.set(reference, _resourceData(resource), SetOptions(merge: true));
-      hasWrites = true;
+      writeCount++;
+      createdCount++;
     }
 
-    if (hasWrites) {
+    if (writeCount > 0) {
       await batch.commit();
     }
+    return createdCount;
   }
 }
 
+class FirestoreMigrationResult {
+  const FirestoreMigrationResult({
+    required this.studentProfilesUpdated,
+    required this.classTypeIdsNormalized,
+    required this.bulkGroupIdsAdded,
+    required this.bulkGroupIdsRepaired,
+    required this.announcementsUpdated,
+    required this.eventsUpdated,
+    required this.resourcesUpdated,
+    required this.locationsUpdated,
+    required this.starterResourcesCreated,
+  });
+
+  final int studentProfilesUpdated;
+  final int classTypeIdsNormalized;
+  final int bulkGroupIdsAdded;
+  final int bulkGroupIdsRepaired;
+  final int announcementsUpdated;
+  final int eventsUpdated;
+  final int resourcesUpdated;
+  final int locationsUpdated;
+  final int starterResourcesCreated;
+
+  String get logSummary =>
+      'Firestore migration complete: '
+      'student profiles updated=$studentProfilesUpdated, '
+      'class type IDs normalized=$classTypeIdsNormalized, '
+      'bulk group IDs added=$bulkGroupIdsAdded, '
+      'bulk group IDs repaired=$bulkGroupIdsRepaired, '
+      'announcements updated=$announcementsUpdated, '
+      'events updated=$eventsUpdated, '
+      'resources updated=$resourcesUpdated, '
+      'locations created or backfilled=$locationsUpdated, '
+      'starter resources created=$starterResourcesCreated.';
+
+  String get displaySummary =>
+      'Migration complete.\n'
+      'Student profiles updated: $studentProfilesUpdated\n'
+      'Class type IDs normalized: $classTypeIdsNormalized\n'
+      'Bulk group IDs added: $bulkGroupIdsAdded\n'
+      'Bulk group IDs repaired: $bulkGroupIdsRepaired\n'
+      'Announcements updated: $announcementsUpdated\n'
+      'Events updated: $eventsUpdated\n'
+      'Resources updated: $resourcesUpdated\n'
+      'Locations created or backfilled: $locationsUpdated\n'
+      'Starter resources created: $starterResourcesCreated';
+}
+
+class BulkGroupMigrationResult {
+  const BulkGroupMigrationResult({required this.added, required this.repaired});
+
+  final int added;
+  final int repaired;
+}
+
 String migrationBulkGroupId(Map<String, dynamic> data) {
+  final existingBulkGroupId = _stringValue(data['bulkGroupId']);
+  if (existingBulkGroupId != null) {
+    return _normalizeRepeatedStandardSuffix(existingBulkGroupId);
+  }
+
   final classTypeId = _stringValue(data['classTypeId']);
   final className = _stringValue(data['className']);
   final stableId =
@@ -289,7 +381,16 @@ String migrationBulkGroupId(Map<String, dynamic> data) {
       (className == null
           ? 'class-session'
           : _classTypeIdForClassName(className));
-  return '$stableId-standard';
+  return _ensureSingleStandardSuffix(stableId);
+}
+
+String _normalizeRepeatedStandardSuffix(String value) {
+  return value.replaceFirst(RegExp(r'(?:-standard){2,}$'), '-standard');
+}
+
+String _ensureSingleStandardSuffix(String value) {
+  final normalized = _normalizeRepeatedStandardSuffix(value);
+  return normalized.endsWith('-standard') ? normalized : '$normalized-standard';
 }
 
 Map<String, Object?> migrationResourceBackfill(Map<String, dynamic> data) {

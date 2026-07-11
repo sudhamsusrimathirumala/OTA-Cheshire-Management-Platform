@@ -15,6 +15,10 @@ import 'firestore_collections.dart';
 
 const bool _enableDevelopmentFirestoreSeed = false;
 
+// WARNING: This full development seeder writes complete sample documents and
+// may overwrite documents that use the same fixed IDs. Do not run it against
+// the current shared database. Use FirestoreMigrationService for merge-only
+// compatibility updates.
 class FirestoreSeedService {
   FirestoreSeedService({FirebaseFirestore? firestore})
     : _firestore = firestore ?? FirebaseFirestore.instance;
@@ -22,6 +26,7 @@ class FirestoreSeedService {
   final FirebaseFirestore _firestore;
 
   Future<void> seedAll() async {
+    // This method is intentionally never called by the migration entrypoint.
     await seedUsers();
     await seedStudentProfiles();
     await seedClassSessions();

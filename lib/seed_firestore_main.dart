@@ -9,9 +9,16 @@ import 'services/location_time_service.dart';
 // This is not connected to the production app UI.
 // This should not be used by normal users.
 //
-// Turn this off after the migration succeeds so this entrypoint cannot rerun it
-// accidentally during normal development launches.
-const bool _enableFirestoreMigration = true;
+// To run this merge-only migration:
+// 1. Temporarily set _enableFirestoreMigration to true.
+// 2. Run: flutter run -t lib/seed_firestore_main.dart
+// 3. Click Run Migration once.
+// 4. Confirm the database updates shown in the completion summary.
+// 5. Set _enableFirestoreMigration back to false.
+//
+// Never connect this entrypoint to normal app startup. It intentionally does
+// not call FirestoreSeedService.seedAll().
+const bool _enableFirestoreMigration = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +69,8 @@ class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
     });
 
     try {
-      await FirestoreMigrationService().runMvpReadinessMigration();
+      final result = await FirestoreMigrationService()
+          .runMvpReadinessMigration();
 
       if (!mounted) {
         return;
@@ -71,7 +79,7 @@ class _SeedFirestoreScreenState extends State<_SeedFirestoreScreen> {
       setState(() {
         _isRunning = false;
         _message =
-            'Firestore migration complete. Turn _enableFirestoreMigration off before using this entrypoint again.';
+            '${result.displaySummary}\n\nSet _enableFirestoreMigration back to false before using this entrypoint again.';
         _hasError = false;
       });
     } catch (error) {

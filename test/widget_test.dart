@@ -562,7 +562,29 @@ void main() {
     expect(changedValue, isNull);
   });
 
-  test('migration helpers only backfill missing resource location fields', () {
+  test('migration bulk group helper derives and repairs stable IDs', () {
+    expect(migrationBulkGroupId({'className': 'Level 1'}), 'level-1-standard');
+    expect(
+      migrationBulkGroupId({'bulkGroupId': 'level-1-standard'}),
+      'level-1-standard',
+    );
+    expect(
+      migrationBulkGroupId({'bulkGroupId': 'level-1-standard-standard'}),
+      'level-1-standard',
+    );
+    expect(
+      migrationBulkGroupId({
+        'bulkGroupId': 'teen-adult-standard-standard-standard',
+      }),
+      'teen-adult-standard',
+    );
+    expect(
+      migrationBulkGroupId({'bulkGroupId': 'advanced-saturday-program'}),
+      'advanced-saturday-program',
+    );
+  });
+
+  test('migration resource and location helpers only add missing fields', () {
     expect(migrationResourceBackfill({'title': 'Existing'}), {
       'resourceSection': 'general',
       'isArchived': false,
@@ -574,11 +596,37 @@ void main() {
       }),
       isEmpty,
     );
+    expect(migrationLocationBackfill({}), {
+      'name': 'OTA Cheshire',
+      'timeZoneId': 'America/New_York',
+      'isActive': true,
+    });
     expect(
-      migrationBulkGroupId({'classTypeId': 'level-1'}),
-      'level-1-standard',
+      migrationLocationBackfill({
+        'name': 'Existing Academy Name',
+        'timeZoneId': 'America/Chicago',
+        'isActive': false,
+      }),
+      isEmpty,
     );
-    expect(migrationLocationBackfill({})['timeZoneId'], 'America/New_York');
+  });
+
+  test('pure migration helper calculations are idempotent', () {
+    final firstBulkGroupId = migrationBulkGroupId({
+      'bulkGroupId': 'level-2-standard-standard-standard',
+    });
+    final secondBulkGroupId = migrationBulkGroupId({
+      'bulkGroupId': firstBulkGroupId,
+    });
+    expect(secondBulkGroupId, firstBulkGroupId);
+
+    final resource = <String, dynamic>{'title': 'Existing'};
+    resource.addAll(migrationResourceBackfill(resource));
+    expect(migrationResourceBackfill(resource), isEmpty);
+
+    final location = <String, dynamic>{};
+    location.addAll(migrationLocationBackfill(location));
+    expect(migrationLocationBackfill(location), isEmpty);
   });
 
   testWidgets('notifications screen filters announcements', (tester) async {
