@@ -4,8 +4,11 @@ import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
+import '../../services/event_resource_rules.dart';
+import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/location_date_time_field.dart';
 
 enum _EventFilter { draft, published, past }
 
@@ -169,7 +172,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              _PreviewLine(label: 'When', value: event.dateRangeLabel),
+              _PreviewLine(label: 'When', value: _formatEventDateTime(event)),
               _PreviewLine(label: 'Type', value: event.eventTypeLabel),
               _PreviewLine(label: 'Location', value: event.locationId),
               _PreviewLine(
@@ -538,11 +541,11 @@ class _EventRow extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DateBadge(date: event.startDateTime),
+                _DateBadge(date: _eventLocalStart(event)),
                 const SizedBox(height: 8),
                 titleBlock,
                 const SizedBox(height: 8),
-                Text(event.dateRangeLabel, style: _metaStyle(context)),
+                Text(_formatEventDateTime(event), style: _metaStyle(context)),
                 const SizedBox(height: 8),
                 badges,
                 const SizedBox(height: 8),
@@ -553,12 +556,15 @@ class _EventRow extends StatelessWidget {
 
           return Row(
             children: [
-              _DateBadge(date: event.startDateTime),
+              _DateBadge(date: _eventLocalStart(event)),
               const SizedBox(width: 12),
               Expanded(flex: 4, child: titleBlock),
               SizedBox(
                 width: 148,
-                child: Text(event.dateRangeLabel, style: _metaStyle(context)),
+                child: Text(
+                  _formatEventDateTime(event),
+                  style: _metaStyle(context),
+                ),
               ),
               Expanded(flex: 4, child: badges),
               actions,
@@ -619,13 +625,13 @@ class _DateBadge extends StatelessWidget {
 class _EventFormSheetState extends State<_EventFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _startController;
-  late final TextEditingController _endController;
   late final TextEditingController _registrationUrlController;
-  late final TextEditingController _registrationDeadlineController;
   late final TextEditingController _notesController;
   late _EventType _eventType;
   late bool _showInResources;
+  DateTime? _startDateTime;
+  DateTime? _endDateTime;
+  DateTime? _registrationDeadline;
   final _linkedResourceIds = <String>{};
   String? _primaryRegistrationResourceId;
   String? _validationMessage;
@@ -638,35 +644,28 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _descriptionController = TextEditingController(
       text: event?.description ?? '',
     );
-    _startController = TextEditingController(
-      text: event == null ? '' : _formatDateTime(event.startDateTime),
-    );
-    _endController = TextEditingController(
-      text: event == null ? '' : _formatDateTime(event.endDateTime),
-    );
+    _startDateTime = event?.startDateTime;
+    _endDateTime = event?.endDateTime;
     _registrationUrlController = TextEditingController(
       text: event?.registrationUrl ?? '',
     );
-    _registrationDeadlineController = TextEditingController(
-      text: event?.registrationDeadline == null
-          ? ''
-          : _formatDateTime(event!.registrationDeadline!),
-    );
+    _registrationDeadline = event?.registrationDeadline;
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
     _showInResources = event?.showInResources ?? false;
-    _linkedResourceIds.addAll(event?.linkedResourceIds ?? const <String>[]);
-    _primaryRegistrationResourceId = event?.primaryRegistrationResourceId;
+    _primaryRegistrationResourceId =
+        event?.primaryRegistrationResourceId ??
+        event?.linkedResourceIds.firstOrNull;
+    if (_primaryRegistrationResourceId != null) {
+      _linkedResourceIds.add(_primaryRegistrationResourceId!);
+    }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _startController.dispose();
-    _endController.dispose();
     _registrationUrlController.dispose();
-    _registrationDeadlineController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -714,17 +713,18 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               },
             ),
             const SizedBox(height: 10),
-            // TODO: Replace these text fields with Flutter date/time pickers.
             _TwoColumnFields(
-              first: _AdminTextField(
-                controller: _startController,
-                label: 'Start date/time',
-                helperText: 'Use YYYY-MM-DD HH:MM or Jul 12, 6:00 PM.',
+              first: LocationDateTimeField(
+                label: 'Start date and time',
+                locationId: _adminLocationId(),
+                value: _startDateTime,
+                onChanged: (value) => setState(() => _startDateTime = value),
               ),
-              second: _AdminTextField(
-                controller: _endController,
-                label: 'End date/time',
-                helperText: 'Leave blank to default to one hour.',
+              second: LocationDateTimeField(
+                label: 'End date and time',
+                locationId: _adminLocationId(),
+                value: _endDateTime,
+                onChanged: (value) => setState(() => _endDateTime = value),
               ),
             ),
             const SizedBox(height: 10),
@@ -733,10 +733,13 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               label: 'Registration link / Google Form URL',
             ),
             const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _registrationDeadlineController,
+            LocationDateTimeField(
               label: 'Registration deadline',
-              helperText: 'Optional. Use YYYY-MM-DD HH:MM or Jul 12, 6:00 PM.',
+              locationId: _adminLocationId(),
+              value: _registrationDeadline,
+              optional: true,
+              onChanged: (value) =>
+                  setState(() => _registrationDeadline = value),
             ),
             const SizedBox(height: 10),
             _buildResourceLinkingSection(),
@@ -801,14 +804,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
     final locationId = _adminLocationId();
-    final startDateTime = _parseDateTimeInput(_startController.text);
-    final endDateTime = _endController.text.trim().isEmpty
-        ? startDateTime?.add(const Duration(hours: 1))
-        : _parseDateTimeInput(_endController.text);
-    final registrationDeadline =
-        _registrationDeadlineController.text.trim().isEmpty
-        ? null
-        : _parseDateTimeInput(_registrationDeadlineController.text);
+    final startDateTime = _startDateTime;
+    final endDateTime = _endDateTime;
+    final registrationDeadline = _registrationDeadline;
     final registrationUrl = _registrationUrlController.text.trim().isEmpty
         ? null
         : _registrationUrlController.text.trim();
@@ -840,9 +838,20 @@ class _EventFormSheetState extends State<_EventFormSheet> {
       return;
     }
 
-    if (_registrationDeadlineController.text.trim().isNotEmpty &&
-        registrationDeadline == null) {
-      setState(() => _validationMessage = 'Registration deadline is invalid.');
+    final selectedResource = _primaryRegistrationResourceId == null
+        ? null
+        : appDataService.resources
+              .where(
+                (resource) => resource.id == _primaryRegistrationResourceId,
+              )
+              .firstOrNull;
+    if (action == _EventSaveAction.publish &&
+        validatePublishedEventResource(selectedResource) != null) {
+      setState(
+        () => _validationMessage = validatePublishedEventResource(
+          selectedResource,
+        ),
+      );
       return;
     }
 
@@ -858,7 +867,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             endDateTime: endDateTime,
             registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
-            linkedResourceIds: _sortedValues(_linkedResourceIds),
+            linkedResourceIds: _primaryRegistrationResourceId == null
+                ? const <String>[]
+                : <String>[_primaryRegistrationResourceId!],
             primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
             showInResources: _showInResources,
@@ -873,7 +884,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             endDateTime: endDateTime,
             registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
-            linkedResourceIds: _sortedValues(_linkedResourceIds),
+            linkedResourceIds: _primaryRegistrationResourceId == null
+                ? const <String>[]
+                : <String>[_primaryRegistrationResourceId!],
             primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
             showInResources: _showInResources,
@@ -895,12 +908,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
 
   Widget _buildResourceLinkingSection() {
     final resources = _resourceOptions();
-    final primaryOptions = [
-      for (final resource in resources)
-        if (_linkedResourceIds.contains(resource.id) ||
-            resource.id == _primaryRegistrationResourceId)
-          resource,
-    ];
 
     return Container(
       width: double.infinity,
@@ -914,7 +921,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Linked Resources',
+            'General Resource',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
               color: OtaColors.ink,
               fontWeight: FontWeight.w900,
@@ -922,78 +929,37 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
-            initialValue: null,
-            decoration: _fieldDecoration('Add resource'),
-            hint: const Text('Select an existing resource'),
-            items: [
-              for (final resource in resources)
-                DropdownMenuItem(
-                  value: resource.id,
-                  child: Text(resource.title),
-                ),
-            ],
-            onChanged: (resourceId) {
-              if (resourceId != null) {
-                setState(() {
-                  _linkedResourceIds.add(resourceId);
-                  _primaryRegistrationResourceId ??= resourceId;
-                });
-              }
-            },
-          ),
-          const SizedBox(height: 10),
-          if (_linkedResourceIds.isEmpty)
-            Text(
-              'No linked resources selected.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: OtaColors.mutedText,
-                fontWeight: FontWeight.w700,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final resource in resources)
-                  if (_linkedResourceIds.contains(resource.id))
-                    InputChip(
-                      label: Text(resource.title),
-                      onDeleted: () {
-                        setState(() {
-                          _linkedResourceIds.remove(resource.id);
-                          if (_primaryRegistrationResourceId == resource.id) {
-                            _primaryRegistrationResourceId = null;
-                          }
-                        });
-                      },
-                    ),
-              ],
-            ),
-          const SizedBox(height: 10),
-          DropdownButtonFormField<String>(
             initialValue:
-                primaryOptions.any(
+                resources.any(
                   (resource) => resource.id == _primaryRegistrationResourceId,
                 )
                 ? _primaryRegistrationResourceId
                 : null,
-            decoration: _fieldDecoration('Primary registration resource'),
-            hint: const Text('Optional'),
+            decoration: _fieldDecoration('Primary linked resource'),
+            hint: const Text('No linked resource'),
             items: [
-              for (final resource in primaryOptions)
+              for (final resource in resources)
                 DropdownMenuItem(
                   value: resource.id,
-                  child: Text(resource.title),
+                  child: Text(
+                    resource.isPublished
+                        ? resource.title
+                        : '${resource.title} (Draft)',
+                  ),
                 ),
             ],
             onChanged: (resourceId) {
-              setState(() => _primaryRegistrationResourceId = resourceId);
+              setState(() {
+                _primaryRegistrationResourceId = resourceId;
+                _linkedResourceIds
+                  ..clear()
+                  ..addAll(resourceId == null ? const [] : [resourceId]);
+              });
             },
           ),
           const SizedBox(height: 6),
           Text(
-            'TODO: Replace legacy registration URL/show-in-resources fields after event-resource linking is fully adopted.',
+            'Published events can only link to published General Resources.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: OtaColors.mutedText,
               fontWeight: FontWeight.w600,
@@ -1005,11 +971,10 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   }
 
   List<AcademyResource> _resourceOptions() {
-    final locationId = _adminLocationId();
-    return appDataService.resources
-        .where((resource) => resource.locationId == locationId)
-        .toList()
-      ..sort((a, b) => a.title.compareTo(b.title));
+    return eventGeneralResourceOptions(
+      appDataService.resources,
+      locationId: _adminLocationId(),
+    );
   }
 }
 
@@ -1289,13 +1254,11 @@ class _AdminTextField extends StatelessWidget {
   const _AdminTextField({
     required this.controller,
     required this.label,
-    this.helperText,
     this.maxLines = 1,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? helperText;
   final int maxLines;
 
   @override
@@ -1303,7 +1266,7 @@ class _AdminTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      decoration: _fieldDecoration(label, helperText: helperText),
+      decoration: _fieldDecoration(label),
     );
   }
 }
@@ -1459,17 +1422,14 @@ _EventType _eventTypeForId(String? eventType) {
   );
 }
 
-List<String> _sortedValues(Set<String> values) {
-  return values.toList()..sort();
-}
-
 Map<String, List<AcademyEvent>> _groupEventsByMonth(List<AcademyEvent> events) {
   final groupedEvents = <String, List<AcademyEvent>>{};
 
   for (final event in events) {
+    final localStart = _eventLocalStart(event);
     final key =
-        '${_fullMonthNames[event.startDateTime.month - 1]} '
-        '${event.startDateTime.year}';
+        '${_fullMonthNames[localStart.month - 1]} '
+        '${localStart.year}';
     groupedEvents.putIfAbsent(key, () => <AcademyEvent>[]).add(event);
   }
 
@@ -1546,46 +1506,21 @@ String _formatDateTime(DateTime dateTime) {
   return '$month ${dateTime.day}, $hour:$minute $period';
 }
 
-DateTime? _parseDateTimeInput(String input) {
-  final value = input.trim();
-  if (value.isEmpty) {
-    return null;
-  }
+DateTime _eventLocalStart(AcademyEvent event) => const LocationTimeService()
+    .toLocationTime(event.startDateTime, event.locationId);
 
-  final parsed = DateTime.tryParse(value);
-  if (parsed != null) {
-    return parsed;
-  }
+String _formatEventDateTime(AcademyEvent event) {
+  final service = const LocationTimeService();
+  final start = service.toLocationTime(event.startDateTime, event.locationId);
+  final end = service.toLocationTime(event.endDateTime, event.locationId);
+  return '${_formatDateTime(start)} - ${_formatClockTime(end)} ${end.timeZoneName}';
+}
 
-  final match = RegExp(
-    r'^([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{1,2}):(\d{2})\s*(AM|PM)$',
-    caseSensitive: false,
-  ).firstMatch(value);
-  if (match == null) {
-    return null;
-  }
-
-  final month =
-      _monthNames.indexWhere(
-        (name) => name.toLowerCase() == match.group(1)!.toLowerCase(),
-      ) +
-      1;
-  final day = int.tryParse(match.group(2)!);
-  final hourValue = int.tryParse(match.group(3)!);
-  final minute = int.tryParse(match.group(4)!);
-  final period = match.group(5)!.toUpperCase();
-
-  if (month <= 0 || day == null || hourValue == null || minute == null) {
-    return null;
-  }
-
-  final hour = switch (period) {
-    'AM' when hourValue == 12 => 0,
-    'PM' when hourValue != 12 => hourValue + 12,
-    _ => hourValue,
-  };
-
-  return DateTime(DateTime.now().year, month, day, hour, minute);
+String _formatClockTime(DateTime dateTime) {
+  final hour = dateTime.hour % 12 == 0 ? 12 : dateTime.hour % 12;
+  final minute = dateTime.minute.toString().padLeft(2, '0');
+  final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+  return '$hour:$minute $period';
 }
 
 const _monthNames = [

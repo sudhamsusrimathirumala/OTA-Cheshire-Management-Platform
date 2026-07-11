@@ -18,7 +18,7 @@ const curriculumBeltOrder = [
   'Black',
 ];
 
-const sampleCurriculum = <String, CurriculumRequirement>{
+final sampleCurriculum = <String, CurriculumRequirement>{
   'White': CurriculumRequirement(
     locationId: otaCheshireLocationId,
     belt: 'White',

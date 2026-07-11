@@ -177,6 +177,7 @@ Map<String, Object?> _classSessionData(ClassSession session, int weekday) {
     // Used for future bulk actions, such as editing or deleting all sessions of
     // the same class type while keeping each scheduled occurrence separate.
     'classTypeId': session.classTypeId,
+    'bulkGroupId': session.bulkGroupId,
     'locationId': session.locationId,
     'weekday': weekday,
     'startTime': Timestamp.fromDate(session.startTime),
@@ -248,6 +249,7 @@ Map<String, Object?> _resourceData(AcademyResource resource) {
   return {
     'title': resource.title,
     'description': resource.description,
+    'resourceSection': resource.resourceSection,
     'resourceType': resource.resourceType,
     'category': resource.category,
     'linkUrl': resource.linkUrl,

@@ -5,22 +5,28 @@ class ClassSession {
     required this.id,
     required this.className,
     required this.classTypeId,
+    String? bulkGroupId,
     required this.locationId,
     required this.startTime,
     required this.endTime,
+    int? startMinutes,
+    int? endMinutes,
     required this.eligibleBelts,
     required this.description,
     this.eligibilityNote,
     this.isPreferred = false,
     this.isPublished = true,
     this.resumesOn,
-  });
+  }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard',
+       startMinutes = startMinutes ?? startTime.hour * 60 + startTime.minute,
+       endMinutes = endMinutes ?? endTime.hour * 60 + endTime.minute;
 
   final String id;
   final String className;
   // Used for future bulk actions, such as editing or deleting all sessions of
   // the same class type while keeping each scheduled occurrence separate.
   final String classTypeId;
+  final String bulkGroupId;
   final String locationId;
   final DateTime startTime;
   final DateTime endTime;
@@ -31,15 +37,16 @@ class ClassSession {
   final bool isPublished;
   final DateTime? resumesOn;
 
-  int get startMinutes => startTime.hour * 60 + startTime.minute;
+  final int startMinutes;
 
-  int get endMinutes => endTime.hour * 60 + endTime.minute;
+  final int endMinutes;
 
-  int get durationMinutes => endTime.difference(startTime).inMinutes;
+  int get durationMinutes => endMinutes - startMinutes;
 
-  String get startLabel => _formatTimeOfDay(startTime);
+  String get startLabel => formatMinutesAsTime(startMinutes);
 
-  String get timeRangeLabel => '$startLabel - ${_formatTimeOfDay(endTime)}';
+  String get timeRangeLabel =>
+      '$startLabel - ${formatMinutesAsTime(endMinutes)}';
 
   String get eligibilityLabel =>
       eligibilityNote ??
@@ -52,8 +59,8 @@ class ClassSession {
       date.year,
       date.month,
       date.day,
-      startTime.hour,
-      startTime.minute,
+      startMinutes ~/ 60,
+      startMinutes % 60,
     );
   }
 
@@ -62,8 +69,8 @@ class ClassSession {
       date.year,
       date.month,
       date.day,
-      endTime.hour,
-      endTime.minute,
+      endMinutes ~/ 60,
+      endMinutes % 60,
     );
   }
 
@@ -72,9 +79,11 @@ class ClassSession {
   }
 }
 
-String _formatTimeOfDay(DateTime time) {
-  final period = time.hour >= 12 ? 'PM' : 'AM';
-  final displayHour = time.hour % 12 == 0 ? 12 : time.hour % 12;
-  final displayMinute = time.minute.toString().padLeft(2, '0');
+String formatMinutesAsTime(int minutes) {
+  final hour = minutes ~/ 60;
+  final minute = minutes % 60;
+  final period = hour >= 12 ? 'PM' : 'AM';
+  final displayHour = hour % 12 == 0 ? 12 : hour % 12;
+  final displayMinute = minute.toString().padLeft(2, '0');
   return '$displayHour:$displayMinute $period';
 }

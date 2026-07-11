@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
+import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
+import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
@@ -18,6 +20,13 @@ import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
+import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
+import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
+import 'package:ota_cheshire_management_platform/services/firestore/firestore_migration_service.dart';
+import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
+import 'package:ota_cheshire_management_platform/widgets/resources/general_resources_view.dart';
+import 'package:ota_cheshire_management_platform/widgets/resources/resources_landing_view.dart';
 
 void main() {
   test(
@@ -42,15 +51,10 @@ void main() {
     },
   );
 
-  testWidgets('app launches the admin dashboard for development', (
-    tester,
-  ) async {
+  testWidgets('app launches the welcome screen', (tester) async {
     await tester.pumpWidget(const OTAApp());
 
-    expect(find.byType(AdminDashboardScreen), findsOneWidget);
-    expect(find.text('OTA Cheshire Control Panel'), findsOneWidget);
-    expect(find.text("Today's Schedule"), findsOneWidget);
-    expect(find.text('Recent Admin Updates'), findsOneWidget);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 
   testWidgets('welcome screen displays its primary actions', (tester) async {
@@ -121,6 +125,8 @@ void main() {
 
     expect(find.text('12 AM'), findsWidgets);
     expect(find.text('Schedule'), findsOneWidget);
+    expect(find.text('Day'), findsOneWidget);
+    expect(find.text('Week'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Level 3'));
 
@@ -139,12 +145,8 @@ void main() {
 
     await tester.tap(find.text('Resources'));
     await tester.pumpAndSettle();
-    expect(
-      find.text(
-        'Academy forms, curriculum links, testing information, and registration links.',
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('Curriculum'), findsOneWidget);
+    expect(find.text('General Resources'), findsOneWidget);
 
     await tester.tap(find.text('Notifications'));
     await tester.pumpAndSettle();
@@ -243,6 +245,19 @@ void main() {
     expect(find.text('Close Preview'), findsOneWidget);
   });
 
+  testWidgets('admin event form uses combined picker fields', (tester) async {
+    LocationTimeService.initialize();
+    await tester.pumpWidget(const MaterialApp(home: AdminEventsScreen()));
+    await tester.tap(find.text('Create Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Start date and time'), findsOneWidget);
+    expect(find.text('End date and time'), findsOneWidget);
+    expect(find.text('Registration deadline'), findsOneWidget);
+    expect(find.text('Start date'), findsNothing);
+    expect(find.text('Start time'), findsNothing);
+  });
+
   testWidgets('admin announcements page displays filters and mock form', (
     tester,
   ) async {
@@ -272,7 +287,11 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: CurriculumScreen()));
 
     expect(find.text('Curriculum'), findsWidgets);
-    expect(find.text('Form video placeholder'), findsOneWidget);
+    expect(find.text('Taegeuk form placeholder'), findsOneWidget);
+    expect(
+      find.text('https://www.youtube.com/@OlympicTaekwondoAcademy'),
+      findsWidgets,
+    );
     expect(find.text('White Belt'), findsOneWidget);
 
     await tester.tap(find.text('White Belt'));
@@ -282,6 +301,284 @@ void main() {
 
     expect(find.text('Blue-Red Belt'), findsOneWidget);
     expect(find.text('Advanced transition sequence'), findsOneWidget);
+  });
+
+  testWidgets('student and admin resources landings share two destinations', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: ResourcesScreen()));
+    expect(find.text('Curriculum'), findsOneWidget);
+    expect(find.text('General Resources'), findsOneWidget);
+
+    await tester.pumpWidget(const MaterialApp(home: AdminResourcesScreen()));
+    expect(find.text('Curriculum'), findsOneWidget);
+    expect(find.text('General Resources'), findsOneWidget);
+    expect(find.text('Create Resource'), findsNothing);
+  });
+
+  testWidgets('shared resource card only shows editing in admin mode', (
+    tester,
+  ) async {
+    final resource = AcademyResource(
+      id: 'test-resource',
+      title: 'Test Resource',
+      description: 'Shared card test',
+      resourceType: 'document',
+      category: 'forms',
+      locationId: 'ota-cheshire',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GeneralResourceCard(
+          resource: resource,
+          presentation: ResourcesPresentation.student,
+        ),
+      ),
+    );
+    expect(find.byTooltip('Edit resource'), findsNothing);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GeneralResourceCard(
+          resource: resource,
+          presentation: ResourcesPresentation.admin,
+          onEdit: () {},
+        ),
+      ),
+    );
+    expect(find.byTooltip('Edit resource'), findsOneWidget);
+  });
+
+  testWidgets('admin general resources exposes create and edit controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: AdminGeneralResourcesScreen()),
+    );
+    expect(find.text('Create Resource'), findsOneWidget);
+    expect(find.byTooltip('Edit resource'), findsWidgets);
+  });
+
+  testWidgets('admin curriculum is read only', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: CurriculumScreen(isAdmin: true)),
+    );
+    expect(find.text('Curriculum'), findsWidgets);
+    expect(find.text('Create Curriculum'), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+  });
+
+  test('event resource rules exclude curriculum and archived resources', () {
+    AcademyResource resource(
+      String id, {
+      String section = 'general',
+      bool published = true,
+      bool archived = false,
+    }) => AcademyResource(
+      id: id,
+      title: id,
+      description: '',
+      resourceSection: section,
+      resourceType: 'document',
+      category: 'general',
+      locationId: 'ota-cheshire',
+      isPublished: published,
+      isArchived: archived,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+
+    final draft = resource('draft', published: false);
+    final archived = resource('archived', archived: true);
+    final options = eventGeneralResourceOptions([
+      resource('general'),
+      resource('curriculum', section: 'curriculum'),
+      archived,
+      draft,
+    ], locationId: 'ota-cheshire');
+
+    expect(options.map((item) => item.id), ['draft', 'general']);
+    expect(validatePublishedEventResource(draft), isNotNull);
+    expect(validatePublishedEventResource(archived), isNotNull);
+    expect(validatePublishedEventResource(options.last), isNull);
+  });
+
+  test('curriculum supports sorted multiple video and text items', () {
+    final curriculum = CurriculumRequirement(
+      locationId: 'ota-cheshire',
+      belt: 'White',
+      formItems: const [],
+      oneStepItems: const [],
+      breakingItems: const [],
+      physicalChallengeItems: const [],
+      sections: const [
+        CurriculumSection(
+          id: 'breaking',
+          title: 'Breaking',
+          sortOrder: 2,
+          items: [
+            CurriculumItem(
+              id: 'break-2',
+              title: 'Second break',
+              contentType: CurriculumContentType.text,
+              textContent: 'Second break details',
+              sortOrder: 2,
+            ),
+            CurriculumItem(
+              id: 'break-1',
+              title: 'First break',
+              contentType: CurriculumContentType.text,
+              textContent: 'First break details',
+              sortOrder: 1,
+            ),
+          ],
+        ),
+        CurriculumSection(
+          id: 'forms',
+          title: 'Forms',
+          sortOrder: 1,
+          items: [
+            CurriculumItem(
+              id: 'form-1',
+              title: 'Form one',
+              contentType: CurriculumContentType.video,
+              videoUrl: 'https://www.youtube.com/watch?v=form-one',
+              sortOrder: 1,
+            ),
+            CurriculumItem(
+              id: 'form-2',
+              title: 'Form two',
+              contentType: CurriculumContentType.video,
+              videoUrl: 'https://www.youtube.com/watch?v=form-two',
+              sortOrder: 2,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(curriculum.sortedSections.first.id, 'forms');
+    expect(curriculum.sortedSections.first.sortedItems, hasLength(2));
+    expect(
+      curriculum.sortedSections.first.sortedItems.last.videoUrl,
+      'https://www.youtube.com/watch?v=form-two',
+    );
+    expect(
+      curriculum.sortedSections.last.sortedItems.first.textContent,
+      'First break details',
+    );
+  });
+
+  test('academy event time round-trips through America New York', () {
+    LocationTimeService.initialize();
+    const service = LocationTimeService();
+    final instant = service.combineDateAndTime(
+      locationId: 'ota-cheshire',
+      date: DateTime(2026, 7, 20),
+      time: const TimeOfDay(hour: 19, minute: 30),
+    );
+
+    expect(instant, DateTime.utc(2026, 7, 20, 23, 30));
+    final local = service.toLocationTime(instant, 'ota-cheshire');
+    expect(local.hour, 19);
+    expect(local.minute, 30);
+    expect(local.timeZoneName, 'EDT');
+  });
+
+  test('schedule write data preserves wall clock minutes', () {
+    const data = ClassSessionWriteData(
+      className: 'Teen/Adult Sparring',
+      classTypeId: 'teen-adult',
+      bulkGroupId: 'teen-adult-evening',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.friday,
+      startMinutes: 19 * 60 + 20,
+      endMinutes: 20 * 60,
+      eligibleBelts: [],
+      description: '',
+      isActive: true,
+      isPreferred: false,
+    );
+
+    expect(data.startMinutes, 1160);
+    expect(data.startTime.hour, 19);
+    expect(data.startTime.minute, 20);
+  });
+
+  testWidgets('combined date time field preserves value when canceled', (
+    tester,
+  ) async {
+    LocationTimeService.initialize();
+    final original = DateTime.utc(2026, 7, 20, 23, 30);
+    DateTime? changedValue;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LocationDateTimeField(
+            label: 'Start date and time',
+            locationId: 'ota-cheshire',
+            value: original,
+            onChanged: (value) => changedValue = value,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Jul 20, 2026 at 7:30 PM EDT'), findsOneWidget);
+    await tester.tap(find.textContaining('Jul 20, 2026 at 7:30 PM EDT'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(changedValue, isNull);
+  });
+
+  testWidgets('combined date selection opens the time picker', (tester) async {
+    LocationTimeService.initialize();
+    DateTime? changedValue;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LocationDateTimeField(
+            label: 'End date and time',
+            locationId: 'ota-cheshire',
+            value: DateTime.utc(2026, 7, 20, 23, 30),
+            onChanged: (value) => changedValue = value,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.textContaining('Jul 20, 2026 at 7:30 PM EDT'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TimePickerDialog), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(changedValue, isNull);
+  });
+
+  test('migration helpers only backfill missing resource location fields', () {
+    expect(migrationResourceBackfill({'title': 'Existing'}), {
+      'resourceSection': 'general',
+      'isArchived': false,
+    });
+    expect(
+      migrationResourceBackfill({
+        'resourceSection': 'general',
+        'isArchived': true,
+      }),
+      isEmpty,
+    );
+    expect(
+      migrationBulkGroupId({'classTypeId': 'level-1'}),
+      'level-1-standard',
+    );
+    expect(migrationLocationBackfill({})['timeZoneId'], 'America/New_York');
   });
 
   testWidgets('notifications screen filters announcements', (tester) async {

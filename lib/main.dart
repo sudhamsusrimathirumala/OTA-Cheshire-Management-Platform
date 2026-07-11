@@ -21,16 +21,14 @@ import 'screens/signup_screen.dart';
 import 'screens/student_dashboard_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'theme/ota_colors.dart';
+import 'services/location_time_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LocationTimeService.initialize();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const OTAApp());
 }
-
-// TODO: Replace this mock launch switch with Firebase Auth and UserAccount.role
-// based routing when real authentication is added.
-const bool _launchAdminForDevelopment = true;
 
 class OTAApp extends StatelessWidget {
   const OTAApp({super.key});
@@ -47,15 +45,14 @@ class OTAApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      initialRoute: _launchAdminForDevelopment
-          ? OtaRoutes.adminDashboard
-          : OtaRoutes.dashboard,
+      initialRoute: OtaRoutes.welcome,
       routes: {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
         OtaRoutes.schedule: (_) => const ScheduleScreen(),
         OtaRoutes.events: (_) => const EventsScreen(),
         OtaRoutes.resources: (_) => const ResourcesScreen(),
+        OtaRoutes.generalResources: (_) => const GeneralResourcesScreen(),
         OtaRoutes.curriculum: (_) => const CurriculumScreen(),
         OtaRoutes.notifications: (_) => const NotificationsScreen(),
         OtaRoutes.profile: (_) => const ProfileScreen(),
@@ -75,6 +72,9 @@ Route<dynamic>? _buildAdminRoute(RouteSettings settings) {
     OtaRoutes.adminAnnouncements => (_) => const AdminAnnouncementsScreen(),
     OtaRoutes.adminSchedule => (_) => const AdminScheduleScreen(),
     OtaRoutes.adminResources => (_) => const AdminResourcesScreen(),
+    OtaRoutes.adminGeneralResources =>
+      (_) => const AdminGeneralResourcesScreen(),
+    OtaRoutes.adminCurriculum => (_) => const CurriculumScreen(isAdmin: true),
     OtaRoutes.adminProfile => (_) => const AdminProfileScreen(),
     _ => null,
   };

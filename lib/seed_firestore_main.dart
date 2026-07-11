@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'firebase_options.dart';
 import 'services/firestore/firestore_migration_service.dart';
+import 'services/location_time_service.dart';
 
 // Development-only entrypoint for manually migrating Firestore.
 // This is not connected to the production app UI.
@@ -14,6 +15,7 @@ const bool _enableFirestoreMigration = true;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LocationTimeService.initialize();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const SeedFirestoreApp());
 }

@@ -14,9 +14,11 @@ class FirestoreMigrationService {
   Future<void> runMvpReadinessMigration() async {
     await addPreferredClassGroupIdsToStudentProfiles();
     await normalizeClassSessionClassTypeIds();
+    await backfillClassSessionBulkGroupIds();
     await normalizeAnnouncements();
     await backfillEventFields();
     await backfillResourceFields();
+    await ensureOtaCheshireLocation();
     await createStarterResourcesIfMissing();
   }
 
@@ -141,6 +143,32 @@ class FirestoreMigrationService {
     }
   }
 
+  Future<void> backfillClassSessionBulkGroupIds() async {
+    final snapshot = await _firestore
+        .collection(FirestoreCollections.classSessions)
+        .get();
+    final batch = _firestore.batch();
+    var hasWrites = false;
+
+    for (final document in snapshot.docs) {
+      final data = document.data();
+      if (_stringValue(data['bulkGroupId']) != null) {
+        continue;
+      }
+
+      final stableId = migrationBulkGroupId(data);
+      batch.set(document.reference, {
+        'bulkGroupId': '$stableId-standard',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      hasWrites = true;
+    }
+
+    if (hasWrites) {
+      await batch.commit();
+    }
+  }
+
   Future<void> backfillEventFields() async {
     final snapshot = await _firestore
         .collection(FirestoreCollections.events)
@@ -189,19 +217,30 @@ class FirestoreMigrationService {
 
     for (final document in snapshot.docs) {
       final data = document.data();
-      if (data.containsKey('isArchived')) {
+      final updates = migrationResourceBackfill(data);
+      if (updates.isEmpty) {
         continue;
       }
 
-      batch.set(document.reference, {
-        'isArchived': false,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      updates['updatedAt'] = FieldValue.serverTimestamp();
+      batch.set(document.reference, updates, SetOptions(merge: true));
       hasWrites = true;
     }
 
     if (hasWrites) {
       await batch.commit();
+    }
+  }
+
+  Future<void> ensureOtaCheshireLocation() async {
+    final reference = _firestore
+        .collection(FirestoreCollections.locations)
+        .doc('ota-cheshire');
+    final snapshot = await reference.get();
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    final updates = migrationLocationBackfill(data);
+    if (updates.isNotEmpty) {
+      await reference.set(updates, SetOptions(merge: true));
     }
   }
 
@@ -221,6 +260,9 @@ class FirestoreMigrationService {
         if (!data.containsKey('isArchived')) {
           updates['isArchived'] = false;
         }
+        if (!data.containsKey('resourceSection')) {
+          updates['resourceSection'] = 'general';
+        }
         if (updates.isNotEmpty) {
           updates['updatedAt'] = FieldValue.serverTimestamp();
           batch.set(reference, updates, SetOptions(merge: true));
@@ -237,6 +279,32 @@ class FirestoreMigrationService {
       await batch.commit();
     }
   }
+}
+
+String migrationBulkGroupId(Map<String, dynamic> data) {
+  final classTypeId = _stringValue(data['classTypeId']);
+  final className = _stringValue(data['className']);
+  final stableId =
+      classTypeId ??
+      (className == null
+          ? 'class-session'
+          : _classTypeIdForClassName(className));
+  return '$stableId-standard';
+}
+
+Map<String, Object?> migrationResourceBackfill(Map<String, dynamic> data) {
+  return {
+    if (!data.containsKey('resourceSection')) 'resourceSection': 'general',
+    if (!data.containsKey('isArchived')) 'isArchived': false,
+  };
+}
+
+Map<String, Object?> migrationLocationBackfill(Map<String, dynamic> data) {
+  return {
+    if (!data.containsKey('name')) 'name': 'OTA Cheshire',
+    if (!data.containsKey('timeZoneId')) 'timeZoneId': 'America/New_York',
+    if (!data.containsKey('isActive')) 'isActive': true,
+  };
 }
 
 final _sampleStudentProfilesById = {
@@ -329,6 +397,7 @@ Map<String, Object?> _resourceData(AcademyResource resource) {
   return {
     'title': resource.title,
     'description': resource.description,
+    'resourceSection': resource.resourceSection,
     'resourceType': resource.resourceType,
     'category': resource.category,
     'linkUrl': resource.linkUrl,

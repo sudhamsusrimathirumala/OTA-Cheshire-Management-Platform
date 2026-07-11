@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../models/academy_event.dart';
 import '../models/academy_resource.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 
 class EventsScreen extends StatelessWidget {
@@ -30,7 +31,11 @@ class EventsScreen extends StatelessWidget {
               ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
         final resourcesById = {
           for (final resource in appDataService.resources)
-            resource.id: resource,
+            if (resource.resourceSection == 'general' &&
+                resource.locationId == locationId &&
+                resource.isPublished &&
+                !resource.isArchived)
+              resource.id: resource,
         };
         final groupedEvents = _groupEventsByMonth(events);
 
@@ -170,7 +175,7 @@ class _EventCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DateBadge(date: event.startDateTime),
+                _DateBadge(date: _eventLocalStart(event)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Wrap(
@@ -245,7 +250,9 @@ void _showEventDetails(
 ) {
   final linkedResources = [
     for (final resourceId in event.linkedResourceIds)
-      if (resourcesById[resourceId] != null) resourcesById[resourceId]!,
+      if (resourceId != event.primaryRegistrationResourceId &&
+          resourcesById[resourceId] != null)
+        resourcesById[resourceId]!,
   ];
   final primaryResource = event.primaryRegistrationResourceId == null
       ? null
@@ -570,9 +577,21 @@ class _Badge extends StatelessWidget {
 }
 
 String _formatEventDateTime(AcademyEvent event) {
-  final start = _formatDateTime(event.startDateTime);
-  final end = _formatTime(event.endDateTime);
+  final startDateTime = _eventLocalStart(event);
+  final endDateTime = const LocationTimeService().toLocationTime(
+    event.endDateTime,
+    event.locationId,
+  );
+  final start = _formatDateTime(startDateTime);
+  final end = _formatTime(endDateTime);
   return '$start - $end';
+}
+
+DateTime _eventLocalStart(AcademyEvent event) {
+  return const LocationTimeService().toLocationTime(
+    event.startDateTime,
+    event.locationId,
+  );
 }
 
 String _formatDateTime(DateTime dateTime) {
@@ -590,9 +609,10 @@ Map<String, List<AcademyEvent>> _groupEventsByMonth(List<AcademyEvent> events) {
   final groupedEvents = <String, List<AcademyEvent>>{};
 
   for (final event in events) {
+    final localStart = _eventLocalStart(event);
     final key =
-        '${_fullMonthNames[event.startDateTime.month - 1]} '
-        '${event.startDateTime.year}';
+        '${_fullMonthNames[localStart.month - 1]} '
+        '${localStart.year}';
     groupedEvents.putIfAbsent(key, () => <AcademyEvent>[]).add(event);
   }
 

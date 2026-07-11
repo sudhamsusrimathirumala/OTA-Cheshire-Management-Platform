@@ -6,6 +6,7 @@ final sampleAcademyResources = [
     id: 'parent_night_out_registration',
     title: 'Parent Night Out Registration',
     description: 'Registration form for the next Parent Night Out event.',
+    resourceSection: 'general',
     resourceType: 'registration',
     category: 'events',
     linkUrl: 'https://forms.gle/ota-parent-night-out',
@@ -19,6 +20,7 @@ final sampleAcademyResources = [
     title: 'Belt Testing Checklist',
     description:
         'Family checklist for testing day arrival, uniform, and preparation.',
+    resourceSection: 'general',
     resourceType: 'document',
     category: 'testing',
     locationId: otaCheshireLocationId,
@@ -30,6 +32,7 @@ final sampleAcademyResources = [
     id: 'student_handbook',
     title: 'Student Handbook',
     description: 'Academy policies and family reference information.',
+    resourceSection: 'general',
     resourceType: 'document',
     category: 'general',
     locationId: otaCheshireLocationId,

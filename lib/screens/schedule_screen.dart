@@ -1376,7 +1376,7 @@ String _formatShortDate(DateTime date) {
 List<DateTime> _weekDatesFor(DateTime selectedDate) {
   final startOfWeek = DateUtils.dateOnly(
     selectedDate.subtract(
-      Duration(days: selectedDate.weekday - DateTime.monday),
+      Duration(days: selectedDate.weekday % DateTime.daysPerWeek),
     ),
   );
   return [

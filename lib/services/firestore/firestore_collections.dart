@@ -5,4 +5,5 @@ abstract final class FirestoreCollections {
   static const announcements = 'announcements';
   static const events = 'events';
   static const resources = 'resources';
+  static const locations = 'locations';
 }

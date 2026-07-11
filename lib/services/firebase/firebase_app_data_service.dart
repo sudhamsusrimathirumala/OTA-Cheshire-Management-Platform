@@ -15,6 +15,7 @@ import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
+import '../location_time_service.dart';
 import '../mock_app_data_service.dart';
 
 class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
@@ -65,6 +66,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
       final firestore = _firestore ?? FirebaseFirestore.instance;
       _firestore = firestore;
+      unawaited(
+        const LocationTimeService().loadLocation(
+          firestore,
+          LocationTimeService.otaCheshireLocationId,
+        ),
+      );
       _listenToSchedule(firestore);
       _listenToAnnouncements(firestore);
       _listenToEvents(firestore);
@@ -413,10 +420,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       className: className,
       classTypeId:
           _stringValue(data['classTypeId']) ?? _classTypeIdFor(className),
+      bulkGroupId:
+          _stringValue(data['bulkGroupId']) ??
+          '${_stringValue(data['classTypeId']) ?? _classTypeIdFor(className)}-standard',
       locationId:
           _stringValue(data['locationId']) ?? selectedStudentProfile.locationId,
       startTime: startTime,
       endTime: endTime,
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
       eligibleBelts: _stringListValue(data['eligibleBelts']),
       description: _stringValue(data['description']) ?? '',
       eligibilityNote: _stringValue(data['eligibilityNote']),
@@ -612,15 +624,16 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     final title = _stringValue(data['title']);
     final locationId = _stringValue(data['locationId']);
     final startDateTime =
-        _dateTimeValue(data['startDateTime']) ??
-        _dateTimeValue(data['startsAt']);
+        (_dateTimeValue(data['startDateTime']) ??
+                _dateTimeValue(data['startsAt']))
+            ?.toUtc();
 
     if (title == null || locationId == null || startDateTime == null) {
       return null;
     }
 
     final endDateTime =
-        _dateTimeValue(data['endDateTime']) ??
+        _dateTimeValue(data['endDateTime'])?.toUtc() ??
         startDateTime.add(const Duration(hours: 1));
     final createdAt = _dateTimeValue(data['createdAt']) ?? startDateTime;
     final updatedAt = _dateTimeValue(data['updatedAt']) ?? createdAt;
@@ -634,7 +647,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       startDateTime: startDateTime,
       endDateTime: endDateTime,
       registrationUrl: _stringValue(data['registrationUrl']),
-      registrationDeadline: _dateTimeValue(data['registrationDeadline']),
+      registrationDeadline: _dateTimeValue(
+        data['registrationDeadline'],
+      )?.toUtc(),
       isPublished: _boolValue(data['isPublished']) ?? false,
       showInResources: _boolValue(data['showInResources']) ?? false,
       isArchived: _boolValue(data['isArchived']) ?? false,
@@ -693,6 +708,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       id: document.id,
       title: title,
       description: _stringValue(data['description']) ?? '',
+      resourceSection: _stringValue(data['resourceSection']) ?? 'general',
       resourceType: _stringValue(data['resourceType']) ?? 'general',
       category: _stringValue(data['category']) ?? 'general',
       linkUrl: _stringValue(data['linkUrl']) ?? _stringValue(data['url']),

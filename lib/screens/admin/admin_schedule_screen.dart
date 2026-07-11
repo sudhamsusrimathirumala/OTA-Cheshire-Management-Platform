@@ -5,6 +5,8 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/schedule_time_field.dart';
+import '../../services/location_time_service.dart';
 
 class AdminScheduleScreen extends StatefulWidget {
   const AdminScheduleScreen({super.key});
@@ -442,12 +444,12 @@ class _ClassFormSheet extends StatefulWidget {
 
 class _ClassFormSheetState extends State<_ClassFormSheet> {
   late final TextEditingController _classNameController;
-  late final TextEditingController _startTimeController;
-  late final TextEditingController _endTimeController;
   late final TextEditingController _beltsController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _eligibilityNoteController;
   late int _weekday;
+  int? _startMinutes;
+  int? _endMinutes;
   late bool _isActive;
   late bool _isPreferred;
   String? _validationMessage;
@@ -460,12 +462,8 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _classNameController = TextEditingController(
       text: session?.className ?? '',
     );
-    _startTimeController = TextEditingController(
-      text: session?.startLabel ?? '',
-    );
-    _endTimeController = TextEditingController(
-      text: session == null ? '' : _formatTime(session.endTime),
-    );
+    _startMinutes = session?.startMinutes;
+    _endMinutes = session?.endMinutes;
     _beltsController = TextEditingController(
       text: session?.eligibleBelts.join(', ') ?? '',
     );
@@ -482,8 +480,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   @override
   void dispose() {
     _classNameController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
     _beltsController.dispose();
     _descriptionController.dispose();
     _eligibilityNoteController.dispose();
@@ -533,13 +529,15 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
               builder: (context, constraints) {
                 final twoColumns = constraints.maxWidth >= 560;
                 final fields = [
-                  _AdminTextField(
-                    controller: _startTimeController,
+                  ScheduleTimeField(
                     label: 'Start time',
+                    minutes: _startMinutes,
+                    onChanged: (value) => setState(() => _startMinutes = value),
                   ),
-                  _AdminTextField(
-                    controller: _endTimeController,
+                  ScheduleTimeField(
                     label: 'End time',
+                    minutes: _endMinutes,
+                    onChanged: (value) => setState(() => _endMinutes = value),
                   ),
                 ];
 
@@ -561,6 +559,14 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Class times are entered in ${const LocationTimeService().friendlyTimeZoneLabelFor(_adminLocationId())}.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: OtaColors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 10),
             _AdminTextField(
@@ -625,25 +631,25 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
 
   void _submit() {
     final className = _classNameController.text.trim();
-    final startTime = _parseClassTime(_startTimeController.text, _weekday);
-    final endTime = _parseClassTime(_endTimeController.text, _weekday);
+    final startMinutes = _startMinutes;
+    final endMinutes = _endMinutes;
 
     if (className.isEmpty) {
       setState(() => _validationMessage = 'Class name is required.');
       return;
     }
 
-    if (startTime == null) {
+    if (startMinutes == null) {
       setState(() => _validationMessage = 'Start time is required.');
       return;
     }
 
-    if (endTime == null) {
+    if (endMinutes == null) {
       setState(() => _validationMessage = 'End time is required.');
       return;
     }
 
-    if (!endTime.isAfter(startTime)) {
+    if (endMinutes <= startMinutes) {
       setState(() => _validationMessage = 'End time must be after start time.');
       return;
     }
@@ -656,10 +662,11 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       id: session?.id,
       className: className,
       classTypeId: classTypeId,
+      bulkGroupId: session?.bulkGroupId ?? '$classTypeId-standard',
       locationId: _adminLocationId(),
       weekday: _weekday,
-      startTime: startTime,
-      endTime: endTime,
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
       eligibleBelts: _parseCommaSeparated(_beltsController.text),
       description: _descriptionController.text.trim(),
       eligibilityNote: _eligibilityNoteController.text.trim().isEmpty
@@ -1509,67 +1516,6 @@ TextStyle? _rowTitleStyle(BuildContext context) {
     color: OtaColors.ink,
     fontWeight: FontWeight.w900,
   );
-}
-
-String _formatTime(DateTime time) {
-  final period = time.hour >= 12 ? 'PM' : 'AM';
-  final displayHour = time.hour % 12 == 0 ? 12 : time.hour % 12;
-  final displayMinute = time.minute.toString().padLeft(2, '0');
-  return '$displayHour:$displayMinute $period';
-}
-
-DateTime? _parseClassTime(String value, int weekday) {
-  final normalized = value.trim().toLowerCase().replaceAll(' ', '');
-  if (normalized.isEmpty) {
-    return null;
-  }
-
-  final twelveHourMatch = RegExp(
-    r'^(\d{1,2}):(\d{2})(am|pm)$',
-  ).firstMatch(normalized);
-  if (twelveHourMatch != null) {
-    final hourValue = int.tryParse(twelveHourMatch.group(1)!);
-    final minute = int.tryParse(twelveHourMatch.group(2)!);
-    final period = twelveHourMatch.group(3)!;
-
-    if (hourValue == null ||
-        minute == null ||
-        hourValue < 1 ||
-        hourValue > 12 ||
-        minute < 0 ||
-        minute > 59) {
-      return null;
-    }
-
-    final hour = period == 'pm'
-        ? (hourValue == 12 ? 12 : hourValue + 12)
-        : (hourValue == 12 ? 0 : hourValue);
-    return _dateTimeForWeekdayAndClock(weekday, hour, minute);
-  }
-
-  final twentyFourHourMatch = RegExp(
-    r'^(\d{1,2}):(\d{2})$',
-  ).firstMatch(normalized);
-  if (twentyFourHourMatch == null) {
-    return null;
-  }
-
-  final hour = int.tryParse(twentyFourHourMatch.group(1)!);
-  final minute = int.tryParse(twentyFourHourMatch.group(2)!);
-  if (hour == null ||
-      minute == null ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59) {
-    return null;
-  }
-
-  return _dateTimeForWeekdayAndClock(weekday, hour, minute);
-}
-
-DateTime _dateTimeForWeekdayAndClock(int weekday, int hour, int minute) {
-  return DateTime(2026, 6, 21 + weekday, hour, minute);
 }
 
 List<String> _parseCommaSeparated(String value) {

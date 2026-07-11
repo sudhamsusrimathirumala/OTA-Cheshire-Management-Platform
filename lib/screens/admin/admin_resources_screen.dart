@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academy_resource.dart';
+import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/resources/general_resources_view.dart';
+import '../../widgets/resources/resources_landing_view.dart';
 
 enum _ResourceFilter { published, draft, archived }
 
@@ -18,11 +21,39 @@ class AdminResourcesScreen extends StatefulWidget {
 }
 
 class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return AdminPageShell(
+      selectedDestination: AdminNavDestination.resources,
+      title: 'Resources',
+      subtitle: 'Review curriculum or manage academy forms and links.',
+      child: ResourcesLandingView(
+        presentation: ResourcesPresentation.admin,
+        onOpenCurriculum: () =>
+            Navigator.pushNamed(context, OtaRoutes.adminCurriculum),
+        onOpenGeneralResources: () =>
+            Navigator.pushNamed(context, OtaRoutes.adminGeneralResources),
+      ),
+    );
+  }
+}
+
+class AdminGeneralResourcesScreen extends StatefulWidget {
+  const AdminGeneralResourcesScreen({super.key});
+
+  @override
+  State<AdminGeneralResourcesScreen> createState() =>
+      _AdminGeneralResourcesScreenState();
+}
+
+class _AdminGeneralResourcesScreenState
+    extends State<AdminGeneralResourcesScreen> {
   final _writeService = FirebaseAdminWriteService();
   var _selectedFilter = _ResourceFilter.published;
 
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
+      if (resource.resourceSection != 'general') return false;
       return switch (_selectedFilter) {
         _ResourceFilter.published =>
           resource.isPublished && !resource.isArchived,
@@ -47,7 +78,7 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.resources,
-          title: 'Resources',
+          title: 'General Resources',
           subtitle: 'Manage family forms, links, and academy references.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,22 +355,24 @@ class _ResourcesPanel extends StatelessWidget {
           else if (resources.isEmpty)
             const _EmptyState(message: 'No resources found.')
           else
-            for (final resource in resources) ...[
-              _ResourceRow(
-                resource: resource,
-                onEdit: () => onEdit(resource),
-                onArchive: () => onArchive(resource),
-                onDelete: () => onDelete(resource),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: GeneralResourcesView(
+                resources: resources,
+                presentation: ResourcesPresentation.admin,
+                onEdit: onEdit,
+                onArchive: onArchive,
+                onDelete: onDelete,
               ),
-              if (resource != resources.last)
-                const Divider(height: 1, color: Color(0xFFE1E4EA)),
-            ],
+            ),
         ],
       ),
     );
   }
 }
 
+// Kept temporarily while older resource-row tests migrate to the shared card.
+// ignore: unused_element
 class _ResourceRow extends StatelessWidget {
   const _ResourceRow({
     required this.resource,
@@ -1071,7 +1104,6 @@ _BadgeColors _badgeColors(_BadgeTone tone) {
 
 const _resourceTypeOptions = [
   _FormOption(id: 'form', label: 'Form'),
-  _FormOption(id: 'curriculum', label: 'Curriculum'),
   _FormOption(id: 'testing', label: 'Testing'),
   _FormOption(id: 'registration', label: 'Registration'),
   _FormOption(id: 'document', label: 'Document'),
@@ -1082,9 +1114,9 @@ const _resourceTypeOptions = [
 
 const _categoryOptions = [
   _FormOption(id: 'registration', label: 'Registration'),
-  _FormOption(id: 'curriculum', label: 'Curriculum'),
   _FormOption(id: 'testing', label: 'Testing'),
   _FormOption(id: 'forms', label: 'Forms'),
   _FormOption(id: 'events', label: 'Events'),
+  _FormOption(id: 'academy-information', label: 'Academy Information'),
   _FormOption(id: 'general', label: 'General'),
 ];

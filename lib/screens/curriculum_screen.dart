@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import '../models/curriculum_requirement.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
+import '../widgets/admin/admin_bottom_nav_bar.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
 class CurriculumScreen extends StatefulWidget {
-  const CurriculumScreen({super.key});
+  const CurriculumScreen({this.isAdmin = false, super.key});
+
+  final bool isAdmin;
 
   @override
   State<CurriculumScreen> createState() => _CurriculumScreenState();
@@ -15,84 +18,73 @@ class CurriculumScreen extends StatefulWidget {
 class _CurriculumScreenState extends State<CurriculumScreen> {
   String _selectedBelt = 'White';
 
-  CurriculumRequirement get _selectedCurriculum =>
-      appDataService.curriculumForBelt(_selectedBelt);
-
   @override
   Widget build(BuildContext context) {
-    final curriculum = _selectedCurriculum;
+    final curriculum = appDataService.curriculumForBelt(_selectedBelt);
+    final content = _CurriculumContent(
+      curriculum: curriculum,
+      selectedBelt: _selectedBelt,
+      onBeltChanged: (belt) {
+        if (belt != null) setState(() => _selectedBelt = belt);
+      },
+    );
+
+    if (widget.isAdmin) {
+      return AdminPageShell(
+        selectedDestination: AdminNavDestination.resources,
+        title: 'Curriculum',
+        subtitle: 'Read-only curriculum content used by students and families.',
+        child: content,
+      );
+    }
 
     return Scaffold(
       backgroundColor: OtaColors.blush,
       body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _CurriculumHeader(
-                          selectedBelt: _selectedBelt,
-                          onBeltChanged: (belt) {
-                            if (belt == null) {
-                              return;
-                            }
-
-                            setState(() => _selectedBelt = belt);
-                          },
-                        ),
-                        const SizedBox(height: 18),
-                        CurriculumSectionCard(
-                          title: 'Forms',
-                          icon: Icons.sports_martial_arts_rounded,
-                          description:
-                              'Review forms, stance transitions, and practice sequences for ${appDataService.beltDisplayLabel(curriculum.belt)}.',
-                          items: curriculum.formItems,
-                          showVideoPlaceholder: true,
-                        ),
-                        const SizedBox(height: 14),
-                        CurriculumSectionCard(
-                          title: 'One-Step Sparring',
-                          icon: Icons.people_alt_rounded,
-                          description:
-                              'Practice timing, distance, and controlled partner responses.',
-                          items: curriculum.oneStepItems,
-                        ),
-                        const SizedBox(height: 14),
-                        CurriculumSectionCard(
-                          title: 'Wood-Breaking Technique',
-                          icon: Icons.fitness_center_rounded,
-                          description:
-                              'Prepare safe, powerful board-breaking technique with proper chamber and focus.',
-                          items: curriculum.breakingItems,
-                        ),
-                        const SizedBox(height: 14),
-                        CurriculumSectionCard(
-                          title: 'Physical Challenge',
-                          icon: Icons.directions_run_rounded,
-                          description:
-                              'Build the strength and endurance expected for promotion readiness.',
-                          items: curriculum.physicalChallengeItems,
-                          emptyMessage:
-                              'No physical challenge required for this belt.',
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 760),
+              child: content,
             ),
-          ],
+          ),
         ),
       ),
       bottomNavigationBar: const OtaBottomNavBar(
         selectedDestination: OtaBottomNavDestination.resources,
       ),
+    );
+  }
+}
+
+class _CurriculumContent extends StatelessWidget {
+  const _CurriculumContent({
+    required this.curriculum,
+    required this.selectedBelt,
+    required this.onBeltChanged,
+  });
+
+  final CurriculumRequirement curriculum;
+  final String selectedBelt;
+  final ValueChanged<String?> onBeltChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _CurriculumHeader(
+          selectedBelt: selectedBelt,
+          onBeltChanged: onBeltChanged,
+        ),
+        const SizedBox(height: 18),
+        for (final section in curriculum.sortedSections) ...[
+          CurriculumSectionCard(section: section),
+          if (section != curriculum.sortedSections.last)
+            const SizedBox(height: 14),
+        ],
+      ],
     );
   }
 }
@@ -108,90 +100,31 @@ class _CurriculumHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: OtaColors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: OtaColors.navy.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    return _Surface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: OtaColors.softRed,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(
-                  Icons.menu_book_rounded,
-                  color: OtaColors.maroon,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Curriculum',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(
-                            color: OtaColors.ink,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Review belt requirements and training material',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: OtaColors.mutedText,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Curriculum',
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
+            ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 6),
+          Text(
+            'Review belt requirements and training material.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: OtaColors.mutedText,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: selectedBelt,
-            isExpanded: true,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               labelText: 'Select Belt Level',
-              prefixIcon: const Icon(Icons.workspace_premium_rounded),
-              filled: true,
-              fillColor: OtaColors.blush,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide(
-                  color: OtaColors.navy.withValues(alpha: 0.06),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(
-                  color: OtaColors.maroon,
-                  width: 1.5,
-                ),
-              ),
+              border: OutlineInputBorder(),
             ),
             items: [
               for (final belt in appDataService.curriculumBeltOrder)
@@ -209,84 +142,31 @@ class _CurriculumHeader extends StatelessWidget {
 }
 
 class CurriculumSectionCard extends StatelessWidget {
-  const CurriculumSectionCard({
-    required this.title,
-    required this.icon,
-    required this.description,
-    required this.items,
-    this.emptyMessage,
-    this.showVideoPlaceholder = false,
-    super.key,
-  });
+  const CurriculumSectionCard({required this.section, super.key});
 
-  final String title;
-  final IconData icon;
-  final String description;
-  final List<String> items;
-  final String? emptyMessage;
-  final bool showVideoPlaceholder;
+  final CurriculumSection section;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: OtaColors.white,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: OtaColors.navy.withValues(alpha: 0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    final items = section.sortedItems;
+    return _Surface(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: OtaColors.softRed,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: Icon(icon, color: OtaColors.maroon, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: OtaColors.ink,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
           Text(
-            description,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: OtaColors.mutedText,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
+            section.title,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: OtaColors.ink,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          if (showVideoPlaceholder) ...[
-            const SizedBox(height: 16),
-            const _VideoPlaceholderCard(),
-          ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (items.isEmpty)
-            _RequirementRow(text: emptyMessage ?? 'No requirements listed.')
+            const Text('No requirements listed.')
           else
-            for (final item in items) ...[
-              _RequirementRow(text: item),
-              if (item != items.last) const SizedBox(height: 10),
+            for (var index = 0; index < items.length; index++) ...[
+              _CurriculumItemView(item: items[index]),
+              if (index != items.length - 1) const SizedBox(height: 10),
             ],
         ],
       ),
@@ -294,65 +174,52 @@ class CurriculumSectionCard extends StatelessWidget {
   }
 }
 
-class _VideoPlaceholderCard extends StatelessWidget {
-  const _VideoPlaceholderCard();
+class _CurriculumItemView extends StatelessWidget {
+  const _CurriculumItemView({required this.item});
+
+  final CurriculumItem item;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 156,
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [OtaColors.navy, OtaColors.maroon],
-        ),
+        color: item.contentType == CurriculumContentType.video
+            ? OtaColors.softRed
+            : const Color(0xFFF6F7F9),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Stack(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: -16,
-            top: -18,
-            child: Icon(
-              Icons.sports_martial_arts_rounded,
-              size: 118,
-              color: OtaColors.white.withValues(alpha: 0.08),
-            ),
+          Icon(
+            item.contentType == CurriculumContentType.video
+                ? Icons.play_circle_outline_rounded
+                : Icons.notes_rounded,
+            color: OtaColors.maroon,
           ),
-          Center(
+          const SizedBox(width: 10),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: OtaColors.white.withValues(alpha: 0.96),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: OtaColors.maroon,
-                    size: 38,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 Text(
-                  'Form video placeholder',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: OtaColors.white,
-                    fontWeight: FontWeight.w900,
+                  item.title,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Instructional video will be added later',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: OtaColors.white.withValues(alpha: 0.82),
-                    fontWeight: FontWeight.w600,
+                if (item.textContent != null && item.textContent != item.title)
+                  Text(item.textContent!),
+                if (item.videoUrl != null) ...[
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    item.videoUrl!,
+                    style: const TextStyle(color: OtaColors.maroon),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -362,37 +229,28 @@ class _VideoPlaceholderCard extends StatelessWidget {
   }
 }
 
-class _RequirementRow extends StatelessWidget {
-  const _RequirementRow({required this.text});
+class _Surface extends StatelessWidget {
+  const _Surface({required this.child});
 
-  final String text;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          margin: const EdgeInsets.only(top: 7),
-          decoration: const BoxDecoration(
-            color: OtaColors.actionRed,
-            shape: BoxShape.circle,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: OtaColors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE1E4EA)),
+        boxShadow: [
+          BoxShadow(
+            color: OtaColors.navy.withValues(alpha: 0.07),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: OtaColors.ink,
-              fontWeight: FontWeight.w600,
-              height: 1.32,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
+      child: child,
     );
   }
 }

@@ -67,6 +67,10 @@ class FirebaseAdminWriteService {
         : collection.doc(data.id);
     final now = DateTime.now();
     final createdAt = data.createdAt ?? now;
+    final linkedResourceIds = <String>{...data.linkedResourceIds};
+    if (data.primaryRegistrationResourceId != null) {
+      linkedResourceIds.add(data.primaryRegistrationResourceId!);
+    }
 
     await document.set({
       'title': data.title,
@@ -79,7 +83,7 @@ class FirebaseAdminWriteService {
       'registrationDeadline': data.registrationDeadline == null
           ? null
           : Timestamp.fromDate(data.registrationDeadline!),
-      'linkedResourceIds': List<String>.from(data.linkedResourceIds),
+      'linkedResourceIds': linkedResourceIds.toList()..sort(),
       'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
       'isPublished': data.isPublished,
       'showInResources': data.showInResources,
@@ -114,6 +118,7 @@ class FirebaseAdminWriteService {
     await document.set({
       'className': data.className,
       'classTypeId': data.classTypeId,
+      'bulkGroupId': data.bulkGroupId,
       'locationId': data.locationId,
       'weekday': data.weekday,
       'startTime': Timestamp.fromDate(data.startTime),
@@ -151,6 +156,7 @@ class FirebaseAdminWriteService {
     await document.set({
       'title': data.title,
       'description': data.description,
+      'resourceSection': data.resourceSection,
       'resourceType': data.resourceType,
       'category': data.category,
       'linkUrl': data.linkUrl,
@@ -331,6 +337,7 @@ class ResourceWriteData {
     required this.category,
     required this.locationId,
     required this.isPublished,
+    this.resourceSection = 'general',
     this.id,
     this.linkUrl,
     this.isArchived = false,
@@ -353,6 +360,7 @@ class ResourceWriteData {
       title: title,
       description: description,
       resourceType: resourceType,
+      resourceSection: resource.resourceSection,
       category: category,
       locationId: locationId,
       linkUrl: linkUrl,
@@ -366,6 +374,7 @@ class ResourceWriteData {
   final String title;
   final String description;
   final String resourceType;
+  final String resourceSection;
   final String category;
   final String? linkUrl;
   final String locationId;
@@ -378,10 +387,11 @@ class ClassSessionWriteData {
   const ClassSessionWriteData({
     required this.className,
     required this.classTypeId,
+    String? bulkGroupId,
     required this.locationId,
     required this.weekday,
-    required this.startTime,
-    required this.endTime,
+    required this.startMinutes,
+    required this.endMinutes,
     required this.eligibleBelts,
     required this.description,
     required this.isActive,
@@ -390,15 +400,16 @@ class ClassSessionWriteData {
     this.eligibilityNote,
     this.resumesOn,
     this.createdAt,
-  });
+  }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard';
 
   final String? id;
   final String className;
   final String classTypeId;
+  final String bulkGroupId;
   final String locationId;
   final int weekday;
-  final DateTime startTime;
-  final DateTime endTime;
+  final int startMinutes;
+  final int endMinutes;
   final List<String> eligibleBelts;
   final String description;
   final String? eligibilityNote;
@@ -407,7 +418,9 @@ class ClassSessionWriteData {
   final DateTime? resumesOn;
   final DateTime? createdAt;
 
-  int get startMinutes => startTime.hour * 60 + startTime.minute;
+  DateTime get startTime =>
+      DateTime(2026, 6, 21 + weekday, startMinutes ~/ 60, startMinutes % 60);
 
-  int get endMinutes => endTime.hour * 60 + endTime.minute;
+  DateTime get endTime =>
+      DateTime(2026, 6, 21 + weekday, endMinutes ~/ 60, endMinutes % 60);
 }

@@ -19,6 +19,16 @@ class StudentDashboardScreen extends StatelessWidget {
         final student = appDataService.selectedStudentProfile;
         final notifications = appDataService.notifications;
         final nextClass = appDataService.nextClassForDashboard();
+        final nextClassWeekday = nextClass == null
+            ? null
+            : appDataService.schedule.entries
+                  .where(
+                    (entry) => entry.value.any(
+                      (session) => session.id == nextClass.id,
+                    ),
+                  )
+                  .map((entry) => entry.key)
+                  .firstOrNull;
 
         return Scaffold(
           backgroundColor: OtaColors.blush,
@@ -36,7 +46,10 @@ class StudentDashboardScreen extends StatelessWidget {
                           children: [
                             _DashboardHeader(student: student),
                             const SizedBox(height: 22),
-                            _NextClassCard(nextClass: nextClass),
+                            _NextClassCard(
+                              nextClass: nextClass,
+                              weekday: nextClassWeekday,
+                            ),
                             const SizedBox(height: 16),
                             _BeltProgressCard(student: student),
                             const SizedBox(height: 16),
@@ -139,15 +152,16 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _NextClassCard extends StatelessWidget {
-  const _NextClassCard({required this.nextClass});
+  const _NextClassCard({required this.nextClass, required this.weekday});
 
   final ClassSession? nextClass;
+  final int? weekday;
 
   @override
   Widget build(BuildContext context) {
     final weekdayLabel = nextClass == null
         ? 'No upcoming class'
-        : _weekdayLabel(nextClass!.startTime.weekday);
+        : _weekdayLabel(weekday ?? DateTime.now().weekday);
     final timeLabel = nextClass?.timeRangeLabel ?? '--';
 
     return _DashboardCard(

@@ -3,6 +3,7 @@ class AcademyResource {
     required this.id,
     required this.title,
     required this.description,
+    this.resourceSection = 'general',
     required this.resourceType,
     required this.category,
     required this.locationId,
@@ -16,6 +17,7 @@ class AcademyResource {
   final String id;
   final String title;
   final String description;
+  final String resourceSection;
   final String resourceType;
   final String category;
   final String? linkUrl;
@@ -45,6 +47,7 @@ class AcademyResource {
       'testing' || 'beltTesting' || 'belt-testing' => 'Testing',
       'forms' || 'form' => 'Forms',
       'events' || 'event' => 'Events',
+      'academy-information' => 'Academy Information',
       _ => 'General',
     };
   }

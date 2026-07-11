@@ -4,6 +4,7 @@ abstract final class OtaRoutes {
   static const schedule = '/schedule';
   static const events = '/events';
   static const resources = '/resources';
+  static const generalResources = '/resources/general';
   static const curriculum = '/curriculum';
   static const notifications = '/notifications';
   static const profile = '/profile';
@@ -15,5 +16,7 @@ abstract final class OtaRoutes {
   static const adminAnnouncements = '/admin/announcements';
   static const adminSchedule = '/admin/schedule';
   static const adminResources = '/admin/resources';
+  static const adminGeneralResources = '/admin/resources/general';
+  static const adminCurriculum = '/admin/resources/curriculum';
   static const adminProfile = '/admin/profile';
 }
