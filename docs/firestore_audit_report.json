@@ -1,0 +1,1171 @@
+{
+  "generatedAt": "2026-07-11T23:26:06.212471Z",
+  "readOnly": true,
+  "totalIssueCount": 139,
+  "countsBySeverity": {
+    "info": 126,
+    "warning": 8,
+    "error": 5
+  },
+  "collections": [
+    {
+      "collection": "locations",
+      "documentCount": 1,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "collection": "users",
+      "documentCount": 1,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "collection": "studentProfiles",
+      "documentCount": 5,
+      "issueCount": 13,
+      "issues": [
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_aarav",
+          "issueCode": "student_profile.guardian_missing",
+          "severity": "error",
+          "message": "A guardian user reference does not exist.",
+          "recommendedAction": "Review the guardian relationship."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_aarav",
+          "issueCode": "student_profile.null_selfUserId",
+          "severity": "info",
+          "message": "selfUserId is explicitly null.",
+          "recommendedAction": "Omit the optional reference during cleanup."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_aarav",
+          "issueCode": "student_profile.age_without_date_of_birth",
+          "severity": "info",
+          "message": "age is present without dateOfBirth.",
+          "recommendedAction": "Keep age for now; consider a future date-of-birth migration."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_daniel",
+          "issueCode": "student_profile.null_selfUserId",
+          "severity": "info",
+          "message": "selfUserId is explicitly null.",
+          "recommendedAction": "Omit the optional reference during cleanup."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_daniel",
+          "issueCode": "student_profile.age_without_date_of_birth",
+          "severity": "info",
+          "message": "age is present without dateOfBirth.",
+          "recommendedAction": "Keep age for now; consider a future date-of-birth migration."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_elena",
+          "issueCode": "student_profile.guardian_missing",
+          "severity": "error",
+          "message": "A guardian user reference does not exist.",
+          "recommendedAction": "Review the guardian relationship."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_elena",
+          "issueCode": "student_profile.null_selfUserId",
+          "severity": "info",
+          "message": "selfUserId is explicitly null.",
+          "recommendedAction": "Omit the optional reference during cleanup."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_elena",
+          "issueCode": "student_profile.age_without_date_of_birth",
+          "severity": "info",
+          "message": "age is present without dateOfBirth.",
+          "recommendedAction": "Keep age for now; consider a future date-of-birth migration."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_maya",
+          "issueCode": "student_profile.guardian_missing",
+          "severity": "error",
+          "message": "A guardian user reference does not exist.",
+          "recommendedAction": "Review the guardian relationship."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_maya",
+          "issueCode": "student_profile.null_selfUserId",
+          "severity": "info",
+          "message": "selfUserId is explicitly null.",
+          "recommendedAction": "Omit the optional reference during cleanup."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_maya",
+          "issueCode": "student_profile.age_without_date_of_birth",
+          "severity": "info",
+          "message": "age is present without dateOfBirth.",
+          "recommendedAction": "Keep age for now; consider a future date-of-birth migration."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_sudhamsu",
+          "issueCode": "student_profile.null_selfUserId",
+          "severity": "info",
+          "message": "selfUserId is explicitly null.",
+          "recommendedAction": "Omit the optional reference during cleanup."
+        },
+        {
+          "collection": "studentProfiles",
+          "documentId": "student_sudhamsu",
+          "issueCode": "student_profile.age_without_date_of_birth",
+          "severity": "info",
+          "message": "age is present without dateOfBirth.",
+          "recommendedAction": "Keep age for now; consider a future date-of-birth migration."
+        }
+      ]
+    },
+    {
+      "collection": "classSessions",
+      "documentCount": 29,
+      "issueCount": 109,
+      "issues": [
+        {
+          "collection": "classSessions",
+          "documentId": "fri_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_level_3",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_level_3",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_level_3",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_level_3",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_little_tiger",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_little_tiger",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_little_tiger",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_sparring",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_sparring",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_sparring",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_sparring",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_teen_adult_sparring",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "fri_teen_adult_sparring",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_1",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_1",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_1",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_1",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_2",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_2",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_2",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_2",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_3",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_3",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_3",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_level_3",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_little_tiger",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_little_tiger",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_little_tiger",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_teen_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_teen_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_teen_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "mon_teen_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_adult",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_adult",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_adult",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_1",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_1",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_1",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_1",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_2",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_2",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_2",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_2",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_3",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_3",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_3",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_3",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_4",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_4",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_4",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "thu_level_4",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_adult",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_adult",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_adult",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_1",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_1",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_1",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_1",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_2",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_2",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_2",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_2",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_3",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_3",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_3",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_level_3",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_little_tiger",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_little_tiger",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "tue_little_tiger",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_1",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_1",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_1",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_1",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_2",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_2",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_2",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_2",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_3",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_3",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_3",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_3",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_4",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_4",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_4",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_level_4",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_teen_black_belt",
+          "issueCode": "class_session.legacy_startTime",
+          "severity": "info",
+          "message": "Legacy field startTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_teen_black_belt",
+          "issueCode": "class_session.legacy_endTime",
+          "severity": "info",
+          "message": "Legacy field endTime is present.",
+          "recommendedAction": "Remove it only in the future cleanup migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_teen_black_belt",
+          "issueCode": "class_session.null_eligibilityNote",
+          "severity": "info",
+          "message": "eligibilityNote is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        },
+        {
+          "collection": "classSessions",
+          "documentId": "wed_teen_black_belt",
+          "issueCode": "class_session.null_resumesOn",
+          "severity": "info",
+          "message": "resumesOn is explicitly null.",
+          "recommendedAction": "Omit this optional field in a future migration."
+        }
+      ]
+    },
+    {
+      "collection": "announcements",
+      "documentCount": 8,
+      "issueCount": 1,
+      "issues": [
+        {
+          "collection": "announcements",
+          "documentId": "curriculum_videos_available",
+          "issueCode": "announcement.placeholder_content",
+          "severity": "warning",
+          "message": "Title or content looks like placeholder data.",
+          "recommendedAction": "Review the announcement manually."
+        }
+      ]
+    },
+    {
+      "collection": "events",
+      "documentCount": 3,
+      "issueCount": 6,
+      "issues": [
+        {
+          "collection": "events",
+          "documentId": "fall_tournament",
+          "issueCode": "event.registration_url_without_resource",
+          "severity": "warning",
+          "message": "registrationUrl is present without a General Resource relationship.",
+          "recommendedAction": "Create or link a General Resource after review."
+        },
+        {
+          "collection": "events",
+          "documentId": "fall_tournament",
+          "issueCode": "event.legacy_show_in_resources",
+          "severity": "info",
+          "message": "Legacy showInResources field is present.",
+          "recommendedAction": "Retain it until the future cleanup migration."
+        },
+        {
+          "collection": "events",
+          "documentId": "fall_tournament",
+          "issueCode": "event.placeholder_registration_url",
+          "severity": "warning",
+          "message": "registrationUrl looks like sample or placeholder data.",
+          "recommendedAction": "Review the URL manually."
+        },
+        {
+          "collection": "events",
+          "documentId": "parent_night_out",
+          "issueCode": "event.legacy_show_in_resources",
+          "severity": "info",
+          "message": "Legacy showInResources field is present.",
+          "recommendedAction": "Retain it until the future cleanup migration."
+        },
+        {
+          "collection": "events",
+          "documentId": "parent_night_out",
+          "issueCode": "event.placeholder_registration_url",
+          "severity": "warning",
+          "message": "registrationUrl looks like sample or placeholder data.",
+          "recommendedAction": "Review the URL manually."
+        },
+        {
+          "collection": "events",
+          "documentId": "summer_belt_testing",
+          "issueCode": "event.legacy_show_in_resources",
+          "severity": "info",
+          "message": "Legacy showInResources field is present.",
+          "recommendedAction": "Retain it until the future cleanup migration."
+        }
+      ]
+    },
+    {
+      "collection": "resources",
+      "documentCount": 3,
+      "issueCount": 10,
+      "issues": [
+        {
+          "collection": "resources",
+          "documentId": "belt_testing_checklist",
+          "issueCode": "resources.missing_resourceType",
+          "severity": "error",
+          "message": "resourceType is missing or empty.",
+          "recommendedAction": "Set the required field."
+        },
+        {
+          "collection": "resources",
+          "documentId": "belt_testing_checklist",
+          "issueCode": "resource.noncanonical_category",
+          "severity": "warning",
+          "message": "category is not canonical.",
+          "recommendedAction": "Normalize the category in a future migration."
+        },
+        {
+          "collection": "resources",
+          "documentId": "belt_testing_checklist",
+          "issueCode": "resource.legacy_url",
+          "severity": "info",
+          "message": "Legacy url field is present.",
+          "recommendedAction": "Keep reading it until the cleanup migration removes it."
+        },
+        {
+          "collection": "resources",
+          "documentId": "belt_testing_checklist",
+          "issueCode": "resource.null_url",
+          "severity": "info",
+          "message": "url is explicitly null.",
+          "recommendedAction": "Omit the optional field during cleanup."
+        },
+        {
+          "collection": "resources",
+          "documentId": "belt_testing_checklist",
+          "issueCode": "resource.placeholder_description",
+          "severity": "warning",
+          "message": "The description looks like placeholder content.",
+          "recommendedAction": "Review the content manually."
+        },
+        {
+          "collection": "resources",
+          "documentId": "parent_night_out_registration",
+          "issueCode": "resource.placeholder_url",
+          "severity": "warning",
+          "message": "A resource URL looks like sample or placeholder data.",
+          "recommendedAction": "Review the URL manually."
+        },
+        {
+          "collection": "resources",
+          "documentId": "student_handbook",
+          "issueCode": "resources.missing_resourceType",
+          "severity": "error",
+          "message": "resourceType is missing or empty.",
+          "recommendedAction": "Set the required field."
+        },
+        {
+          "collection": "resources",
+          "documentId": "student_handbook",
+          "issueCode": "resource.legacy_url",
+          "severity": "info",
+          "message": "Legacy url field is present.",
+          "recommendedAction": "Keep reading it until the cleanup migration removes it."
+        },
+        {
+          "collection": "resources",
+          "documentId": "student_handbook",
+          "issueCode": "resource.null_url",
+          "severity": "info",
+          "message": "url is explicitly null.",
+          "recommendedAction": "Omit the optional field during cleanup."
+        },
+        {
+          "collection": "resources",
+          "documentId": "student_handbook",
+          "issueCode": "resource.placeholder_description",
+          "severity": "warning",
+          "message": "The description looks like placeholder content.",
+          "recommendedAction": "Review the content manually."
+        }
+      ]
+    }
+  ]
+}

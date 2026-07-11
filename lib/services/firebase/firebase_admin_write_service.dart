@@ -18,29 +18,10 @@ class FirebaseAdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    final createdAt = data.createdAt ?? now;
-    final publishedAt = data.publishedAt ?? now;
-
-    await document.set({
-      'title': data.title,
-      'summary': data.summary,
-      'body': data.body,
-      'announcementType': data.announcementType,
-      'priority': data.priority,
-      'requiresAction': data.requiresAction,
-      'status': data.status,
-      'audienceType': data.audienceType,
-      'locationId': data.locationId,
-      'publishedAt': Timestamp.fromDate(publishedAt),
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(now),
-      'targetBelts': List<String>.from(data.targetBelts),
-      'targetClassTypeIds': List<String>.from(data.targetClassTypeIds),
-      'targetStudentProfileIds': List<String>.from(
-        data.targetStudentProfileIds,
-      ),
-      'targetUserIds': List<String>.from(data.targetUserIds),
-    }, SetOptions(merge: true));
+    await document.set(
+      announcementWriteFields(data, now: now),
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> archiveAnnouncement(String announcementId) async {
@@ -139,18 +120,68 @@ Map<String, Object?> resourceWriteFields(
   ResourceWriteData data, {
   required DateTime now,
 }) {
-  return {
+  final resourceType = data.resourceType.trim();
+  if (resourceType.isEmpty) {
+    throw ArgumentError.value(
+      data.resourceType,
+      'resourceType',
+      'Resource type must not be empty.',
+    );
+  }
+  return <String, Object?>{
     'title': data.title,
     'description': data.description,
-    'resourceSection': data.resourceSection,
-    'resourceType': data.resourceType,
-    'category': data.category,
-    'linkUrl': data.linkUrl,
+    'resourceSection': 'general',
+    'resourceType': resourceType,
+    'category': normalizeResourceCategory(data.category),
+    if (data.linkUrl != null && data.linkUrl!.trim().isNotEmpty)
+      'linkUrl': data.linkUrl!.trim(),
     'locationId': data.locationId,
     'isPublished': data.isPublished,
     'isArchived': data.isArchived,
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
+  };
+}
+
+String normalizeResourceCategory(String value) {
+  final trimmed = value.trim();
+  final compact = trimmed.replaceAll(RegExp(r'[_\s-]+'), '').toLowerCase();
+  return switch (compact) {
+    'belttesting' => 'testing',
+    'testing' => 'testing',
+    'registration' => 'registration',
+    'event' || 'events' => 'events',
+    'form' || 'forms' => 'forms',
+    'academyinformation' => 'academy-information',
+    'general' => 'general',
+    _ => trimmed.toLowerCase().replaceAll(RegExp(r'[_\s]+'), '-'),
+  };
+}
+
+Map<String, Object?> announcementWriteFields(
+  AnnouncementWriteData data, {
+  required DateTime now,
+}) {
+  final publishedAt =
+      data.publishedAt ?? (data.status == 'published' ? now : null);
+  return <String, Object?>{
+    'title': data.title,
+    'summary': data.summary,
+    'body': data.body,
+    'announcementType': data.announcementType,
+    'priority': data.priority == 'critical' ? 'important' : data.priority,
+    'requiresAction': data.requiresAction,
+    'status': data.status,
+    'audienceType': data.audienceType,
+    'locationId': data.locationId,
+    if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt),
+    'createdAt': Timestamp.fromDate(data.createdAt ?? now),
+    'updatedAt': Timestamp.fromDate(now),
+    'targetBelts': List<String>.from(data.targetBelts),
+    'targetClassTypeIds': List<String>.from(data.targetClassTypeIds),
+    'targetStudentProfileIds': List<String>.from(data.targetStudentProfileIds),
+    'targetUserIds': List<String>.from(data.targetUserIds),
   };
 }
 
@@ -177,7 +208,7 @@ Map<String, Object?> eventWriteFields(
     'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
     'isPublished': data.isPublished,
     'showInResources': data.showInResources,
-    'isArchived': false,
+    'isArchived': data.isArchived,
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };
@@ -193,18 +224,16 @@ Map<String, Object?> classSessionWriteFields(
     'bulkGroupId': data.bulkGroupId,
     'locationId': data.locationId,
     'weekday': data.weekday,
-    'startTime': Timestamp.fromDate(data.startTime),
-    'endTime': Timestamp.fromDate(data.endTime),
     'startMinutes': data.startMinutes,
     'endMinutes': data.endMinutes,
     'eligibleBelts': List<String>.from(data.eligibleBelts),
     'description': data.description,
-    'eligibilityNote': data.eligibilityNote,
+    if (data.eligibilityNote != null && data.eligibilityNote!.trim().isNotEmpty)
+      'eligibilityNote': data.eligibilityNote!.trim(),
     'isActive': data.isActive,
     'isPreferred': data.isPreferred,
-    'resumesOn': data.resumesOn == null
-        ? null
-        : Timestamp.fromDate(data.resumesOn!),
+    if (data.resumesOn != null)
+      'resumesOn': Timestamp.fromDate(data.resumesOn!),
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };
@@ -300,6 +329,7 @@ class EventWriteData {
     this.registrationDeadline,
     this.linkedResourceIds = const <String>[],
     this.primaryRegistrationResourceId,
+    this.isArchived = false,
     this.createdAt,
   });
 
@@ -332,6 +362,7 @@ class EventWriteData {
       primaryRegistrationResourceId: primaryRegistrationResourceId,
       isPublished: isPublished,
       showInResources: showInResources,
+      isArchived: event.isArchived,
       createdAt: event.createdAt,
     );
   }
@@ -349,6 +380,7 @@ class EventWriteData {
   final String? primaryRegistrationResourceId;
   final bool isPublished;
   final bool showInResources;
+  final bool isArchived;
   final DateTime? createdAt;
 }
 
