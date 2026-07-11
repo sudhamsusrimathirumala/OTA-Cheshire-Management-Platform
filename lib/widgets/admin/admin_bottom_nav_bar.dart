@@ -23,9 +23,14 @@ enum AdminNavDestination {
 }
 
 class AdminNavigationBar extends StatefulWidget {
-  const AdminNavigationBar({required this.selectedDestination, super.key});
+  const AdminNavigationBar({
+    required this.selectedDestination,
+    this.onSelectedDestinationTap,
+    super.key,
+  });
 
   final AdminNavDestination selectedDestination;
+  final VoidCallback? onSelectedDestinationTap;
 
   @override
   State<AdminNavigationBar> createState() => _AdminNavigationBarState();
@@ -91,6 +96,9 @@ class _AdminNavigationBarState extends State<AdminNavigationBar> {
               _AdminNavTab(
                 destination: destination,
                 isSelected: destination == widget.selectedDestination,
+                onSelectedTap: destination == widget.selectedDestination
+                    ? widget.onSelectedDestinationTap
+                    : null,
               ),
           ],
         ),
@@ -105,6 +113,7 @@ class AdminPageShell extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    this.onSelectedDestinationTap,
     super.key,
   });
 
@@ -112,6 +121,7 @@ class AdminPageShell extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
+  final VoidCallback? onSelectedDestinationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +132,10 @@ class AdminPageShell extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const _AdminTopHeader(),
-            AdminNavigationBar(selectedDestination: selectedDestination),
+            AdminNavigationBar(
+              selectedDestination: selectedDestination,
+              onSelectedDestinationTap: onSelectedDestinationTap,
+            ),
             Expanded(
               child: _AdminContentTransition(
                 child: SingleChildScrollView(
@@ -377,16 +390,21 @@ class _AdminPageTitle extends StatelessWidget {
 }
 
 class _AdminNavTab extends StatelessWidget {
-  const _AdminNavTab({required this.destination, required this.isSelected});
+  const _AdminNavTab({
+    required this.destination,
+    required this.isSelected,
+    this.onSelectedTap,
+  });
 
   final AdminNavDestination destination;
   final bool isSelected;
+  final VoidCallback? onSelectedTap;
 
   @override
   Widget build(BuildContext context) {
     return TextButton(
       onPressed: isSelected
-          ? null
+          ? onSelectedTap
           : () {
               Navigator.of(context).pushReplacementNamed(destination.route);
             },

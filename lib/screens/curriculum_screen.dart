@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/curriculum_requirement.dart';
+import '../routes.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/admin/admin_bottom_nav_bar.dart';
@@ -34,6 +35,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
         selectedDestination: AdminNavDestination.resources,
         title: 'Curriculum',
         subtitle: 'Read-only curriculum content used by students and families.',
+        onSelectedDestinationTap: () => Navigator.of(
+          context,
+        ).pushReplacementNamed(OtaRoutes.adminResources),
         child: content,
       );
     }
@@ -46,13 +50,24 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
-              child: content,
+              child: _CurriculumContent(
+                curriculum: curriculum,
+                selectedBelt: _selectedBelt,
+                onBeltChanged: (belt) {
+                  if (belt != null) setState(() => _selectedBelt = belt);
+                },
+                onBack: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed(OtaRoutes.resources),
+              ),
             ),
           ),
         ),
       ),
-      bottomNavigationBar: const OtaBottomNavBar(
+      bottomNavigationBar: OtaBottomNavBar(
         selectedDestination: OtaBottomNavDestination.resources,
+        onSelectedDestinationTap: () =>
+            Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
       ),
     );
   }
@@ -63,11 +78,13 @@ class _CurriculumContent extends StatelessWidget {
     required this.curriculum,
     required this.selectedBelt,
     required this.onBeltChanged,
+    this.onBack,
   });
 
   final CurriculumRequirement curriculum;
   final String selectedBelt;
   final ValueChanged<String?> onBeltChanged;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -77,6 +94,7 @@ class _CurriculumContent extends StatelessWidget {
         _CurriculumHeader(
           selectedBelt: selectedBelt,
           onBeltChanged: onBeltChanged,
+          onBack: onBack,
         ),
         const SizedBox(height: 18),
         for (final section in curriculum.sortedSections) ...[
@@ -93,10 +111,12 @@ class _CurriculumHeader extends StatelessWidget {
   const _CurriculumHeader({
     required this.selectedBelt,
     required this.onBeltChanged,
+    this.onBack,
   });
 
   final String selectedBelt;
   final ValueChanged<String?> onBeltChanged;
+  final VoidCallback? onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -104,12 +124,24 @@ class _CurriculumHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Curriculum',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: OtaColors.ink,
-              fontWeight: FontWeight.w900,
-            ),
+          Row(
+            children: [
+              IconButton.filledTonal(
+                onPressed: onBack ?? () => Navigator.maybePop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Back',
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Curriculum',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(

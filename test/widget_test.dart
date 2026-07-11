@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
+import 'package:ota_cheshire_management_platform/models/academy_event.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
@@ -13,20 +15,26 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_resources_s
 import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/events_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/resource_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/resources_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
+import 'package:ota_cheshire_management_platform/services/app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_migration_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
+import 'package:ota_cheshire_management_platform/widgets/admin/admin_bottom_nav_bar.dart';
+import 'package:ota_cheshire_management_platform/widgets/ota_bottom_nav_bar.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/general_resources_view.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/resources_landing_view.dart';
+import 'package:ota_cheshire_management_platform/widgets/schedule_time_field.dart';
 
 void main() {
   test(
@@ -134,6 +142,20 @@ void main() {
     expect(find.textContaining('Next eligible class:'), findsOneWidget);
   });
 
+  testWidgets('schedule defaults to Day and keeps Week optional', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(home: ScheduleScreen(initialDate: DateTime(2026, 6, 22))),
+    );
+
+    expect(find.text('12 AM'), findsWidgets);
+    await tester.tap(find.text('Week'));
+    await tester.pumpAndSettle();
+    expect(find.text('12 AM'), findsNothing);
+    expect(find.text('Sunday'), findsWidgets);
+  });
+
   testWidgets('bottom navigation opens every primary destination', (
     tester,
   ) async {
@@ -184,7 +206,9 @@ void main() {
     expect(find.byType(AdminScheduleScreen), findsOneWidget);
 
     await tester.ensureVisible(find.widgetWithText(TextButton, 'Resources'));
-    await tester.tap(find.widgetWithText(TextButton, 'Resources'));
+    final resourcesTab = find.widgetWithText(TextButton, 'Resources');
+    await tester.ensureVisible(resourcesTab);
+    await tester.tap(resourcesTab);
     await tester.pumpAndSettle();
     expect(find.byType(AdminResourcesScreen), findsOneWidget);
 
@@ -303,6 +327,52 @@ void main() {
     expect(find.text('Advanced transition sequence'), findsOneWidget);
   });
 
+  testWidgets('curriculum screen provides a back button', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: CurriculumScreen()));
+
+    expect(find.byTooltip('Back'), findsOneWidget);
+  });
+
+  testWidgets('selected student resources destination can return home', (
+    tester,
+  ) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          bottomNavigationBar: OtaBottomNavBar(
+            selectedDestination: OtaBottomNavDestination.resources,
+            onSelectedDestinationTap: () => tapped = true,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Resources'));
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('selected admin resources destination can return home', (
+    tester,
+  ) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AdminNavigationBar(
+            selectedDestination: AdminNavDestination.resources,
+            onSelectedDestinationTap: () => tapped = true,
+          ),
+        ),
+      ),
+    );
+
+    final resourcesTab = find.widgetWithText(TextButton, 'Resources');
+    await tester.ensureVisible(resourcesTab);
+    await tester.tap(resourcesTab);
+    expect(tapped, isTrue);
+  });
+
   testWidgets('student and admin resources landings share two destinations', (
     tester,
   ) async {
@@ -360,6 +430,69 @@ void main() {
     );
     expect(find.text('Create Resource'), findsOneWidget);
     expect(find.byTooltip('Edit resource'), findsWidgets);
+
+    await tester.tap(find.text('Create Resource'));
+    await tester.pumpAndSettle();
+    expect(find.text('Save Draft'), findsOneWidget);
+    expect(find.text('Publish Resource'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Edit resource').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Resource'), findsOneWidget);
+    expect(find.text('Update Published Resource'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Resource actions').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Archive'), findsOneWidget);
+    expect(find.text('Delete'), findsOneWidget);
+  });
+
+  testWidgets('student resource card opens resource detail page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: GeneralResourcesScreen()));
+
+    await tester.tap(find.text('Parent Night Out Registration'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ResourceDetailScreen), findsOneWidget);
+    expect(find.text('Resource Detail'), findsOneWidget);
+    expect(
+      find.text('Registration form for the next Parent Night Out event.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('admin resource card opens detail with status', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: AdminGeneralResourcesScreen()),
+    );
+
+    await tester.tap(find.text('Parent Night Out Registration'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ResourceDetailScreen), findsOneWidget);
+    expect(find.text('Published'), findsOneWidget);
+  });
+
+  testWidgets('event popup opens its linked resource detail page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: EventsScreen()));
+
+    await tester.tap(find.text('Parent Night Out').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Go to Resource for Event'), findsOneWidget);
+
+    await tester.tap(find.text('Go to Resource for Event'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ResourceDetailScreen), findsOneWidget);
+    expect(find.text('Parent Night Out Registration'), findsOneWidget);
   });
 
   testWidgets('admin curriculum is read only', (tester) async {
@@ -404,6 +537,71 @@ void main() {
     expect(validatePublishedEventResource(draft), isNotNull);
     expect(validatePublishedEventResource(archived), isNotNull);
     expect(validatePublishedEventResource(options.last), isNull);
+  });
+
+  test('student resources only include visible matching general resources', () {
+    AcademyResource resource(
+      String id, {
+      String locationId = 'ota-cheshire',
+      String section = 'general',
+      bool published = true,
+      bool archived = false,
+    }) => AcademyResource(
+      id: id,
+      title: id,
+      description: '',
+      resourceSection: section,
+      resourceType: 'document',
+      category: 'general',
+      locationId: locationId,
+      isPublished: published,
+      isArchived: archived,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+
+    final visible = visibleStudentGeneralResources([
+      resource('published'),
+      resource('draft', published: false),
+      resource('archived', archived: true),
+      resource('curriculum', section: 'curriculum'),
+      resource('other-location', locationId: 'other-location'),
+    ], locationId: 'ota-cheshire');
+
+    expect(visible.map((resource) => resource.id), ['published']);
+  });
+
+  test('dashboard next class never falls back to an ineligible class', () {
+    final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
+    final ineligibleClass = mondayClasses.firstWhere(
+      (session) => session.className == 'Little Tiger (Age 3-5)',
+    );
+    final eligibleClass = mondayClasses.firstWhere(
+      (session) => session.className == 'Teen & Black Belt',
+    );
+
+    expect(
+      nextEligibleClassFromSchedule(
+        {
+          DateTime.monday: [ineligibleClass],
+        },
+        appDataService.selectedStudentProfile,
+        currentWeekday: DateTime.sunday,
+        currentMinutes: 0,
+      ),
+      isNull,
+    );
+    expect(
+      nextEligibleClassFromSchedule(
+        {
+          DateTime.monday: [ineligibleClass, eligibleClass],
+        },
+        appDataService.selectedStudentProfile,
+        currentWeekday: DateTime.sunday,
+        currentMinutes: 0,
+      ),
+      same(eligibleClass),
+    );
   });
 
   test('curriculum supports sorted multiple video and text items', () {
@@ -506,6 +704,181 @@ void main() {
     expect(data.startMinutes, 1160);
     expect(data.startTime.hour, 19);
     expect(data.startTime.minute, 20);
+    expect(data.bulkGroupId, 'teen-adult-evening');
+    expect(minutesForTimeOfDay(const TimeOfDay(hour: 19, minute: 20)), 1160);
+  });
+
+  test('resource write fields preserve edit identity and schema', () {
+    final createdAt = DateTime.utc(2026, 6, 1, 12);
+    final now = DateTime.utc(2026, 7, 11, 15);
+    final resource = AcademyResource(
+      id: 'existing-resource',
+      title: 'Original',
+      description: 'Original description',
+      resourceType: 'document',
+      category: 'forms',
+      locationId: 'ota-cheshire',
+      isPublished: true,
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+    final data = ResourceWriteData.fromResource(
+      resource,
+      title: 'Updated',
+      description: 'Updated description',
+      resourceType: 'document',
+      category: 'forms',
+      locationId: resource.locationId,
+      isPublished: true,
+      linkUrl: 'https://example.com/resource',
+    );
+    final fields = resourceWriteFields(data, now: now);
+
+    expect(data.id, 'existing-resource');
+    expect(data.createdAt, createdAt);
+    expect(fields['resourceSection'], 'general');
+    expect(fields['locationId'], 'ota-cheshire');
+    expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
+    expect((fields['updatedAt']! as Timestamp).toDate().toUtc(), now);
+    expect(
+      fields.keys,
+      containsAll(<String>{
+        'title',
+        'description',
+        'resourceSection',
+        'resourceType',
+        'category',
+        'linkUrl',
+        'locationId',
+        'isPublished',
+        'isArchived',
+        'createdAt',
+        'updatedAt',
+      }),
+    );
+  });
+
+  test('event write fields synchronize and can clear primary resource', () {
+    final createdAt = DateTime.utc(2026, 6, 1, 12);
+    final now = DateTime.utc(2026, 7, 11, 15);
+    final event = AcademyEvent(
+      id: 'event-1',
+      title: 'Event',
+      description: 'Description',
+      locationId: 'ota-cheshire',
+      eventType: 'specialEvent',
+      startDateTime: DateTime.utc(2026, 7, 20, 23, 30),
+      endDateTime: DateTime.utc(2026, 7, 21, 1),
+      linkedResourceIds: const ['old-resource'],
+      primaryRegistrationResourceId: 'old-resource',
+      isPublished: false,
+      showInResources: false,
+      createdAt: createdAt,
+      updatedAt: createdAt,
+    );
+    final cleared = EventWriteData.fromEvent(
+      event,
+      title: event.title,
+      description: event.description,
+      locationId: event.locationId,
+      eventType: event.eventType,
+      startDateTime: event.startDateTime,
+      endDateTime: event.endDateTime,
+      linkedResourceIds: const [],
+      primaryRegistrationResourceId: null,
+      isPublished: false,
+      showInResources: false,
+    );
+    expect(cleared.primaryRegistrationResourceId, isNull);
+
+    final linked = EventWriteData(
+      id: event.id,
+      title: event.title,
+      description: event.description,
+      locationId: event.locationId,
+      eventType: event.eventType,
+      startDateTime: event.startDateTime,
+      endDateTime: event.endDateTime,
+      linkedResourceIds: const [],
+      primaryRegistrationResourceId: 'new-resource',
+      isPublished: true,
+      showInResources: true,
+      createdAt: createdAt,
+    );
+    final fields = eventWriteFields(linked, now: now);
+    expect(fields['linkedResourceIds'], ['new-resource']);
+    expect(fields['primaryRegistrationResourceId'], 'new-resource');
+    expect(
+      (fields['startDateTime']! as Timestamp).toDate().toUtc(),
+      event.startDateTime,
+    );
+    expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
+    expect(
+      fields.keys,
+      containsAll(<String>{
+        'title',
+        'description',
+        'locationId',
+        'eventType',
+        'startDateTime',
+        'endDateTime',
+        'registrationDeadline',
+        'registrationUrl',
+        'linkedResourceIds',
+        'primaryRegistrationResourceId',
+        'isPublished',
+        'isArchived',
+        'createdAt',
+        'updatedAt',
+      }),
+    );
+  });
+
+  test('class session write fields preserve schedule edit metadata', () {
+    final createdAt = DateTime.utc(2026, 6, 1, 12);
+    final now = DateTime.utc(2026, 7, 11, 15);
+    final data = ClassSessionWriteData(
+      id: 'fri-sparring',
+      className: 'Teen/Adult Sparring',
+      classTypeId: 'teen-adult',
+      bulkGroupId: 'teen-adult-evening',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.friday,
+      startMinutes: 1160,
+      endMinutes: 1200,
+      eligibleBelts: const ['Red-Black', 'Black'],
+      description: 'Sparring',
+      eligibilityNote: 'Instructor approval',
+      isActive: true,
+      isPreferred: false,
+      createdAt: createdAt,
+    );
+    final fields = classSessionWriteFields(data, now: now);
+
+    expect(fields['weekday'], DateTime.friday);
+    expect(fields['startMinutes'], 1160);
+    expect(fields['endMinutes'], 1200);
+    expect(fields['bulkGroupId'], 'teen-adult-evening');
+    expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
+    expect(
+      fields.keys,
+      containsAll(<String>{
+        'className',
+        'classTypeId',
+        'bulkGroupId',
+        'locationId',
+        'weekday',
+        'startMinutes',
+        'endMinutes',
+        'eligibleBelts',
+        'description',
+        'eligibilityNote',
+        'isActive',
+        'isPreferred',
+        'createdAt',
+        'updatedAt',
+      }),
+    );
   });
 
   testWidgets('combined date time field preserves value when canceled', (

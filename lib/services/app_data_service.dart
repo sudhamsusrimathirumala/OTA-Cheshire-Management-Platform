@@ -60,3 +60,19 @@ abstract class AppDataService implements Listenable {
 
   List<AcademyResource> get resources;
 }
+
+ClassSession? nextEligibleClassFromSchedule(
+  Map<int, List<ClassSession>> schedule,
+  StudentProfile student, {
+  required int currentWeekday,
+  required int currentMinutes,
+}) {
+  for (var offset = 0; offset < DateTime.daysPerWeek; offset++) {
+    final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
+    for (final session in schedule[weekday] ?? const <ClassSession>[]) {
+      if (offset == 0 && session.endMinutes <= currentMinutes) continue;
+      if (session.isEligibleFor(student)) return session;
+    }
+  }
+  return null;
+}

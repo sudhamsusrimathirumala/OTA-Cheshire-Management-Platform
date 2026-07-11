@@ -6,6 +6,7 @@ import '../models/academy_resource.dart';
 import '../services/app_data_service_provider.dart';
 import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
+import 'resource_detail_screen.dart';
 
 class EventsScreen extends StatelessWidget {
   const EventsScreen({super.key});
@@ -257,6 +258,7 @@ void _showEventDetails(
   final primaryResource = event.primaryRegistrationResourceId == null
       ? null
       : resourcesById[event.primaryRegistrationResourceId];
+  final eventResource = primaryResource ?? linkedResources.firstOrNull;
 
   showModalBottomSheet<void>(
     context: context,
@@ -297,6 +299,33 @@ void _showEventDetails(
                   height: 1.35,
                 ),
               ),
+              if (eventResource != null) ...[
+                const SizedBox(height: 18),
+                FilledButton(
+                  onPressed: () {
+                    final navigator = Navigator.of(context);
+                    Navigator.of(context).pop();
+                    navigator.push(
+                      MaterialPageRoute<void>(
+                        builder: (context) =>
+                            ResourceDetailScreen(resource: eventResource),
+                      ),
+                    );
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: OtaColors.maroon,
+                    foregroundColor: OtaColors.white,
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text('Go to Resource for Event'),
+                      SizedBox(width: 8),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
+                  ),
+                ),
+              ],
               if (primaryResource != null) ...[
                 const SizedBox(height: 18),
                 _DetailSectionTitle(label: 'Registration'),

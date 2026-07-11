@@ -304,24 +304,16 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       return _fallbackService.nextClassForDashboard();
     }
 
-    final weekdays = _weekdaysStartingWith(DateTime.now().weekday);
-
-    for (final weekday in weekdays) {
-      for (final session in scheduleForWeekday(weekday)) {
-        if (session.isEligibleFor(selectedStudentProfile)) {
-          return session;
-        }
-      }
-    }
-
-    for (final weekday in weekdays) {
-      final sessions = scheduleForWeekday(weekday);
-      if (sessions.isNotEmpty) {
-        return sessions.first;
-      }
-    }
-
-    return null;
+    final academyNow = const LocationTimeService().toLocationTime(
+      DateTime.now(),
+      selectedStudentProfile.locationId,
+    );
+    return nextEligibleClassFromSchedule(
+      schedule,
+      selectedStudentProfile,
+      currentWeekday: academyNow.weekday,
+      currentMinutes: academyNow.hour * 60 + academyNow.minute,
+    );
   }
 
   // TODO: Replace mock delegation with Firestore-backed curriculum resources.
@@ -438,6 +430,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           _boolValue(data['isPublished']) ??
           true,
       resumesOn: _dateTimeValue(data['resumesOn']),
+      createdAt: _dateTimeValue(data['createdAt']),
+      updatedAt: _dateTimeValue(data['updatedAt']),
     );
   }
 
@@ -825,13 +819,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     return selectedStudentProfile.locationId;
   }
-}
-
-List<int> _weekdaysStartingWith(int weekday) {
-  return [
-    for (var offset = 0; offset < DateTime.daysPerWeek; offset++)
-      ((weekday + offset - 1) % DateTime.daysPerWeek) + 1,
-  ];
 }
 
 DateTime _dateTimeFromWeekdayAndMinutes(int weekday, int minutes) {

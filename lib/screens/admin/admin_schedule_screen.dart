@@ -675,6 +675,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       isActive: _isActive,
       isPreferred: _isPreferred,
       resumesOn: session?.resumesOn,
+      createdAt: session?.createdAt,
     );
 
     Navigator.of(context).pop(data);

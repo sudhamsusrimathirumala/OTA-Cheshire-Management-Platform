@@ -40,7 +40,9 @@ class ScheduleTimeField extends StatelessWidget {
           : TimeOfDay(hour: current ~/ 60, minute: current % 60),
     );
     if (selected != null) {
-      onChanged(selected.hour * 60 + selected.minute);
+      onChanged(minutesForTimeOfDay(selected));
     }
   }
 }
+
+int minutesForTimeOfDay(TimeOfDay time) => time.hour * 60 + time.minute;

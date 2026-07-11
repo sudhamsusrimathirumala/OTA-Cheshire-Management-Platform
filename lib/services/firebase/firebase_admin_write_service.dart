@@ -66,31 +66,10 @@ class FirebaseAdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    final createdAt = data.createdAt ?? now;
-    final linkedResourceIds = <String>{...data.linkedResourceIds};
-    if (data.primaryRegistrationResourceId != null) {
-      linkedResourceIds.add(data.primaryRegistrationResourceId!);
-    }
-
-    await document.set({
-      'title': data.title,
-      'description': data.description,
-      'locationId': data.locationId,
-      'eventType': data.eventType,
-      'startDateTime': Timestamp.fromDate(data.startDateTime),
-      'endDateTime': Timestamp.fromDate(data.endDateTime),
-      'registrationUrl': data.registrationUrl,
-      'registrationDeadline': data.registrationDeadline == null
-          ? null
-          : Timestamp.fromDate(data.registrationDeadline!),
-      'linkedResourceIds': linkedResourceIds.toList()..sort(),
-      'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
-      'isPublished': data.isPublished,
-      'showInResources': data.showInResources,
-      'isArchived': false,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(now),
-    }, SetOptions(merge: true));
+    await document.set(
+      eventWriteFields(data, now: now),
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> archiveEvent(String eventId) async {
@@ -113,29 +92,10 @@ class FirebaseAdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    final createdAt = data.createdAt ?? now;
-
-    await document.set({
-      'className': data.className,
-      'classTypeId': data.classTypeId,
-      'bulkGroupId': data.bulkGroupId,
-      'locationId': data.locationId,
-      'weekday': data.weekday,
-      'startTime': Timestamp.fromDate(data.startTime),
-      'endTime': Timestamp.fromDate(data.endTime),
-      'startMinutes': data.startMinutes,
-      'endMinutes': data.endMinutes,
-      'eligibleBelts': List<String>.from(data.eligibleBelts),
-      'description': data.description,
-      'eligibilityNote': data.eligibilityNote,
-      'isActive': data.isActive,
-      'isPreferred': data.isPreferred,
-      'resumesOn': data.resumesOn == null
-          ? null
-          : Timestamp.fromDate(data.resumesOn!),
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(now),
-    }, SetOptions(merge: true));
+    await document.set(
+      classSessionWriteFields(data, now: now),
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> deleteClassSession(String classSessionId) async {
@@ -151,21 +111,10 @@ class FirebaseAdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    final createdAt = data.createdAt ?? now;
-
-    await document.set({
-      'title': data.title,
-      'description': data.description,
-      'resourceSection': data.resourceSection,
-      'resourceType': data.resourceType,
-      'category': data.category,
-      'linkUrl': data.linkUrl,
-      'locationId': data.locationId,
-      'isPublished': data.isPublished,
-      'isArchived': data.isArchived,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(now),
-    }, SetOptions(merge: true));
+    await document.set(
+      resourceWriteFields(data, now: now),
+      SetOptions(merge: true),
+    );
   }
 
   Future<void> archiveResource(String resourceId) async {
@@ -184,6 +133,81 @@ class FirebaseAdminWriteService {
         .doc(resourceId)
         .delete();
   }
+}
+
+Map<String, Object?> resourceWriteFields(
+  ResourceWriteData data, {
+  required DateTime now,
+}) {
+  return {
+    'title': data.title,
+    'description': data.description,
+    'resourceSection': data.resourceSection,
+    'resourceType': data.resourceType,
+    'category': data.category,
+    'linkUrl': data.linkUrl,
+    'locationId': data.locationId,
+    'isPublished': data.isPublished,
+    'isArchived': data.isArchived,
+    'createdAt': Timestamp.fromDate(data.createdAt ?? now),
+    'updatedAt': Timestamp.fromDate(now),
+  };
+}
+
+Map<String, Object?> eventWriteFields(
+  EventWriteData data, {
+  required DateTime now,
+}) {
+  final linkedResourceIds = <String>{...data.linkedResourceIds};
+  if (data.primaryRegistrationResourceId != null) {
+    linkedResourceIds.add(data.primaryRegistrationResourceId!);
+  }
+  return {
+    'title': data.title,
+    'description': data.description,
+    'locationId': data.locationId,
+    'eventType': data.eventType,
+    'startDateTime': Timestamp.fromDate(data.startDateTime),
+    'endDateTime': Timestamp.fromDate(data.endDateTime),
+    'registrationUrl': data.registrationUrl,
+    'registrationDeadline': data.registrationDeadline == null
+        ? null
+        : Timestamp.fromDate(data.registrationDeadline!),
+    'linkedResourceIds': linkedResourceIds.toList()..sort(),
+    'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
+    'isPublished': data.isPublished,
+    'showInResources': data.showInResources,
+    'isArchived': false,
+    'createdAt': Timestamp.fromDate(data.createdAt ?? now),
+    'updatedAt': Timestamp.fromDate(now),
+  };
+}
+
+Map<String, Object?> classSessionWriteFields(
+  ClassSessionWriteData data, {
+  required DateTime now,
+}) {
+  return {
+    'className': data.className,
+    'classTypeId': data.classTypeId,
+    'bulkGroupId': data.bulkGroupId,
+    'locationId': data.locationId,
+    'weekday': data.weekday,
+    'startTime': Timestamp.fromDate(data.startTime),
+    'endTime': Timestamp.fromDate(data.endTime),
+    'startMinutes': data.startMinutes,
+    'endMinutes': data.endMinutes,
+    'eligibleBelts': List<String>.from(data.eligibleBelts),
+    'description': data.description,
+    'eligibilityNote': data.eligibilityNote,
+    'isActive': data.isActive,
+    'isPreferred': data.isPreferred,
+    'resumesOn': data.resumesOn == null
+        ? null
+        : Timestamp.fromDate(data.resumesOn!),
+    'createdAt': Timestamp.fromDate(data.createdAt ?? now),
+    'updatedAt': Timestamp.fromDate(now),
+  };
 }
 
 class AnnouncementWriteData {
@@ -305,8 +329,7 @@ class EventWriteData {
       registrationUrl: registrationUrl,
       registrationDeadline: registrationDeadline,
       linkedResourceIds: linkedResourceIds ?? event.linkedResourceIds,
-      primaryRegistrationResourceId:
-          primaryRegistrationResourceId ?? event.primaryRegistrationResourceId,
+      primaryRegistrationResourceId: primaryRegistrationResourceId,
       isPublished: isPublished,
       showInResources: showInResources,
       createdAt: event.createdAt,

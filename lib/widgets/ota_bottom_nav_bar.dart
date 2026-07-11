@@ -12,9 +12,14 @@ enum OtaBottomNavDestination {
 }
 
 class OtaBottomNavBar extends StatelessWidget {
-  const OtaBottomNavBar({required this.selectedDestination, super.key});
+  const OtaBottomNavBar({
+    required this.selectedDestination,
+    this.onSelectedDestinationTap,
+    super.key,
+  });
 
   final OtaBottomNavDestination selectedDestination;
+  final VoidCallback? onSelectedDestinationTap;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +58,7 @@ class OtaBottomNavBar extends StatelessWidget {
         final destination = OtaBottomNavDestination.values[index];
 
         if (destination == selectedDestination) {
+          onSelectedDestinationTap?.call();
           return;
         }
 

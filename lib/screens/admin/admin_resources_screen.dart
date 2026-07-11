@@ -8,6 +8,7 @@ import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 import '../../widgets/resources/general_resources_view.dart';
 import '../../widgets/resources/resources_landing_view.dart';
+import '../resource_detail_screen.dart';
 
 enum _ResourceFilter { published, draft, archived }
 
@@ -80,6 +81,9 @@ class _AdminGeneralResourcesScreenState
           selectedDestination: AdminNavDestination.resources,
           title: 'General Resources',
           subtitle: 'Manage family forms, links, and academy references.',
+          onSelectedDestinationTap: () => Navigator.of(
+            context,
+          ).pushReplacementNamed(OtaRoutes.adminResources),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -96,6 +100,7 @@ class _AdminGeneralResourcesScreenState
                 resources: resources,
                 isLoading: appDataService.isResourcesLoading,
                 errorMessage: appDataService.resourcesErrorMessage,
+                onOpen: _openResourceDetail,
                 onEdit: _openResourceSheet,
                 onArchive: _confirmArchive,
                 onDelete: _confirmDelete,
@@ -148,6 +153,15 @@ class _AdminGeneralResourcesScreenState
         context,
       ).showSnackBar(const SnackBar(content: Text('Unable to save resource.')));
     }
+  }
+
+  void _openResourceDetail(AcademyResource resource) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            ResourceDetailScreen(resource: resource, showAdminStatus: true),
+      ),
+    );
   }
 
   Future<void> _confirmArchive(AcademyResource resource) async {
@@ -324,6 +338,7 @@ class _ResourcesPanel extends StatelessWidget {
     required this.resources,
     required this.isLoading,
     required this.errorMessage,
+    required this.onOpen,
     required this.onEdit,
     required this.onArchive,
     required this.onDelete,
@@ -332,6 +347,7 @@ class _ResourcesPanel extends StatelessWidget {
   final List<AcademyResource> resources;
   final bool isLoading;
   final String? errorMessage;
+  final ValueChanged<AcademyResource> onOpen;
   final ValueChanged<AcademyResource> onEdit;
   final ValueChanged<AcademyResource> onArchive;
   final ValueChanged<AcademyResource> onDelete;
@@ -360,6 +376,7 @@ class _ResourcesPanel extends StatelessWidget {
               child: GeneralResourcesView(
                 resources: resources,
                 presentation: ResourcesPresentation.admin,
+                onOpen: onOpen,
                 onEdit: onEdit,
                 onArchive: onArchive,
                 onDelete: onDelete,

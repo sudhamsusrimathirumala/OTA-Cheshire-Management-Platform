@@ -17,6 +17,8 @@ class ClassSession {
     this.isPreferred = false,
     this.isPublished = true,
     this.resumesOn,
+    this.createdAt,
+    this.updatedAt,
   }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard',
        startMinutes = startMinutes ?? startTime.hour * 60 + startTime.minute,
        endMinutes = endMinutes ?? endTime.hour * 60 + endTime.minute;
@@ -36,6 +38,8 @@ class ClassSession {
   final bool isPreferred;
   final bool isPublished;
   final DateTime? resumesOn;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   final int startMinutes;
 

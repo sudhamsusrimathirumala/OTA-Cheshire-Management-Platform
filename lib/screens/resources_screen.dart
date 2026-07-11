@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../models/academy_resource.dart';
 import '../routes.dart';
+import 'resource_detail_screen.dart';
 import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -35,17 +37,10 @@ class GeneralResourcesScreen extends StatelessWidget {
       animation: appDataService,
       builder: (context, child) {
         final locationId = appDataService.selectedStudentProfile.locationId;
-        final resources =
-            appDataService.resources
-                .where(
-                  (resource) =>
-                      resource.resourceSection == 'general' &&
-                      resource.locationId == locationId &&
-                      resource.isPublished &&
-                      !resource.isArchived,
-                )
-                .toList()
-              ..sort((a, b) => a.title.compareTo(b.title));
+        final resources = visibleStudentGeneralResources(
+          appDataService.resources,
+          locationId: locationId,
+        );
 
         Widget content;
         if (appDataService.isResourcesLoading) {
@@ -58,12 +53,19 @@ class GeneralResourcesScreen extends StatelessWidget {
           content = GeneralResourcesView(
             resources: resources,
             presentation: ResourcesPresentation.student,
+            onOpen: (resource) => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (context) => ResourceDetailScreen(resource: resource),
+              ),
+            ),
           );
         }
 
         return _StudentResourcesShell(
           title: 'General Resources',
           subtitle: 'Academy forms, links, and reference material.',
+          onResourcesSelected: () =>
+              Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
           child: content,
         );
       },
@@ -71,16 +73,34 @@ class GeneralResourcesScreen extends StatelessWidget {
   }
 }
 
+List<AcademyResource> visibleStudentGeneralResources(
+  Iterable<AcademyResource> resources, {
+  required String locationId,
+}) {
+  return resources
+      .where(
+        (resource) =>
+            resource.resourceSection == 'general' &&
+            resource.locationId == locationId &&
+            resource.isPublished &&
+            !resource.isArchived,
+      )
+      .toList()
+    ..sort((a, b) => a.title.compareTo(b.title));
+}
+
 class _StudentResourcesShell extends StatelessWidget {
   const _StudentResourcesShell({
     required this.title,
     required this.subtitle,
     required this.child,
+    this.onResourcesSelected,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final VoidCallback? onResourcesSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -133,8 +153,9 @@ class _StudentResourcesShell extends StatelessWidget {
           ),
         ),
       ),
-      bottomNavigationBar: const OtaBottomNavBar(
+      bottomNavigationBar: OtaBottomNavBar(
         selectedDestination: OtaBottomNavDestination.resources,
+        onSelectedDestinationTap: onResourcesSelected,
       ),
     );
   }
