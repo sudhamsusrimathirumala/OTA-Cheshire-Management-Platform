@@ -18,7 +18,7 @@ import 'services/location_time_service.dart';
 //
 // Never connect this entrypoint to normal app startup. It intentionally does
 // not call FirestoreSeedService.seedAll().
-const bool _enableFirestoreMigration = false;
+const bool _enableFirestoreMigration = true;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();

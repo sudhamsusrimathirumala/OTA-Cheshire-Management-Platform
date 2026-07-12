@@ -1,242 +1,204 @@
 # OTA Cheshire Management Platform
 
-A modern management and communication platform for Olympic Taekwondo Academy (OTA) designed to improve communication, scheduling, curriculum access, and organization for students, parents, instructors, and administrators.
+## Overview
 
----
+The OTA Cheshire Management Platform is a Flutter and Firebase management and
+communication application for Olympic Taekwondo Academy. It is intended to
+serve students, parents, instructors, and administrators from one shared data
+model. Multi-location support is an architectural goal; the current code and
+sample data are centered on the `ota-cheshire` location.
 
-## Project Overview
+The application is under active development and is not production-ready.
 
-The OTA Cheshire Management Platform is a cross-platform mobile application being developed using Flutter. The goal of the project is to replace fragmented communication methods with a centralized platform that provides students, parents, and instructors with access to schedules, announcements, curriculum information, belt progression, events, and academy resources.
+## Current Capabilities
 
-The application is being designed with scalability in mind, allowing support for multiple academy locations, role-based access control, targeted communications, and personalized user experiences.
+### Student and Parent Experience
 
----
+- Dashboard with the selected student's next eligible class, belt progress,
+  and academy updates.
+- Day and week schedule views with recurrence, overlap, eligibility, and class
+  detail presentation.
+- Firestore-backed announcements, notification filters, and notification
+  details.
+- Firestore-backed published events with linked General Resources for
+  registration.
+- Firestore-backed published General Resources with detail pages and links.
+- Local sample curriculum organized by belt.
+- Student profile and linked account presentation.
 
-## Motivation
+The selected user account, linked profiles, and active student profile are
+still supplied by mock data. Authentication and real profile switching are not
+implemented.
 
-Currently, many interactions between families and the academy occur through text messages, paper handouts, social media posts, and verbal announcements. Important information can be missed, communication can become fragmented, and academy resources are not always easily accessible.
+### Administrator Experience
 
-This project aims to create a single platform where students, parents, instructors, and administrators can efficiently communicate and access the information relevant to them.
+- Admin dashboard and navigation.
+- Firestore-backed schedule listing plus create, edit, and single-session
+  delete operations. Bulk actions are preview-only.
+- Firestore-backed announcement create, edit, publish, archive, and delete
+  operations with audience targeting.
+- Firestore-backed event create, edit, publish, archive, and delete operations.
+- Firestore-backed General Resource create, edit, publish, archive, and delete
+  operations.
+- Firestore-backed student directory and details. Student profile editing is
+  not implemented.
+- Read-only curriculum view backed by local sample curriculum.
 
----
+Admin routes currently have no authentication or role guard.
 
-## Planned Features
+### Data Layer
 
-### Student Features
+`AppDataService` defines the data consumed by screens. The provider switch in
+`lib/services/app_data_service_provider.dart` currently selects
+`FirebaseAppDataService`. It maintains Firestore snapshot listeners for
+`classSessions`, `announcements`, `events`, `resources`, and
+`studentProfiles`. `MockAppDataService` supplies local data when Firebase is
+unavailable and continues to supply the current user, linked/selected profiles,
+and curriculum.
 
-- Personalized dashboard
-- Belt progression tracking
-- Curriculum access
-- Class schedule access
-- Event information
-- Academy announcements
-- Notification center
+`FirebaseAdminWriteService` performs the implemented admin writes. Existing
+documents are written with merge semantics, and cleared canonical optional
+fields are explicitly deleted so stale values do not remain.
 
-### Parent Features
+### Firestore Collections
 
-- Family dashboard
-- Multiple student profile management
-- Student progress tracking
-- Academy communication
-- Event registration and updates
+The application uses these top-level collections:
 
-### Instructor & Administrator Features
+- `locations`
+- `users`
+- `studentProfiles`
+- `classSessions`
+- `announcements`
+- `events`
+- `resources`
 
-- Student database access
-- Academy-wide announcements
-- Targeted notifications
-- Schedule management
-- Promotion tracking
-- Administrative tools
+See [Firestore schema](docs/firestore_schema.md) for field and relationship
+details.
 
----
+## Current Architecture
 
-## Technology Stack
+The repository separates Flutter screens and widgets, application models, the
+`AppDataService` abstraction, Firebase read/write services, mock data, and
+development-only Firestore utilities. See [Architecture](docs/ARCHITECTURE.md)
+for the current data flow and fallback boundaries.
 
-- Flutter
-- Dart
-- Firebase Core, Firestore, and Auth packages configured
-- Git
-- GitHub
+## Development Status
 
----
+### Implemented
 
-## Current Development Status
+- Student dashboard, schedule, announcements, events, resources, curriculum,
+  and profile screens.
+- Admin schedule, announcement, event, resource, student directory, and
+  profile screens.
+- Live Firestore reads for schedules, announcements, events, resources, and
+  the admin student directory.
+- Admin writes for individual class sessions, announcements, events, and
+  General Resources.
+- Resource-based event registration and academy-location time handling.
+- Read-only Firestore audit/export utilities and guarded write utilities.
 
-### Completed
+### Partially Implemented
 
-- Welcome Screen
-- Login Screen UI
-- Signup Screen UI
-- Student Dashboard UI
-- Schedule/Calendar UI
-- Curriculum UI
-- Notifications UI
-- Notification Detail UI
-- Profile UI
-- Reusable bottom navigation
-- Navigation structure for primary app destinations
-- Application Theme System
-- OTA brand color system
-- Basic app models
-- User account and student profile data separation
-- App data service abstraction with mock implementation
-- Firebase app initialization and Android Firebase configuration
-- Firestore collection constants and mock-data seed service
-- Development-only Firestore seed entrypoints
-- Firebase schedule data service behind a feature switch
-- Stream-based Firestore schedule cache for `classSessions`
-- Stream-based Firestore announcement cache for `announcements`
-- Stream-based Firestore admin event cache for `events`
-- Stream-based Firestore admin student directory cache for `studentProfiles`
-- Mock student, schedule, curriculum, and notification data
-- Cheshire OTA belt structure cleanup
-- Admin control panel foundation
-- Admin dashboard, schedule, announcements, students, and events pages
-- Project Architecture Planning
+- Firebase packages and configuration are present, but Firebase Authentication
+  is not connected to the login or signup UI.
+- User roles, approval status, guardian links, and selected-profile fields are
+  modeled, but production identity, ownership, approval, and role routing are
+  not implemented.
+- Firestore data is location-aware, but administration is currently centered
+  on OTA Cheshire rather than a complete multi-location workflow.
+- Announcements are live Firestore data, but device push notifications are not
+  implemented.
+- Curriculum is functional UI backed by local sample data, not Firestore.
+- Admin schedule bulk actions show an impact preview but do not write.
 
-### In Progress
+### Planned or Remaining
 
-- Application Documentation
-- System Design
-- Firebase read-path migration through `FirebaseAppDataService`
+- Authentication, account recovery, signup/onboarding, role guards, and admin
+  approval.
+- Production Firestore security rules and authorization testing.
+- Firebase-backed user identity, profile ownership/switching, and guardian name
+  resolution.
+- Admin student profile editing and production curriculum data.
+- End-to-end release validation, production signing, and content review.
 
-### Planned
-
-- Authentication System
-- Firestore security rules and production data validation
-- Admin schedule writes, including bulk edit/delete actions
-- Firebase-backed users, guardian name resolution, profile switching, and admin write flows
-- Student/parent-facing events and resources
-- Full Curriculum System
-- Full Notification System
-- Family Dashboard
-- Administrative Tools
-- Role-based user experiences
-- Real data integration
-
----
+See [Project backlog](docs/Project_Backlog.md) for prioritized remaining work.
 
 ## Project Structure
 
 ```text
-assets/
-`-- images/
-    `-- ota_logo.png
-
 lib/
-|-- data/
-|   |-- sample_curriculum.dart
-|   |-- sample_events.dart
-|   |-- sample_constants.dart
-|   |-- sample_notifications.dart
-|   |-- sample_schedule.dart
-|   `-- sample_student.dart
-|-- models/
-|   |-- academy_event.dart
-|   |-- class_session.dart
-|   |-- curriculum_requirement.dart
-|   |-- notification_item.dart
-|   |-- student.dart
-|   |-- student_profile.dart
-|   `-- user_account.dart
-|-- screens/
-|   |-- admin/
-|   |   |-- admin_announcements_screen.dart
-|   |   |-- admin_dashboard_screen.dart
-|   |   |-- admin_events_screen.dart
-|   |   |-- admin_schedule_screen.dart
-|   |   `-- admin_students_screen.dart
-|   |-- curriculum_screen.dart
-|   |-- login_screen.dart
-|   |-- notification_detail_screen.dart
-|   |-- notifications_screen.dart
-|   |-- profile_screen.dart
-|   |-- schedule_screen.dart
-|   |-- signup_screen.dart
-|   |-- student_dashboard_screen.dart
-|   `-- welcome_screen.dart
-|-- firebase_options.dart
-|-- services/
-|   |-- app_data_service.dart
-|   |-- app_data_service_provider.dart
-|   |-- firebase/
-|   |   `-- firebase_app_data_service.dart
-|   |-- firestore/
-|   |   |-- firestore_collections.dart
-|   |   `-- firestore_seed_service.dart
-|   `-- mock_app_data_service.dart
-|-- theme/
-|   `-- ota_colors.dart
-|-- utils/
-|   `-- notification_formatters.dart
-|-- widgets/
-|   |-- admin/
-|   |   `-- admin_bottom_nav_bar.dart
-|   |-- notifications/
-|   |   `-- notification_card.dart
-|   |-- profile/
-|   |   `-- profile_section.dart
-|   |-- ota_action_button.dart
-|   |-- ota_auth_switch_link.dart
-|   |-- ota_auth_text_field.dart
-|   |-- ota_bottom_nav_bar.dart
-|   |-- ota_branded_scaffold.dart
-|   `-- ota_logo_mark.dart
-|-- main.dart
-|-- seed_firestore_main.dart
-`-- routes.dart
-
-docs/
-`-- Project_Backlog.md
-
-test/
-`-- widget_test.dart
-
-tool/
-`-- seed_firestore.dart
+  data/       Local sample and fallback data
+  models/     Application data models
+  screens/    Student, parent-facing, and administrator screens
+  services/   Data abstraction, Firebase services, and Firestore utilities
+  theme/      OTA color system
+  utils/      Presentation helpers
+  widgets/    Shared UI components
+  main.dart   Normal application entrypoint
+  *_main.dart Development-only Firestore entrypoints
+docs/         Schema, architecture, operations, and backlog documentation
+test/         Unit, service-helper, and widget tests
+.github/workflows/  Manual debug APK release workflow
+android/      Android application and Gradle configuration
+assets/       OTA image assets
 ```
 
----
+## Running the App
 
-## Current Data Layer State
+```powershell
+flutter pub get
+flutter run
+```
 
-The app reads through `AppDataService`, which is selected in
-`lib/services/app_data_service_provider.dart`.
+Android development is supported through Android Studio and an Android
+emulator. Web development does not require Visual Studio. Windows desktop
+builds require the Visual Studio C++ desktop workload.
 
-The current development switch is `const bool useFirebase = true`, so
-`FirebaseAppDataService` is active when Firebase is available. It keeps live
-Firestore stream caches for:
+See [Development guide](docs/DEVELOPMENT.md) for run targets and build commands.
 
-- `classSessions` for student and admin schedule views
-- `announcements` for student notifications, dashboard OTA updates, and admin announcements
-- `events` for the admin events page
-- `studentProfiles` for the admin student directory
+## Firebase Setup
 
-The Firebase service uses `snapshots()`, handles empty or malformed documents
-without crashing, and notifies listening screens when Firestore data changes.
-If Firebase is unavailable during local tests, the service falls back to
-`MockAppDataService` data.
+Firebase initialization uses `lib/firebase_options.dart`. The configured
+project ID is `ota-management-platform`, and the Android application ID is
+`com.otamanagement.app`. Running against Firebase requires valid platform
+configuration and Firestore permissions. Do not place credentials in
+documentation or source control.
 
-The following areas still intentionally use mock/delegated behavior:
+No production Firestore rules file is present in this repository.
 
-- Firebase Auth and real user identity
-- Linked student profile ownership and profile switching
-- Guardian/user account name resolution
-- Curriculum and resources
-- Student/parent-facing events and resources pages
-- Admin writes for schedule, announcements, events, and student profiles
+## Testing and Validation
 
----
+```powershell
+dart format lib test
+flutter analyze
+flutter test
+git diff --check
+```
 
-## Screenshots
+## Development Utilities
 
-Screenshots and progress updates will be added as development continues.
+The repository includes development-only entrypoints for Firestore audit,
+export, cleanup, migration, seeding, and the completed approved schema update.
+Some are write-capable and are not part of normal application startup or
+navigation. See [Firestore operations](docs/FIRESTORE_OPERATIONS.md) before
+running any utility.
 
----
+## Build and Release
+
+The GitHub Actions workflow is manually triggered with `workflow_dispatch`. It
+installs Flutter, runs `flutter pub get`, builds a debug APK, renames it to
+`OTA-Cheshire-debug.apk`, and creates a GitHub Release tagged
+`apk-<run_number>` with that APK attached. It does not build a signed production
+release APK.
+
+The Android release build currently uses the debug signing configuration, so
+production signing remains outstanding.
 
 ## Author
 
 Sudhamsu Srimathirumala
 
-Independent software development project focused on applying software engineering, UI/UX design, database design, and system architecture concepts to solve real-world organizational and communication challenges within a community organization.
+Independent software development project focused on applying software
+engineering, UI/UX design, database design, and system architecture concepts to
+solve organizational and communication challenges within a community
+organization.

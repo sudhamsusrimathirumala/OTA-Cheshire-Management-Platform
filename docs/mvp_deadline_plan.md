@@ -1,38 +1,29 @@
-# July 15 MVP Deadline Plan
+# Historical July 15 MVP Plan
 
-## Must be done before July 15
+This file records the earlier July 15 implementation milestone. It is retained
+for project history and is not the current backlog or deployment checklist.
+Use [Project Backlog](Project_Backlog.md) for current work.
 
-- Implement admin schedule Firestore writes for creating, editing, and deleting class sessions.
-- Remove admin-facing Location ID fields from forms; derive location from admin context.
-- Clean up announcement targeting so admins use belt, class group, student, or everyone audiences.
-- Merge Critical priority into Important across admin and student UI.
-- Simplify Admin Events filters to Draft, Published, and Past.
-- Keep the student Events screen available and Firestore-backed.
-- Keep the student Resources screen available from dashboard and bottom navigation.
-- Add a student weekly schedule view.
-- Keep Archive and Delete as separate admin actions.
-- Clean up dashboard next-class text so it is not misleading.
-- Keep the app compiling cleanly with format, analyze, and tests.
+## Delivered in the Milestone
 
-## Should be done if time allows
+- Individual admin schedule create, edit, and delete writes.
+- Admin location derived from the current application context.
+- Announcement audience targeting and General/Important priority UI.
+- Draft, Published, and Past admin event filters.
+- Firestore-backed student events and General Resources.
+- Student day/week schedule views.
+- Separate archive and delete actions where supported.
+- Combined event date/time pickers and dashboard next-class corrections.
+- Formatting, analysis, and automated tests for the implemented flows.
 
-- Replace event date/time text fields with dedicated date and time pickers.
-- Improve the Admin Events list into a richer calendar-like management view.
-- Improve student class group profile handling beyond the current MVP preference fields.
-- Polish Requires Action display and wording across admin and student UI.
-- Apply small UI consistency fixes found during testing.
+## Still Incomplete
 
-## Backlog after MVP
+- Firebase Authentication and real user/role routing.
+- User approval and Firestore security rules.
+- Device push notifications and persistent per-user read state.
+- Parent/student profile switching.
+- Write-capable bulk schedule actions; the current bulk sheet is preview-only.
+- Production location administration, attendance, and production signing.
 
-- Full admin calendar redesign.
-- Richer Firestore-backed Resources management with better attachment handling.
-- Firebase Auth.
-- User approval workflow.
-- Production Firestore rules.
-- Push notifications.
-- Attendance.
-- Parent/student switching.
-- Full schedule recurring and bulk editing system using `classTypeId`.
-- Real role-based location management.
-- Notification read/unread persistence.
-- Manually migrate or delete old Firestore event documents with `eventType == "closure"`.
+These remaining items are prioritized in the current backlog rather than this
+historical deadline plan.

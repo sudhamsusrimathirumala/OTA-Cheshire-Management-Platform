@@ -5,20 +5,33 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="e4d7ad43-2629-4d9f-8be2-77d508f813f8" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Dart_Packages.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/libraries/Flutter_Plugins.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/libraries/Flutter_Plugins.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/firestore_schema.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/firestore_schema.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/sample_events.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sample_events.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/data/sample_schedule.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sample_schedule.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/data/sample_student.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/data/sample_student.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/main.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/main.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/models/academy_announcement.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/models/academy_announcement.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/models/academy_event.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/models/academy_event.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/models/class_session.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/models/class_session.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/models/student.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/models/student.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/routes.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/routes.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/screens/admin/admin_announcements_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/admin/admin_announcements_screen.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/screens/admin/admin_events_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/admin/admin_events_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/screens/notification_detail_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/notification_detail_screen.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/screens/student_dashboard_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/student_dashboard_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/screens/admin/admin_schedule_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/admin/admin_schedule_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/screens/admin/admin_students_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/admin/admin_students_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/screens/events_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/events_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/screens/profile_screen.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/screens/profile_screen.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/seed_firestore_main.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/seed_firestore_main.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/services/event_resource_rules.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/event_resource_rules.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/services/firebase/firebase_admin_write_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firebase/firebase_admin_write_service.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/services/firebase/firebase_app_data_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firebase/firebase_app_data_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/services/firestore/firestore_audit_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firestore/firestore_audit_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/services/firestore/firestore_cleanup_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firestore/firestore_cleanup_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/services/firestore/firestore_migration_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firestore/firestore_migration_service.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/lib/services/firestore/firestore_seed_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/firestore/firestore_seed_service.dart" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/lib/services/mock_app_data_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/mock_app_data_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/lib/services/location_time_service.dart" beforeDir="false" afterPath="$PROJECT_DIR$/lib/services/location_time_service.dart" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pubspec.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/pubspec.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/firestore_audit_test.dart" beforeDir="false" afterPath="$PROJECT_DIR$/test/firestore_audit_test.dart" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test/widget_test.dart" beforeDir="false" afterPath="$PROJECT_DIR$/test/widget_test.dart" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -64,6 +77,8 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Flutter.firestore_audit_main.dart.executor": "Run",
+    "Flutter.firestore_cleanup_main.dart.executor": "Run",
     "Flutter.main.dart.executor": "Run",
     "Flutter.seed_firestore_main.dart.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
@@ -83,13 +98,23 @@
     "show.migrate.to.gradle.popup": "false"
   }
 }]]></component>
-  <component name="RunManager" selected="Flutter.main.dart">
+  <component name="RunManager" selected="Flutter.firestore_cleanup_main.dart">
+    <configuration name="firestore_audit_main.dart" type="FlutterRunConfigurationType" factoryName="Flutter" temporary="true" nameIsGenerated="true">
+      <option name="filePath" value="$PROJECT_DIR$/lib/firestore_audit_main.dart" />
+      <method v="2" />
+    </configuration>
+    <configuration name="firestore_cleanup_main.dart" type="FlutterRunConfigurationType" factoryName="Flutter" temporary="true" nameIsGenerated="true">
+      <option name="filePath" value="$PROJECT_DIR$/lib/firestore_cleanup_main.dart" />
+      <method v="2" />
+    </configuration>
     <configuration name="seed_firestore_main.dart" type="FlutterRunConfigurationType" factoryName="Flutter" temporary="true" nameIsGenerated="true">
       <option name="filePath" value="$PROJECT_DIR$/lib/seed_firestore_main.dart" />
       <method v="2" />
     </configuration>
     <recent_temporary>
       <list>
+        <item itemvalue="Flutter.firestore_cleanup_main.dart" />
+        <item itemvalue="Flutter.firestore_audit_main.dart" />
         <item itemvalue="Flutter.seed_firestore_main.dart" />
       </list>
     </recent_temporary>

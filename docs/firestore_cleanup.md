@@ -1,50 +1,43 @@
-# Firestore deterministic cleanup
+# Firestore Deterministic Cleanup
 
-Phase 2A adds a development-only cleanup planner for deterministic schema
-maintenance. It is separate from normal application startup and from the older
-Firestore migration. It never creates or deletes documents.
+The repository contains a development-only cleanup planner and guarded apply
+flow. This document summarizes its implementation. Operational cautions and all
+database tools are documented in [Firestore operations](FIRESTORE_OPERATIONS.md).
 
-## Running the planner
+## Entry Point
 
 ```powershell
 flutter run -t lib/firestore_cleanup_main.dart
 ```
 
-`Generate Cleanup Plan` reads the seven audited collections and creates a dry-run
-plan. It does not write to Firestore. Plan JSON separates automatic field updates
-and deletions from unresolved content or relationship decisions.
+`Generate Cleanup Plan` reads the seven application collections and produces a
+deterministic JSON plan without writing. The plan separates approved field
+updates/deletions from unresolved content and relationship decisions.
 
-The `enableFirestoreCleanupApply` constant controls whether live apply is
-available. The developer must also review the plan and type
-`APPLY OTA FIRESTORE CLEANUP` exactly. `Apply Cleanup` remains disabled until
-those conditions are met and the current plan has operations with no failed
-preconditions.
+The source currently has `enableFirestoreCleanupApply = true`. Live apply also
+requires:
 
-## Deterministic scope
+- the exact text `APPLY OTA FIRESTORE CLEANUP`;
+- a non-empty plan for `ota-management-platform`;
+- no failed operation preconditions; and
+- a final confirmation dialog.
 
-The planner can:
+## Scope and Safety
 
-- remove `startTime`, `endTime`, and explicitly-null optional class fields after
-  validating the canonical recurring schedule fields;
-- set `resourceSection` to `general`, normalize known category variants, backfill
-  the two approved missing resource types, move a non-empty legacy `url` into an
-  empty `linkUrl`, and remove deterministic legacy/null URL fields;
-- remove an explicitly-null student profile `selfUserId`.
+The planner performs deterministic canonicalization such as removing validated
+legacy schedule fields, normalizing General Resource fields/categories, moving
+legacy resource `url` to `linkUrl` where safe, and removing an explicitly null
+student `selfUserId`.
 
-It preserves timestamps, schedule minutes, publication/archive state, student
-ages, guardian relationships, content, event relationships, and compatibility
-event fields. Ambiguous relationships and placeholder-looking content remain in
-the plan's unresolved section.
+It does not create or delete documents. It does not invent guardian, event, or
+resource relationships, and it does not rewrite ambiguous or placeholder
+content.
 
-## Apply and failure behavior
+Immediately before writing, the service rereads every affected document and
+verifies full-document fingerprints and planned preconditions. All documents
+are validated before the first write. Apply uses targeted updates and
+`FieldValue.delete()`, stops on the exact failed document, and runs the read-only
+audit again after a successful apply.
 
-Immediately before writing, every affected document is re-read. A stable
-full-document fingerprint and every planned field precondition must still match.
-All affected documents are validated before the first write begins. Apply uses
-targeted `update` calls and `FieldValue.delete()` inside one-document batches,
-which keeps every batch safely below Firestore's limit and allows an exact failed
-collection/document ID to be reported. Processing stops after the first failed
-batch.
-
-After a successful apply, the Phase 1 read-only audit runs again. The result JSON
-records before/after issue totals and remaining warning/error findings.
+No filesystem backup is required by this tool. Apply is intended only for an
+explicitly reviewed plan and should not be exposed in production navigation.
