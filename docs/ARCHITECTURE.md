@@ -102,7 +102,8 @@ The following areas still use local/fallback data:
 
 - Current user account.
 - Linked and selected student profiles used by student-facing screens.
-- Curriculum content and belt order.
+- Read-only curriculum content and belt order. Curriculum uses five canonical
+  local sections per belt and is never stored as a General Resource.
 - Full data fallback when Firebase is unavailable during service construction.
 
 The admin student directory is Firestore-backed, but it is read-only and shows

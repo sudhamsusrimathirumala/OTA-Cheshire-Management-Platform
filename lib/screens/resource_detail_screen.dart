@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/academy_resource.dart';
 import '../theme/ota_colors.dart';
+
+typedef ResourceLinkLauncher = Future<bool> Function(Uri uri);
 
 class ResourceDetailScreen extends StatelessWidget {
   const ResourceDetailScreen({
     required this.resource,
     this.showAdminStatus = false,
+    this.linkLauncher,
     super.key,
   });
 
   final AcademyResource resource;
   final bool showAdminStatus;
+  final ResourceLinkLauncher? linkLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +47,10 @@ class ResourceDetailScreen extends StatelessWidget {
                           showAdminStatus: showAdminStatus,
                         ),
                         const SizedBox(height: 16),
-                        _ResourceContentCard(resource: resource),
+                        _ResourceContentCard(
+                          resource: resource,
+                          linkLauncher: linkLauncher,
+                        ),
                       ],
                     ),
                   ),
@@ -121,9 +129,10 @@ class _ResourceHeroCard extends StatelessWidget {
 }
 
 class _ResourceContentCard extends StatelessWidget {
-  const _ResourceContentCard({required this.resource});
+  const _ResourceContentCard({required this.resource, this.linkLauncher});
 
   final AcademyResource resource;
+  final ResourceLinkLauncher? linkLauncher;
 
   @override
   Widget build(BuildContext context) {
@@ -150,7 +159,7 @@ class _ResourceContentCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
-          if (resource.linkUrl == null)
+          if (validResourceLinkUri(resource.linkUrl) == null)
             Text(
               'No link is available for this resource.',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -159,7 +168,10 @@ class _ResourceContentCard extends StatelessWidget {
               ),
             )
           else
-            _ResourceLink(url: resource.linkUrl!),
+            _ResourceLink(
+              uri: validResourceLinkUri(resource.linkUrl)!,
+              launcher: linkLauncher,
+            ),
         ],
       ),
     );
@@ -167,9 +179,10 @@ class _ResourceContentCard extends StatelessWidget {
 }
 
 class _ResourceLink extends StatelessWidget {
-  const _ResourceLink({required this.url});
+  const _ResourceLink({required this.uri, this.launcher});
 
-  final String url;
+  final Uri uri;
+  final ResourceLinkLauncher? launcher;
 
   @override
   Widget build(BuildContext context) {
@@ -185,30 +198,67 @@ class _ResourceLink extends StatelessWidget {
           const Icon(Icons.link_rounded, color: OtaColors.maroon),
           const SizedBox(width: 10),
           Expanded(
-            child: SelectableText(
-              url,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: OtaColors.maroon,
-                fontWeight: FontWeight.w800,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(
+                  uri.toString(),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: OtaColors.maroon,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => _open(context),
+                      icon: const Icon(Icons.open_in_new_rounded),
+                      label: const Text('Open Link'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _copy(context),
+                      icon: const Icon(Icons.copy_rounded),
+                      label: const Text('Copy Link'),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ),
-          IconButton(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: url));
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Resource link copied.')),
-                );
-              }
-            },
-            tooltip: 'Copy link',
-            icon: const Icon(Icons.copy_rounded),
-            color: OtaColors.maroon,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _open(BuildContext context) async {
+    try {
+      final opened =
+          await (launcher?.call(uri) ??
+              launchUrl(uri, mode: LaunchMode.externalApplication));
+      if (!opened && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open this resource link.')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open this resource link.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: uri.toString()));
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Resource link copied.')));
+    }
   }
 }
 

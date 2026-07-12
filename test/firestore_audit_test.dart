@@ -254,7 +254,7 @@ void main() {
           title: 'Registration',
           description: 'Registration form',
           resourceType: 'form',
-          category: 'beltTesting',
+          category: 'testing',
           linkUrl: 'https://ota-cheshire.com/register',
           locationId: 'ota-cheshire',
           isPublished: true,
@@ -282,6 +282,64 @@ void main() {
         ),
         throwsArgumentError,
       );
+    });
+
+    test('resource writes reject unsupported type, category, and URL', () {
+      ResourceWriteData data({
+        String type = 'general',
+        String category = 'general',
+        String? link,
+      }) => ResourceWriteData(
+        title: 'Resource',
+        description: 'Description',
+        resourceType: type,
+        category: category,
+        linkUrl: link,
+        locationId: 'ota-cheshire',
+        isPublished: false,
+      );
+
+      expect(
+        () => resourceWriteFields(data(type: 'curriculum'), now: now),
+        throwsArgumentError,
+      );
+      expect(
+        () => resourceWriteFields(data(category: 'other'), now: now),
+        throwsArgumentError,
+      );
+      expect(
+        () => resourceWriteFields(data(link: 'not a url'), now: now),
+        throwsArgumentError,
+      );
+    });
+
+    test('resource writes allow empty links and only canonical fields', () {
+      final fields = resourceWriteFields(
+        const ResourceWriteData(
+          title: 'Resource',
+          description: 'Description',
+          resourceType: 'general',
+          category: 'general',
+          linkUrl: '',
+          locationId: 'ota-cheshire',
+          isPublished: false,
+        ),
+        now: now,
+      );
+
+      expect(fields, isNot(contains('linkUrl')));
+      expect(fields.keys.toSet(), {
+        'title',
+        'description',
+        'resourceSection',
+        'resourceType',
+        'category',
+        'locationId',
+        'isPublished',
+        'isArchived',
+        'createdAt',
+        'updatedAt',
+      });
     });
 
     test('draft announcement writes do not assign publishedAt', () {

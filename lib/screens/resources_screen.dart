@@ -17,6 +17,8 @@ class ResourcesScreen extends StatelessWidget {
     return _StudentResourcesShell(
       title: 'Resources',
       subtitle: 'Choose curriculum or academy forms and links.',
+      onBack: () =>
+          Navigator.of(context).pushReplacementNamed(OtaRoutes.dashboard),
       child: ResourcesLandingView(
         presentation: ResourcesPresentation.student,
         onOpenCurriculum: () =>
@@ -64,6 +66,8 @@ class GeneralResourcesScreen extends StatelessWidget {
         return _StudentResourcesShell(
           title: 'General Resources',
           subtitle: 'Academy forms, links, and reference material.',
+          onBack: () =>
+              Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
           onResourcesSelected: () =>
               Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
           child: content,
@@ -94,68 +98,76 @@ class _StudentResourcesShell extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.child,
+    required this.onBack,
     this.onResourcesSelected,
   });
 
   final String title;
   final String subtitle;
   final Widget child;
+  final VoidCallback onBack;
   final VoidCallback? onResourcesSelected;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 760),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      IconButton.filledTonal(
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        tooltip: 'Back',
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(
-                                    color: OtaColors.ink,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                            ),
-                            Text(
-                              subtitle,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: OtaColors.mutedText),
-                            ),
-                          ],
+    return PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) onBack();
+      },
+      child: Scaffold(
+        backgroundColor: OtaColors.blush,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 760),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton.filledTonal(
+                          onPressed: onBack,
+                          icon: const Icon(Icons.arrow_back_rounded),
+                          tooltip: 'Back',
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
-                  child,
-                ],
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: Theme.of(context).textTheme.headlineSmall
+                                    ?.copyWith(
+                                      color: OtaColors.ink,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                              Text(
+                                subtitle,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: OtaColors.mutedText),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+                    child,
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-      bottomNavigationBar: OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.resources,
-        onSelectedDestinationTap: onResourcesSelected,
+        bottomNavigationBar: OtaBottomNavBar(
+          selectedDestination: OtaBottomNavDestination.resources,
+          onSelectedDestinationTap: onResourcesSelected,
+        ),
       ),
     );
   }

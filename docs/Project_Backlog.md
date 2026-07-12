@@ -72,17 +72,15 @@ cleanup and schema-update work is not listed as active work.
 
 - [ ] Replace local sample curriculum and placeholder items with approved
   production curriculum content.
-- [ ] Select and implement a production curriculum data source and media model.
-- [ ] Keep curriculum separate from General Resource documents unless the
-  canonical schema is deliberately changed.
+- [ ] Add approved individual YouTube video URLs for form items where videos
+  are available.
 
-### Events and Resources
+### Events
 
 - [ ] Validate the resource-based event registration flow end to end with
   production content.
 - [ ] Add calendar-oriented event UX only after core release blockers are
   complete.
-- [ ] Continue resource UX polish based on real family/admin usage.
 
 ### Multi-Location Administration
 
@@ -109,6 +107,10 @@ cleanup and schema-update work is not listed as active work.
 - [x] Admin writes for individual class sessions, announcements, events, and
   General Resources, including canonical optional-field clearing.
 - [x] Student-facing Firestore events and General Resources.
+- [x] General Resource create, edit, publish, archive, delete, canonical write
+  validation, and external link actions.
+- [x] Local read-only section-based curriculum with No Belt and five canonical
+  categories.
 - [x] Resource-based event registration.
 - [x] Canonical recurring schedule fields and separate Teen/Adult Sparring type.
 - [x] Student `dateOfBirth` with computed age and temporary legacy-age read

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
 import 'package:ota_cheshire_management_platform/data/sample_student.dart';
+import 'package:ota_cheshire_management_platform/data/sample_curriculum.dart'
+    as curriculum_data;
 import 'package:ota_cheshire_management_platform/models/academy_event.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
@@ -31,6 +33,7 @@ import 'package:ota_cheshire_management_platform/services/firebase/firebase_admi
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
+import 'package:ota_cheshire_management_platform/services/mock_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_migration_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_schema_update_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_seed_service.dart';
@@ -327,11 +330,12 @@ void main() {
     expect(find.text('Taegeuk form placeholder'), findsOneWidget);
     expect(
       find.text('https://www.youtube.com/@OlympicTaekwondoAcademy'),
-      findsWidgets,
+      findsNothing,
     );
-    expect(find.text('White Belt'), findsOneWidget);
+    expect(find.text('Video coming soon'), findsNWidgets(2));
+    expect(find.text('Red-Black Belt'), findsOneWidget);
 
-    await tester.tap(find.text('White Belt'));
+    await tester.tap(find.text('Red-Black Belt'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Blue-Red Belt').last);
     await tester.pumpAndSettle();
@@ -397,6 +401,53 @@ void main() {
     expect(find.text('Curriculum'), findsOneWidget);
     expect(find.text('General Resources'), findsOneWidget);
     expect(find.text('Create Resource'), findsNothing);
+  });
+
+  testWidgets('Resources visible and system Back return to dashboard', (
+    tester,
+  ) async {
+    Widget app() => MaterialApp(
+      initialRoute: OtaRoutes.resources,
+      routes: {
+        OtaRoutes.dashboard: (_) => const Scaffold(body: Text('Dashboard')),
+        OtaRoutes.resources: (_) => const ResourcesScreen(),
+      },
+    );
+
+    await tester.pumpWidget(app());
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dashboard'), findsOneWidget);
+
+    await tester.pumpWidget(app());
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Dashboard'), findsOneWidget);
+  });
+
+  testWidgets('Curriculum and General Resources Back return to Resources', (
+    tester,
+  ) async {
+    Future<void> verifyBack(String initialRoute) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(initialRoute),
+          initialRoute: initialRoute,
+          routes: {
+            OtaRoutes.resources: (_) =>
+                const Scaffold(body: Text('Resources landing destination')),
+            OtaRoutes.curriculum: (_) => const CurriculumScreen(),
+            OtaRoutes.generalResources: (_) => const GeneralResourcesScreen(),
+          },
+        ),
+      );
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text('Resources landing destination'), findsOneWidget);
+    }
+
+    await verifyBack(OtaRoutes.curriculum);
+    await verifyBack(OtaRoutes.generalResources);
   });
 
   testWidgets('shared resource card only shows editing in admin mode', (
@@ -476,6 +527,114 @@ void main() {
     expect(find.text('Resource Detail'), findsOneWidget);
     expect(
       find.text('Registration form for the next Parent Night Out event.'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('General Resources'), findsOneWidget);
+  });
+
+  testWidgets('valid resource links show open and copy actions', (
+    tester,
+  ) async {
+    final resource = AcademyResource(
+      id: 'linked',
+      title: 'Linked Resource',
+      description: '',
+      resourceType: 'document',
+      category: 'general',
+      linkUrl: 'https://example.com/resource',
+      locationId: 'ota-cheshire',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ResourceDetailScreen(
+          resource: resource,
+          linkLauncher: (uri) async => true,
+        ),
+      ),
+    );
+
+    expect(find.text('Open Link'), findsOneWidget);
+    expect(find.text('Copy Link'), findsOneWidget);
+  });
+
+  testWidgets('resource link launch failure shows a friendly error', (
+    tester,
+  ) async {
+    final resource = AcademyResource(
+      id: 'linked',
+      title: 'Linked Resource',
+      description: '',
+      resourceType: 'document',
+      category: 'general',
+      linkUrl: 'https://example.com/resource',
+      locationId: 'ota-cheshire',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ResourceDetailScreen(
+          resource: resource,
+          linkLauncher: (uri) async => false,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open Link'));
+    await tester.pump();
+    expect(find.text('Unable to open this resource link.'), findsOneWidget);
+  });
+
+  testWidgets('missing and invalid resource links hide link actions', (
+    tester,
+  ) async {
+    AcademyResource resource(String? link) => AcademyResource(
+      id: 'resource',
+      title: 'Resource',
+      description: '',
+      resourceType: 'document',
+      category: 'general',
+      linkUrl: link,
+      locationId: 'ota-cheshire',
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+
+    for (final link in <String?>[null, 'not a link']) {
+      await tester.pumpWidget(
+        MaterialApp(home: ResourceDetailScreen(resource: resource(link))),
+      );
+      expect(find.text('Open Link'), findsNothing);
+      expect(find.text('Copy Link'), findsNothing);
+    }
+  });
+
+  testWidgets('admin resource form rejects an invalid entered URL', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: AdminGeneralResourcesScreen()),
+    );
+    await tester.tap(find.text('Create Resource'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Title'),
+      'Reference',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Link URL'),
+      'not a url',
+    );
+    await tester.tap(find.text('Save Draft'));
+    await tester.pump();
+
+    expect(
+      find.text('Enter a valid HTTP or HTTPS link, or leave it empty.'),
       findsOneWidget,
     );
   });
@@ -633,10 +792,6 @@ void main() {
     final curriculum = CurriculumRequirement(
       locationId: 'ota-cheshire',
       belt: 'White',
-      formItems: const [],
-      oneStepItems: const [],
-      breakingItems: const [],
-      physicalChallengeItems: const [],
       sections: const [
         CurriculumSection(
           id: 'breaking',
@@ -693,6 +848,205 @@ void main() {
       curriculum.sortedSections.last.sortedItems.first.textContent,
       'First break details',
     );
+  });
+
+  test('curriculum data uses No Belt and five canonical sections', () {
+    const expectedIds = <String>[
+      'forms',
+      'one-step-sparring',
+      'breaking-techniques',
+      'kicking-combinations',
+      'physical-challenges',
+    ];
+
+    expect(curriculum_data.curriculumBeltOrder.first, 'No Belt');
+    expect(curriculum_data.beltDisplayLabel('No Belt'), 'No Belt');
+    expect(curriculum_data.beltDisplayLabel('White'), 'White Belt');
+    for (final curriculum in curriculum_data.sampleCurriculum.values) {
+      expect(
+        curriculum.sortedSections.map((section) => section.id),
+        expectedIds,
+      );
+      expect(
+        curriculum.sections.map((section) => section.title),
+        isNot(contains('Requirements')),
+      );
+    }
+    expect(
+      curriculum_data.sampleCurriculum['White']!.sections.first.items,
+      hasLength(2),
+    );
+    expect(
+      curriculum_data.sampleCurriculum['No Belt']!.sections.first.items,
+      isEmpty,
+    );
+  });
+
+  test('curriculum belt selection falls back safely', () {
+    final curriculum = <String, CurriculumRequirement>{
+      'No Belt': _testCurriculum('No Belt'),
+      'White': _testCurriculum('White'),
+    };
+    expect(
+      initialCurriculumBelt(
+        selectedStudentBelt: 'White',
+        beltOrder: const ['No Belt', 'White'],
+        curriculum: curriculum,
+      ),
+      'White',
+    );
+    expect(
+      initialCurriculumBelt(
+        selectedStudentBelt: 'Unknown',
+        beltOrder: const ['No Belt', 'White'],
+        curriculum: curriculum,
+      ),
+      'No Belt',
+    );
+    expect(
+      initialCurriculumBelt(
+        selectedStudentBelt: 'Unknown',
+        beltOrder: const ['White'],
+        curriculum: {'White': curriculum['White']!},
+      ),
+      'White',
+    );
+    expect(
+      initialCurriculumBelt(
+        selectedStudentBelt: 'Unknown',
+        beltOrder: const [],
+        curriculum: const {},
+      ),
+      isNull,
+    );
+  });
+
+  test('YouTube parser accepts videos and rejects channel or invalid URLs', () {
+    expect(youtubeVideoId('abcdefghijk'), 'abcdefghijk');
+    expect(
+      youtubeVideoId('https://www.youtube.com/watch?v=abcdefghijk'),
+      'abcdefghijk',
+    );
+    expect(youtubeVideoId('https://youtu.be/abcdefghijk'), 'abcdefghijk');
+    expect(
+      youtubeVideoId('https://youtube.com/shorts/abcdefghijk'),
+      'abcdefghijk',
+    );
+    expect(
+      youtubeVideoId('https://youtube.com/@OlympicTaekwondoAcademy'),
+      isNull,
+    );
+    expect(youtubeVideoId('not a video'), isNull);
+  });
+
+  testWidgets('curriculum defaults to selected belt and shows five cards', (
+    tester,
+  ) async {
+    final service = _CurriculumTestService(
+      selectedBelt: 'White',
+      curriculum: {
+        'No Belt': _testCurriculum('No Belt'),
+        'White': _testCurriculum('White'),
+      },
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: CurriculumScreen(dataService: service)),
+    );
+
+    expect(find.text('White Belt'), findsOneWidget);
+    for (final title in const [
+      'Forms',
+      'One-Step Sparring',
+      'Breaking Techniques',
+      'Kicking Combinations',
+      'Physical Challenges',
+    ]) {
+      expect(find.text(title), findsOneWidget);
+    }
+    expect(find.text('None for this belt'), findsNWidgets(5));
+  });
+
+  testWidgets('curriculum renders multiple text and video items safely', (
+    tester,
+  ) async {
+    final curriculum = _testCurriculum(
+      'No Belt',
+      forms: const [
+        CurriculumItem(
+          id: 'form-1',
+          title: 'First form',
+          contentType: CurriculumContentType.video,
+          sortOrder: 0,
+          videoUrl: 'abcdefghijk',
+        ),
+        CurriculumItem(
+          id: 'form-2',
+          title: 'Second form',
+          contentType: CurriculumContentType.video,
+          sortOrder: 1,
+          videoUrl: 'lmnopqrstuv',
+        ),
+        CurriculumItem(
+          id: 'form-3',
+          title: 'Future form',
+          contentType: CurriculumContentType.video,
+          sortOrder: 2,
+          videoUrl: 'invalid',
+        ),
+      ],
+      oneSteps: const [
+        CurriculumItem(
+          id: 'step-1',
+          title: 'First step',
+          contentType: CurriculumContentType.text,
+          sortOrder: 0,
+          textContent: 'First step details',
+        ),
+        CurriculumItem(
+          id: 'step-2',
+          title: 'Second step',
+          contentType: CurriculumContentType.text,
+          sortOrder: 1,
+        ),
+      ],
+    );
+    final service = _CurriculumTestService(
+      selectedBelt: 'Unknown',
+      curriculum: {'No Belt': curriculum},
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) => Text('player:$videoId'),
+        ),
+      ),
+    );
+
+    expect(find.text('No Belt'), findsOneWidget);
+    expect(find.text('player:abcdefghijk'), findsOneWidget);
+    expect(find.text('player:lmnopqrstuv'), findsOneWidget);
+    expect(find.text('Video coming soon'), findsOneWidget);
+    expect(find.text('First step'), findsOneWidget);
+    expect(find.text('First step details'), findsOneWidget);
+    expect(find.text('Second step'), findsOneWidget);
+    expect(find.textContaining('youtube.com/@'), findsNothing);
+  });
+
+  testWidgets('curriculum fits a narrow mobile layout', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = _CurriculumTestService(
+      selectedBelt: 'No Belt',
+      curriculum: {'No Belt': _testCurriculum('No Belt')},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(home: CurriculumScreen(dataService: service)),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   test('academy event time round-trips through America New York', () {
@@ -1188,6 +1542,80 @@ void main() {
     expect(student.fields['dateOfBirth'], isA<Timestamp>());
     expect(student.fields['age'], isA<FieldValue>());
   });
+}
+
+CurriculumRequirement _testCurriculum(
+  String belt, {
+  List<CurriculumItem> forms = const <CurriculumItem>[],
+  List<CurriculumItem> oneSteps = const <CurriculumItem>[],
+}) {
+  return CurriculumRequirement(
+    locationId: 'ota-cheshire',
+    belt: belt,
+    sections: <CurriculumSection>[
+      CurriculumSection(
+        id: 'forms',
+        title: 'Forms',
+        sortOrder: 0,
+        items: forms,
+      ),
+      CurriculumSection(
+        id: 'one-step-sparring',
+        title: 'One-Step Sparring',
+        sortOrder: 1,
+        items: oneSteps,
+      ),
+      const CurriculumSection(
+        id: 'breaking-techniques',
+        title: 'Breaking Techniques',
+        sortOrder: 2,
+      ),
+      const CurriculumSection(
+        id: 'kicking-combinations',
+        title: 'Kicking Combinations',
+        sortOrder: 3,
+      ),
+      const CurriculumSection(
+        id: 'physical-challenges',
+        title: 'Physical Challenges',
+        sortOrder: 4,
+      ),
+    ],
+  );
+}
+
+class _CurriculumTestService extends MockAppDataService {
+  _CurriculumTestService({
+    required this.selectedBelt,
+    required this.curriculum,
+  });
+
+  final String selectedBelt;
+
+  @override
+  final Map<String, CurriculumRequirement> curriculum;
+
+  @override
+  Student get selectedStudentProfile => Student(
+    id: 'student',
+    name: 'Student',
+    locationId: 'ota-cheshire',
+    belt: selectedBelt,
+    stickerCount: 0,
+    stickersRequired: 0,
+    nextRank: 'White',
+  );
+
+  @override
+  List<String> get curriculumBeltOrder => curriculum.keys.toList();
+
+  @override
+  CurriculumRequirement curriculumForBelt(String belt) =>
+      curriculum[belt] ?? curriculum.values.first;
+
+  @override
+  String beltDisplayLabel(String belt) =>
+      curriculum_data.beltDisplayLabel(belt);
 }
 
 class _StudentNavigationTestApp extends StatelessWidget {

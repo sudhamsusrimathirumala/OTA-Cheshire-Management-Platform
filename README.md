@@ -22,8 +22,10 @@ The application is under active development and is not production-ready.
   details.
 - Firestore-backed published events with linked General Resources for
   registration.
-- Firestore-backed published General Resources with detail pages and links.
-- Local sample curriculum organized by belt.
+- Firestore-backed published General Resources with validated copy/open-link
+  actions and detail pages.
+- Local, read-only curriculum organized by belt, including No Belt and five
+  canonical sections. Form items support embedded YouTube videos.
 - Student profile and linked account presentation.
 
 The selected user account, linked profiles, and active student profile are
@@ -108,7 +110,9 @@ for the current data flow and fallback boundaries.
   on OTA Cheshire rather than a complete multi-location workflow.
 - Announcements are live Firestore data, but device push notifications are not
   implemented.
-- Curriculum is functional UI backed by local sample data, not Firestore.
+- Curriculum is functional, section-based UI backed by bundled data rather
+  than Firestore; approved curriculum text and individual form videos remain
+  content work.
 - Admin schedule bulk actions show an impact preview but do not write.
 
 ### Planned or Remaining

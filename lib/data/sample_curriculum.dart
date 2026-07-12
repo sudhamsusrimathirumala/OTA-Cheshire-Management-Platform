@@ -1,7 +1,8 @@
 import '../models/curriculum_requirement.dart';
 import 'sample_constants.dart';
 
-const curriculumBeltOrder = [
+const curriculumBeltOrder = <String>[
+  'No Belt',
   'White',
   'White-Yellow',
   'Yellow',
@@ -19,208 +20,262 @@ const curriculumBeltOrder = [
 ];
 
 final sampleCurriculum = <String, CurriculumRequirement>{
-  'White': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'White',
-    formItems: [
+  'No Belt': _curriculum('No Belt'),
+  'White': _curriculum(
+    'White',
+    forms: const [
       'Taegeuk form placeholder',
       'Basic stance sequence placeholder',
     ],
-    oneStepItems: [
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Front kick board break placeholder',
       'Hammer fist board break placeholder',
     ],
-    physicalChallengeItems: [],
   ),
-  'White-Yellow': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'White-Yellow',
-    formItems: ['Taegeuk form placeholder', 'Low block practice sequence'],
-    oneStepItems: [
+  'White-Yellow': _curriculum(
+    'White-Yellow',
+    forms: const ['Taegeuk form placeholder', 'Low block practice sequence'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Front kick board break placeholder'],
-    physicalChallengeItems: [],
+    breakingTechniques: const ['Front kick board break placeholder'],
   ),
-  'Yellow': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Yellow',
-    formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
-    oneStepItems: [
+  'Yellow': _curriculum(
+    'Yellow',
+    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Front kick board break placeholder'],
-    physicalChallengeItems: ['Push-up challenge placeholder'],
+    breakingTechniques: const ['Front kick board break placeholder'],
+    physicalChallenges: const ['Push-up challenge placeholder'],
   ),
-  'Yellow-Green': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Yellow-Green',
-    formItems: [
-      'Taegeuk form placeholder',
-      'Turning kick sequence placeholder',
-    ],
-    oneStepItems: [
+  'Yellow-Green': _curriculum(
+    'Yellow-Green',
+    forms: const ['Taegeuk form placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Distance control partner drill',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Front kick board break placeholder',
       'Side kick board break placeholder',
     ],
-    physicalChallengeItems: ['Push-up challenge placeholder'],
+    kickingCombinations: const ['Turning kick sequence placeholder'],
+    physicalChallenges: const ['Push-up challenge placeholder'],
   ),
-  'Green': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Green',
-    formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
-    oneStepItems: [
+  'Green': _curriculum(
+    'Green',
+    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Side kick board break placeholder'],
-    physicalChallengeItems: [
+    breakingTechniques: const ['Side kick board break placeholder'],
+    physicalChallenges: const [
       'Push-up challenge placeholder',
       'Endurance challenge placeholder',
     ],
   ),
-  'Green-Blue': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Green-Blue',
-    formItems: ['Taegeuk form placeholder', 'Combination kicking sequence'],
-    oneStepItems: [
+  'Green-Blue': _curriculum(
+    'Green-Blue',
+    forms: const ['Taegeuk form placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Side kick board break placeholder'],
-    physicalChallengeItems: ['Endurance challenge placeholder'],
+    breakingTechniques: const ['Side kick board break placeholder'],
+    kickingCombinations: const ['Combination kicking sequence'],
+    physicalChallenges: const ['Endurance challenge placeholder'],
   ),
-  'Blue': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Blue',
-    formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
-    oneStepItems: [
+  'Blue': _curriculum(
+    'Blue',
+    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Counter-kick partner drill',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Side kick board break placeholder',
       'Round kick board break placeholder',
     ],
-    physicalChallengeItems: [
+    physicalChallenges: const [
       'Push-up challenge placeholder',
       'Endurance challenge placeholder',
     ],
   ),
-  'Blue-Red': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Blue-Red',
-    formItems: ['Taegeuk form placeholder', 'Advanced transition sequence'],
-    oneStepItems: [
+  'Blue-Red': _curriculum(
+    'Blue-Red',
+    forms: const ['Taegeuk form placeholder', 'Advanced transition sequence'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Side kick board break placeholder'],
-    physicalChallengeItems: ['Endurance challenge placeholder'],
+    breakingTechniques: const ['Side kick board break placeholder'],
+    physicalChallenges: const ['Endurance challenge placeholder'],
   ),
-  'Red': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Red',
-    formItems: ['Taegeuk form placeholder', 'Practice sequence placeholder'],
-    oneStepItems: [
+  'Red': _curriculum(
+    'Red',
+    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Side kick board break placeholder',
       'Jump front kick board break placeholder',
     ],
-    physicalChallengeItems: [
+    physicalChallenges: const [
       'Push-up challenge placeholder',
       'Endurance challenge placeholder',
     ],
   ),
-  'Red-Yellow': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Red-Yellow',
-    formItems: [
+  'Red-Yellow': _curriculum(
+    'Red-Yellow',
+    forms: const [
       'Taegeuk form placeholder',
       'Black belt prep sequence placeholder',
     ],
-    oneStepItems: [
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Side kick board break placeholder'],
-    physicalChallengeItems: ['Endurance challenge placeholder'],
+    breakingTechniques: const ['Side kick board break placeholder'],
+    physicalChallenges: const ['Endurance challenge placeholder'],
   ),
-  'Red-Green': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Red-Green',
-    formItems: ['Taegeuk form placeholder', 'Precision sequence placeholder'],
-    oneStepItems: [
+  'Red-Green': _curriculum(
+    'Red-Green',
+    forms: const ['Taegeuk form placeholder', 'Precision sequence placeholder'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Side kick board break placeholder',
       'Back kick board break placeholder',
     ],
-    physicalChallengeItems: [
+    physicalChallenges: const [
       'Push-up challenge placeholder',
       'Endurance challenge placeholder',
     ],
   ),
-  'Red-Blue': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Red-Blue',
-    formItems: [
+  'Red-Blue': _curriculum(
+    'Red-Blue',
+    forms: const [
       'Taegeuk form placeholder',
       'Advanced practice sequence placeholder',
     ],
-    oneStepItems: [
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
     ],
-    breakingItems: ['Back kick board break placeholder'],
-    physicalChallengeItems: ['Endurance challenge placeholder'],
+    breakingTechniques: const ['Back kick board break placeholder'],
+    physicalChallenges: const ['Endurance challenge placeholder'],
   ),
-  'Red-Black': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Red-Black',
-    formItems: ['Taegeuk form placeholder', 'Black belt readiness sequence'],
-    oneStepItems: [
+  'Red-Black': _curriculum(
+    'Red-Black',
+    forms: const ['Taegeuk form placeholder', 'Black belt readiness sequence'],
+    oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Advanced partner drill placeholder',
     ],
-    breakingItems: [
+    breakingTechniques: const [
       'Side kick board break placeholder',
       'Back kick board break placeholder',
     ],
-    physicalChallengeItems: [
+    physicalChallenges: const [
       'Push-up challenge placeholder',
       'Endurance challenge placeholder',
     ],
   ),
-  'Black': CurriculumRequirement(
-    locationId: otaCheshireLocationId,
-    belt: 'Black',
-    formItems: [
+  'Black': _curriculum(
+    'Black',
+    forms: const [
       'Black belt form placeholder',
       'Degree curriculum sequence placeholder',
     ],
-    oneStepItems: [
+    oneStepSparring: const [
       'Advanced one-step sparring placeholder',
       'Leadership partner drill placeholder',
     ],
-    breakingItems: ['Advanced board break placeholder'],
-    physicalChallengeItems: ['Endurance challenge placeholder'],
+    breakingTechniques: const ['Advanced board break placeholder'],
+    physicalChallenges: const ['Endurance challenge placeholder'],
   ),
 };
 
-String beltDisplayLabel(String belt) => '$belt Belt';
+CurriculumRequirement _curriculum(
+  String belt, {
+  List<String> forms = const <String>[],
+  List<String> oneStepSparring = const <String>[],
+  List<String> breakingTechniques = const <String>[],
+  List<String> kickingCombinations = const <String>[],
+  List<String> physicalChallenges = const <String>[],
+}) {
+  return CurriculumRequirement(
+    locationId: otaCheshireLocationId,
+    belt: belt,
+    sections: <CurriculumSection>[
+      _section(
+        id: 'forms',
+        title: 'Forms',
+        sortOrder: 0,
+        values: forms,
+        contentType: CurriculumContentType.video,
+      ),
+      _section(
+        id: 'one-step-sparring',
+        title: 'One-Step Sparring',
+        sortOrder: 1,
+        values: oneStepSparring,
+      ),
+      _section(
+        id: 'breaking-techniques',
+        title: 'Breaking Techniques',
+        sortOrder: 2,
+        values: breakingTechniques,
+      ),
+      _section(
+        id: 'kicking-combinations',
+        title: 'Kicking Combinations',
+        sortOrder: 3,
+        values: kickingCombinations,
+      ),
+      _section(
+        id: 'physical-challenges',
+        title: 'Physical Challenges',
+        sortOrder: 4,
+        values: physicalChallenges,
+      ),
+    ],
+  );
+}
+
+CurriculumSection _section({
+  required String id,
+  required String title,
+  required int sortOrder,
+  required List<String> values,
+  CurriculumContentType contentType = CurriculumContentType.text,
+}) {
+  return CurriculumSection(
+    id: id,
+    title: title,
+    sortOrder: sortOrder,
+    items: <CurriculumItem>[
+      for (var index = 0; index < values.length; index++)
+        CurriculumItem(
+          id: '$id-${index + 1}',
+          title: values[index],
+          contentType: contentType,
+          sortOrder: index,
+        ),
+    ],
+  );
+}
+
+String beltDisplayLabel(String belt) => belt == 'No Belt' ? belt : '$belt Belt';

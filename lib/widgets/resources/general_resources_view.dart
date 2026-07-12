@@ -68,6 +68,7 @@ class GeneralResourceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isAdmin = presentation == ResourcesPresentation.admin;
+    final validLink = validResourceLinkUri(resource.linkUrl);
     final borderRadius = BorderRadius.circular(isAdmin ? 6 : 20);
     return Material(
       color: Colors.transparent,
@@ -160,12 +161,12 @@ class GeneralResourceCard extends StatelessWidget {
                   ),
                 ),
               ],
-              if (resource.linkUrl != null) ...[
+              if (validLink != null) ...[
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: () async {
                     await Clipboard.setData(
-                      ClipboardData(text: resource.linkUrl!),
+                      ClipboardData(text: validLink.toString()),
                     );
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(

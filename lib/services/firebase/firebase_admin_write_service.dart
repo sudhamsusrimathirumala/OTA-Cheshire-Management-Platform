@@ -121,11 +121,27 @@ Map<String, Object?> resourceWriteFields(
   required DateTime now,
 }) {
   final resourceType = data.resourceType.trim();
-  if (resourceType.isEmpty) {
+  if (!canonicalResourceTypes.contains(resourceType)) {
     throw ArgumentError.value(
       data.resourceType,
       'resourceType',
-      'Resource type must not be empty.',
+      'Unsupported resource type.',
+    );
+  }
+  final category = data.category.trim();
+  if (!canonicalResourceCategories.contains(category)) {
+    throw ArgumentError.value(
+      data.category,
+      'category',
+      'Unsupported category.',
+    );
+  }
+  final link = data.linkUrl?.trim();
+  if (link != null && link.isNotEmpty && validResourceLinkUri(link) == null) {
+    throw ArgumentError.value(
+      data.linkUrl,
+      'linkUrl',
+      'Resource link must be an absolute HTTP or HTTPS URL.',
     );
   }
   return <String, Object?>{
@@ -133,9 +149,9 @@ Map<String, Object?> resourceWriteFields(
     'description': data.description,
     'resourceSection': 'general',
     'resourceType': resourceType,
-    'category': normalizeResourceCategory(data.category),
-    if (data.linkUrl != null && data.linkUrl!.trim().isNotEmpty)
-      'linkUrl': data.linkUrl!.trim()
+    'category': category,
+    if (link != null && link.isNotEmpty)
+      'linkUrl': link
     else if (data.id != null)
       'linkUrl': FieldValue.delete(),
     'locationId': data.locationId,

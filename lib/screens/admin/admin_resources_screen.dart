@@ -55,6 +55,7 @@ class _AdminGeneralResourcesScreenState
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
       if (resource.resourceSection != 'general') return false;
+      if (resource.locationId != _adminLocationId()) return false;
       return switch (_selectedFilter) {
         _ResourceFilter.published =>
           resource.isPublished && !resource.isArchived,
@@ -68,6 +69,12 @@ class _AdminGeneralResourcesScreenState
       }
       return a.title.compareTo(b.title);
     });
+  }
+
+  String _adminLocationId() {
+    final accountLocationId = appDataService.currentUserAccount.locationId;
+    if (accountLocationId.trim().isNotEmpty) return accountLocationId;
+    return appDataService.selectedStudentProfile.locationId;
   }
 
   @override
@@ -524,8 +531,12 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
       text: resource?.description ?? '',
     );
     _linkController = TextEditingController(text: resource?.linkUrl ?? '');
-    _resourceType = resource?.resourceType ?? 'general';
-    _category = resource?.category ?? 'general';
+    _resourceType = canonicalResourceTypes.contains(resource?.resourceType)
+        ? resource!.resourceType
+        : 'general';
+    _category = canonicalResourceCategories.contains(resource?.category)
+        ? resource!.category
+        : 'general';
   }
 
   @override
@@ -652,8 +663,16 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
 
   void _submit(_ResourceSaveAction action) {
     final title = _titleController.text.trim();
+    final link = _linkController.text.trim();
     if (title.isEmpty) {
       setState(() => _validationMessage = 'Title is required.');
+      return;
+    }
+    if (link.isNotEmpty && validResourceLinkUri(link) == null) {
+      setState(
+        () => _validationMessage =
+            'Enter a valid HTTP or HTTPS link, or leave it empty.',
+      );
       return;
     }
 
@@ -665,9 +684,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             description: _descriptionController.text.trim(),
             resourceType: _resourceType,
             category: _category,
-            linkUrl: _linkController.text.trim().isEmpty
-                ? null
-                : _linkController.text.trim(),
+            linkUrl: link.isEmpty ? null : link,
             locationId: _adminLocationId(),
             isPublished: isPublished,
           )
@@ -677,9 +694,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             description: _descriptionController.text.trim(),
             resourceType: _resourceType,
             category: _category,
-            linkUrl: _linkController.text.trim().isEmpty
-                ? null
-                : _linkController.text.trim(),
+            linkUrl: link.isEmpty ? null : link,
             locationId: resource.locationId,
             isPublished: isPublished,
           );

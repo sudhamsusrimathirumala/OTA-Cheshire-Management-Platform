@@ -59,3 +59,35 @@ class AcademyResource {
     return isPublished ? 'Published' : 'Draft';
   }
 }
+
+const canonicalResourceTypes = <String>{
+  'form',
+  'testing',
+  'registration',
+  'document',
+  'video',
+  'externalLink',
+  'general',
+};
+
+const canonicalResourceCategories = <String>{
+  'registration',
+  'testing',
+  'forms',
+  'events',
+  'academy-information',
+  'general',
+};
+
+Uri? validResourceLinkUri(String? value) {
+  final trimmed = value?.trim();
+  if (trimmed == null || trimmed.isEmpty) return null;
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null ||
+      !uri.isAbsolute ||
+      (uri.scheme != 'http' && uri.scheme != 'https') ||
+      uri.host.isEmpty) {
+    return null;
+  }
+  return uri;
+}
