@@ -41,7 +41,6 @@ analysis_benchmark.json
 .pub-preload-cache/
 .pub/
 build/
-firestore_backups/
 flutter_*.png
 linked_*.ds
 unlinked.ds

@@ -283,7 +283,7 @@ void main() {
     });
   });
 
-  group('determinism, backup, and safeguards', () {
+  group('determinism and safeguards', () {
     test('plan generation is deterministic and idempotent', () {
       final source = _collections(
         classSessions: {'session': _validClassSession()},
@@ -312,56 +312,6 @@ void main() {
         jsonEncode(serializeFirestoreValue(first)),
       );
       expect(generateFirestoreCleanupPlan(first).operations, isEmpty);
-    });
-
-    test('backup serialization and parser handle Timestamp values', () {
-      final timestamp = Timestamp(123, 456);
-      final backup = FirestoreCleanupBackup(
-        projectId: otaFirestoreProjectId,
-        generatedAt: DateTime.utc(2026, 7, 12),
-        documents: [
-          FirestoreCleanupBackupDocument(
-            collection: 'classSessions',
-            documentId: 'session',
-            originalFields: Map<String, Object?>.from(
-              serializeFirestoreValue(<String, Object?>{
-                    'createdAt': timestamp,
-                  })!
-                  as Map,
-            ),
-          ),
-        ],
-      );
-      final source = jsonEncode(backup.toJson());
-      final parsed = FirestoreCleanupBackup.parseAndValidate(
-        source,
-        expectedProjectId: otaFirestoreProjectId,
-      );
-      final serialized =
-          parsed.documents.single.originalFields['createdAt'] as Map;
-      expect(serialized['__type'], 'Timestamp');
-      expect(serialized['seconds'], 123);
-      expect(serialized['nanoseconds'], 456);
-    });
-
-    test('backup validation rejects the wrong project', () {
-      final json = <String, Object?>{
-        'formatVersion': 1,
-        'projectId': 'wrong-project',
-        'generatedAt': DateTime.utc(2026, 7, 12).toIso8601String(),
-        'documents': <Object?>[],
-      };
-      expect(
-        validateFirestoreCleanupBackupJson(
-          json,
-          expectedProjectId: otaFirestoreProjectId,
-        ),
-        isNotEmpty,
-      );
-    });
-
-    test('apply mode remains disabled by default', () {
-      expect(cleanup_main.enableFirestoreCleanupApply, isFalse);
     });
 
     test('confirmation text must match exactly', () {
@@ -396,6 +346,127 @@ void main() {
       ]);
     });
   });
+
+  group('direct apply safety', () {
+    test('apply is blocked when flag is false', () async {
+      final plan = _plan(classSessions: {'session': _validClassSession()});
+      final service = _fakeApplyService(_validClassSession());
+      await expectLater(
+        service.applyPlan(
+          plan,
+          enableApply: false,
+          confirmationText: cleanup_main.requiredConfirmationText,
+          requiredConfirmationText: cleanup_main.requiredConfirmationText,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('apply is blocked with wrong confirmation text', () async {
+      final plan = _plan(classSessions: {'session': _validClassSession()});
+      final service = _fakeApplyService(_validClassSession());
+      await expectLater(
+        service.applyPlan(
+          plan,
+          enableApply: true,
+          confirmationText: 'WRONG',
+          requiredConfirmationText: cleanup_main.requiredConfirmationText,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('apply is blocked when a planned precondition failed', () async {
+      final base = _plan(classSessions: {'session': _validClassSession()});
+      final plan = FirestoreCleanupPlan(
+        projectId: base.projectId,
+        generatedAt: base.generatedAt,
+        operations: base.operations,
+        unresolvedFindings: base.unresolvedFindings,
+        warnings: const [
+          FirestoreCleanupWarning(
+            collection: 'classSessions',
+            documentId: 'session',
+            code: 'failed',
+            message: 'failed',
+            failedPlannedOperationPrecondition: true,
+          ),
+        ],
+      );
+      await expectLater(
+        _fakeApplyService(_validClassSession()).applyPlan(
+          plan,
+          enableApply: true,
+          confirmationText: cleanup_main.requiredConfirmationText,
+          requiredConfirmationText: cleanup_main.requiredConfirmationText,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('apply is blocked when any document changed', () async {
+      final original = _validClassSession();
+      final changed = _validClassSession()..['description'] = 'Changed';
+      final plan = _plan(classSessions: {'session': original});
+      var writes = 0;
+      final service = _fakeApplyService(changed, onWrite: () => writes += 1);
+      await expectLater(
+        service.applyPlan(
+          plan,
+          enableApply: true,
+          confirmationText: cleanup_main.requiredConfirmationText,
+          requiredConfirmationText: cleanup_main.requiredConfirmationText,
+        ),
+        throwsStateError,
+      );
+      expect(writes, 0);
+    });
+
+    test('apply succeeds without backup and reruns audit', () async {
+      final original = _validClassSession();
+      final plan = _plan(classSessions: {'session': original});
+      var writes = 0;
+      var audits = 0;
+      final service = _fakeApplyService(
+        original,
+        onWrite: () => writes += 1,
+        onAudit: () => audits += 1,
+      );
+      final result = await service.applyPlan(
+        plan,
+        enableApply: true,
+        confirmationText: cleanup_main.requiredConfirmationText,
+        requiredConfirmationText: cleanup_main.requiredConfirmationText,
+      );
+      expect(result.success, isTrue);
+      expect(writes, 1);
+      expect(audits, 1);
+      expect(result.afterIssueCount, 0);
+      expect(result.toJson(), isNot(contains('backupPath')));
+    });
+  });
+}
+
+FirestoreCleanupService _fakeApplyService(
+  Map<String, Object?> currentDocument, {
+  void Function()? onWrite,
+  void Function()? onAudit,
+}) {
+  return FirestoreCleanupService(
+    affectedDocumentsReader: (_) async => <String, FirestoreDocumentMap>{
+      'classSessions': <String, Map<String, Object?>>{
+        'session': Map<String, Object?>.from(currentDocument),
+      },
+    },
+    documentUpdater: (_, _, _, _) async => onWrite?.call(),
+    auditRunner: () async {
+      onAudit?.call();
+      return FirestoreAuditReport(
+        generatedAt: DateTime.utc(2026, 7, 12),
+        collections: const <CollectionAuditReport>[],
+      );
+    },
+  );
 }
 
 FirestoreCleanupPlan _plan({

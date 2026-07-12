@@ -9,7 +9,7 @@ import 'firebase_options.dart';
 import 'services/firestore/firestore_cleanup_service.dart';
 import 'services/location_time_service.dart';
 
-const bool enableFirestoreCleanupApply = false;
+const bool enableFirestoreCleanupApply = true;
 const String requiredConfirmationText = 'APPLY OTA FIRESTORE CLEANUP';
 
 Future<void> main() async {
@@ -48,7 +48,6 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
   final _service = FirestoreCleanupService();
   final _confirmationController = TextEditingController();
   FirestoreCleanupPlan? _plan;
-  PreparedFirestoreCleanup? _prepared;
   FirestoreCleanupResult? _result;
   Object? _error;
   bool _isBusy = false;
@@ -63,7 +62,6 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
     setState(() {
       _isBusy = true;
       _error = null;
-      _prepared = null;
       _result = null;
     });
     try {
@@ -87,42 +85,21 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _prepareBackup() async {
+  Future<void> _apply() async {
     final plan = _plan;
     if (plan == null) return;
-    setState(() {
-      _isBusy = true;
-      _error = null;
-      _prepared = null;
-    });
-    try {
-      final prepared = await _service.prepareApply(plan);
-      if (!mounted) return;
-      setState(() => _prepared = prepared);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error);
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
-  }
-
-  Future<void> _apply() async {
-    final prepared = _prepared;
-    if (prepared == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Final cleanup confirmation'),
         content: SingleChildScrollView(
           child: SelectableText(
-            'Firebase project: ${prepared.plan.projectId}\n'
-            'Affected documents: ${prepared.plan.affectedDocumentCount}\n'
-            'Fields to set: ${prepared.plan.fieldsToSetCount}\n'
-            'Fields to delete: ${prepared.plan.fieldsToDeleteCount}\n'
+            'Firebase project: ${plan.projectId}\n'
+            'Affected documents: ${plan.affectedDocumentCount}\n'
+            'Fields to set: ${plan.fieldsToSetCount}\n'
+            'Fields to delete: ${plan.fieldsToDeleteCount}\n'
             'Unresolved issues: '
-            '${prepared.plan.unresolvedFindings.length}\n'
-            'Backup: ${prepared.backupPath}',
+            '${plan.unresolvedFindings.length}',
           ),
         ),
         actions: [
@@ -143,8 +120,8 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
       _error = null;
     });
     try {
-      final result = await _service.applyPrepared(
-        prepared,
+      final result = await _service.applyPlan(
+        plan,
         enableApply: enableFirestoreCleanupApply,
         confirmationText: _confirmationController.text,
         requiredConfirmationText: requiredConfirmationText,
@@ -164,23 +141,20 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
     requiredConfirmationText: requiredConfirmationText,
   );
 
-  bool get _canPrepare {
+  bool get _canApply {
     final plan = _plan;
     return enableFirestoreCleanupApply &&
         !_isBusy &&
         plan != null &&
+        plan.projectId == otaFirestoreProjectId &&
         plan.operations.isNotEmpty &&
         !plan.hasFailedPlannedOperationPreconditions &&
         _confirmationMatches;
   }
 
-  bool get _canApply =>
-      _canPrepare && _prepared != null && _prepared!.backupPath.isNotEmpty;
-
   @override
   Widget build(BuildContext context) {
     final plan = _plan;
-    final prepared = _prepared;
     final result = _result;
     return Scaffold(
       appBar: AppBar(title: const Text('Firestore Cleanup Planning')),
@@ -219,11 +193,6 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
                 icon: const Icon(Icons.ios_share_outlined),
                 label: const Text('Export Plan JSON'),
               ),
-              OutlinedButton.icon(
-                onPressed: _canPrepare ? _prepareBackup : null,
-                icon: const Icon(Icons.backup_outlined),
-                label: const Text('Prepare Local Backup'),
-              ),
               FilledButton.icon(
                 onPressed: _canApply ? _apply : null,
                 icon: const Icon(Icons.playlist_add_check_circle_outlined),
@@ -244,9 +213,7 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
           const SizedBox(height: 16),
           TextField(
             controller: _confirmationController,
-            onChanged: (_) => setState(() {
-              _prepared = null;
-            }),
+            onChanged: (_) => setState(() {}),
             decoration: const InputDecoration(
               border: OutlineInputBorder(),
               labelText: 'Exact apply confirmation',
@@ -263,10 +230,6 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
               'Operation failed: $_error',
               style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
-          ],
-          if (prepared != null) ...[
-            const SizedBox(height: 16),
-            SelectableText('Validated backup: ${prepared.backupPath}'),
           ],
           if (plan != null) ...[
             const SizedBox(height: 24),
@@ -328,7 +291,6 @@ class _FirestoreCleanupScreenState extends State<FirestoreCleanupScreen> {
             Text('Before issues: ${result.beforeIssueCount ?? 'unknown'}'),
             Text('After issues: ${result.afterIssueCount ?? 'not available'}'),
             Text('Applied operations: ${result.appliedOperationCount}'),
-            SelectableText('Backup: ${result.backupPath}'),
             if (!result.success)
               SelectableText(
                 'Failed at ${result.failedCollection}/'

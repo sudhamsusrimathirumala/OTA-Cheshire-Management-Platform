@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -8,6 +7,17 @@ import 'firestore_audit_service.dart';
 import 'firestore_collections.dart';
 
 const String otaFirestoreProjectId = 'ota-management-platform';
+
+typedef FirestoreCleanupAffectedDocumentsReader =
+    Future<FirestoreCollectionMap> Function(FirestoreCleanupPlan plan);
+typedef FirestoreCleanupDocumentUpdater =
+    Future<void> Function(
+      String collection,
+      String documentId,
+      Map<String, Object?> fieldsToSet,
+      List<String> fieldsToDelete,
+    );
+typedef FirestoreCleanupAuditRunner = Future<FirestoreAuditReport> Function();
 
 enum FirestoreCleanupOperationType { updateFields, deleteFields }
 
@@ -181,92 +191,6 @@ class FirestoreCleanupPlan {
   };
 }
 
-class FirestoreCleanupBackupDocument {
-  const FirestoreCleanupBackupDocument({
-    required this.collection,
-    required this.documentId,
-    required this.originalFields,
-  });
-
-  final String collection;
-  final String documentId;
-  final Map<String, Object?> originalFields;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'collection': collection,
-    'documentId': documentId,
-    'originalFields': originalFields,
-  };
-
-  factory FirestoreCleanupBackupDocument.fromJson(Map<String, Object?> json) {
-    return FirestoreCleanupBackupDocument(
-      collection: json['collection'] as String,
-      documentId: json['documentId'] as String,
-      originalFields: Map<String, Object?>.from(json['originalFields']! as Map),
-    );
-  }
-}
-
-class FirestoreCleanupBackup {
-  const FirestoreCleanupBackup({
-    required this.projectId,
-    required this.generatedAt,
-    required this.documents,
-  });
-
-  final String projectId;
-  final DateTime generatedAt;
-  final List<FirestoreCleanupBackupDocument> documents;
-
-  Map<String, Object?> toJson() => <String, Object?>{
-    'formatVersion': 1,
-    'projectId': projectId,
-    'generatedAt': generatedAt.toUtc().toIso8601String(),
-    'documents': documents.map((document) => document.toJson()).toList(),
-  };
-
-  factory FirestoreCleanupBackup.parseAndValidate(
-    String source, {
-    required String expectedProjectId,
-  }) {
-    final decoded = jsonDecode(source);
-    if (decoded is! Map) {
-      throw const FormatException('Backup root must be a JSON object.');
-    }
-    final json = Map<String, Object?>.from(decoded);
-    final errors = validateFirestoreCleanupBackupJson(
-      json,
-      expectedProjectId: expectedProjectId,
-    );
-    if (errors.isNotEmpty) {
-      throw FormatException(errors.join(' '));
-    }
-    return FirestoreCleanupBackup(
-      projectId: json['projectId']! as String,
-      generatedAt: DateTime.parse(json['generatedAt']! as String),
-      documents: (json['documents']! as List)
-          .map(
-            (document) => FirestoreCleanupBackupDocument.fromJson(
-              Map<String, Object?>.from(document as Map),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class PreparedFirestoreCleanup {
-  const PreparedFirestoreCleanup({
-    required this.plan,
-    required this.backup,
-    required this.backupPath,
-  });
-
-  final FirestoreCleanupPlan plan;
-  final FirestoreCleanupBackup backup;
-  final String backupPath;
-}
-
 class FirestoreCleanupResult {
   const FirestoreCleanupResult({
     required this.success,
@@ -274,7 +198,6 @@ class FirestoreCleanupResult {
     required this.completedAt,
     required this.affectedDocumentCount,
     required this.appliedOperationCount,
-    required this.backupPath,
     required this.beforeIssueCount,
     this.afterIssueCount,
     this.failedCollection,
@@ -288,7 +211,6 @@ class FirestoreCleanupResult {
   final DateTime completedAt;
   final int affectedDocumentCount;
   final int appliedOperationCount;
-  final String backupPath;
   final int? beforeIssueCount;
   final int? afterIssueCount;
   final String? failedCollection;
@@ -302,7 +224,6 @@ class FirestoreCleanupResult {
     'completedAt': completedAt.toUtc().toIso8601String(),
     'affectedDocumentCount': affectedDocumentCount,
     'appliedOperationCount': appliedOperationCount,
-    'backupPath': backupPath,
     'beforeIssueCount': beforeIssueCount,
     'afterIssueCount': afterIssueCount,
     'failedCollection': failedCollection,
@@ -316,12 +237,20 @@ class FirestoreCleanupResult {
 
 class FirestoreCleanupService {
   FirestoreCleanupService({
-    FirebaseFirestore? firestore,
+    this.firestore,
     this.projectId = otaFirestoreProjectId,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+    this.affectedDocumentsReader,
+    this.documentUpdater,
+    this.auditRunner,
+  });
 
-  final FirebaseFirestore _firestore;
+  final FirebaseFirestore? firestore;
   final String projectId;
+  final FirestoreCleanupAffectedDocumentsReader? affectedDocumentsReader;
+  final FirestoreCleanupDocumentUpdater? documentUpdater;
+  final FirestoreCleanupAuditRunner? auditRunner;
+
+  FirebaseFirestore get _database => firestore ?? FirebaseFirestore.instance;
 
   Future<FirestoreCleanupPlan> generatePlan() async {
     final documents = await _readPlanningCollections();
@@ -333,73 +262,8 @@ class FirestoreCleanupService {
     );
   }
 
-  Future<PreparedFirestoreCleanup> prepareApply(
+  Future<FirestoreCleanupResult> applyPlan(
     FirestoreCleanupPlan plan, {
-    String? backupDirectoryPath,
-  }) async {
-    if (plan.projectId != projectId) {
-      throw StateError('Cleanup plan project ID does not match $projectId.');
-    }
-    if (plan.operations.isEmpty) {
-      throw StateError('Cleanup plan contains no operations.');
-    }
-    if (plan.hasFailedPlannedOperationPreconditions) {
-      throw StateError('Cleanup plan has failed operation preconditions.');
-    }
-
-    final originals = await _readAffectedDocuments(plan);
-    for (final operation in plan.operations) {
-      final current = originals[operation.collection]?[operation.documentId];
-      if (current == null || !_preconditionsMatch(operation, current)) {
-        throw StateError(
-          'Precondition failed for '
-          '${operation.collection}/${operation.documentId}.',
-        );
-      }
-    }
-
-    final generatedAt = DateTime.now().toUtc();
-    final backup = FirestoreCleanupBackup(
-      projectId: projectId,
-      generatedAt: generatedAt,
-      documents: [
-        for (final collection in originals.entries)
-          for (final document in collection.value.entries)
-            FirestoreCleanupBackupDocument(
-              collection: collection.key,
-              documentId: document.key,
-              originalFields: Map<String, Object?>.from(
-                serializeFirestoreValue(document.value)! as Map,
-              ),
-            ),
-      ],
-    );
-    final directory = Directory(
-      backupDirectoryPath ??
-          '${Directory.current.path}${Platform.pathSeparator}firestore_backups',
-    );
-    await directory.create(recursive: true);
-    final stamp = _backupTimestamp(generatedAt);
-    final file = File(
-      '${directory.path}${Platform.pathSeparator}'
-      'firestore_cleanup_backup_$stamp.json',
-    );
-    final encoded = const JsonEncoder.withIndent('  ').convert(backup.toJson());
-    await file.writeAsString(encoded, flush: true);
-    final written = await file.readAsString();
-    FirestoreCleanupBackup.parseAndValidate(
-      written,
-      expectedProjectId: projectId,
-    );
-    return PreparedFirestoreCleanup(
-      plan: plan,
-      backup: backup,
-      backupPath: file.absolute.path,
-    );
-  }
-
-  Future<FirestoreCleanupResult> applyPrepared(
-    PreparedFirestoreCleanup prepared, {
     required bool enableApply,
     required String confirmationText,
     required String requiredConfirmationText,
@@ -413,76 +277,56 @@ class FirestoreCleanupService {
     )) {
       throw StateError('Firestore cleanup confirmation text does not match.');
     }
-    if (!File(prepared.backupPath).existsSync()) {
-      throw StateError('The required cleanup backup file is missing.');
+    if (plan.projectId != projectId) {
+      throw StateError('Cleanup plan project ID does not match $projectId.');
+    }
+    if (plan.operations.isEmpty) {
+      throw StateError('Cleanup plan contains no operations.');
+    }
+    if (plan.hasFailedPlannedOperationPreconditions) {
+      throw StateError('Cleanup plan has failed operation preconditions.');
     }
 
-    final validation = FirestoreCleanupBackup.parseAndValidate(
-      await File(prepared.backupPath).readAsString(),
-      expectedProjectId: projectId,
-    );
-    if (validation.documents.length != prepared.plan.affectedDocumentCount) {
-      throw StateError('The cleanup backup document count is invalid.');
-    }
-
-    final current = await _readAffectedDocuments(prepared.plan);
-    final backupDocuments = <String, Map<String, Object?>>{
-      for (final document in validation.documents)
-        '${document.collection}/${document.documentId}':
-            document.originalFields,
-    };
-    for (final operation in prepared.plan.operations) {
-      final data = current[operation.collection]?[operation.documentId];
-      if (data == null || !_preconditionsMatch(operation, data)) {
+    final current = await _readAffectedDocuments(plan);
+    for (final operation in plan.operations) {
+      final document = current[operation.collection]?[operation.documentId];
+      if (document == null || !_preconditionsMatch(operation, document)) {
         throw StateError(
           'Precondition failed for '
           '${operation.collection}/${operation.documentId}.',
         );
       }
     }
-    for (final collection in current.entries) {
-      for (final document in collection.value.entries) {
-        final key = '${collection.key}/${document.key}';
-        final original = backupDocuments[key];
-        if (original == null ||
-            _canonicalValue(document.value) != _canonicalValue(original)) {
-          throw StateError(
-            'Affected document $key changed after the backup was written.',
-          );
-        }
-      }
-    }
 
     final startedAt = DateTime.now().toUtc();
     var appliedOperationCount = 0;
-    final grouped = _groupOperationsByDocument(prepared.plan.operations);
+    final grouped = _groupOperationsByDocument(plan.operations);
     for (final entry in grouped.entries) {
       final separator = entry.key.indexOf('/');
       final collection = entry.key.substring(0, separator);
       final documentId = entry.key.substring(separator + 1);
-      final update = <String, Object?>{};
+      final fieldsToSet = <String, Object?>{};
+      final fieldsToDelete = <String>[];
       for (final operation in entry.value) {
-        update.addAll(operation.fieldsToSet);
-        for (final field in operation.fieldsToDelete) {
-          update[field] = FieldValue.delete();
-        }
+        fieldsToSet.addAll(operation.fieldsToSet);
+        fieldsToDelete.addAll(operation.fieldsToDelete);
       }
       try {
-        // A one-document batch is intentionally below Firestore's limit and
-        // allows an exact failed document to be reported.
-        final batch = _firestore.batch();
-        batch.update(_firestore.collection(collection).doc(documentId), update);
-        await batch.commit();
+        await _applyTargetedUpdate(
+          collection,
+          documentId,
+          fieldsToSet,
+          fieldsToDelete.toSet().toList(),
+        );
         appliedOperationCount += entry.value.length;
       } catch (error) {
         return FirestoreCleanupResult(
           success: false,
           startedAt: startedAt,
           completedAt: DateTime.now().toUtc(),
-          affectedDocumentCount: prepared.plan.affectedDocumentCount,
+          affectedDocumentCount: plan.affectedDocumentCount,
           appliedOperationCount: appliedOperationCount,
-          backupPath: prepared.backupPath,
-          beforeIssueCount: prepared.plan.sourceAuditIssueCount,
+          beforeIssueCount: plan.sourceAuditIssueCount,
           failedCollection: collection,
           failedDocumentId: documentId,
           errorMessage: error.toString(),
@@ -490,7 +334,7 @@ class FirestoreCleanupService {
       }
     }
 
-    final afterAudit = await FirestoreAuditService(firestore: _firestore).run();
+    final afterAudit = await _runPostCleanupAudit();
     final remaining = afterAudit.collections
         .expand((collection) => collection.issues)
         .where(
@@ -503,10 +347,9 @@ class FirestoreCleanupService {
       success: true,
       startedAt: startedAt,
       completedAt: DateTime.now().toUtc(),
-      affectedDocumentCount: prepared.plan.affectedDocumentCount,
+      affectedDocumentCount: plan.affectedDocumentCount,
       appliedOperationCount: appliedOperationCount,
-      backupPath: prepared.backupPath,
-      beforeIssueCount: prepared.plan.sourceAuditIssueCount,
+      beforeIssueCount: plan.sourceAuditIssueCount,
       afterIssueCount: afterAudit.totalIssueCount,
       remainingErrorsAndWarnings: remaining,
     );
@@ -523,7 +366,7 @@ class FirestoreCleanupService {
       FirestoreCollections.resources,
     ];
     final snapshots = await Future.wait(
-      names.map((name) => _firestore.collection(name).get()),
+      names.map((name) => _database.collection(name).get()),
     );
     return <String, FirestoreDocumentMap>{
       for (var index = 0; index < names.length; index += 1)
@@ -537,6 +380,8 @@ class FirestoreCleanupService {
   Future<FirestoreCollectionMap> _readAffectedDocuments(
     FirestoreCleanupPlan plan,
   ) async {
+    final reader = affectedDocumentsReader;
+    if (reader != null) return reader(plan);
     final documents = <String, FirestoreDocumentMap>{};
     final keys = plan.operations
         .map((operation) => '${operation.collection}/${operation.documentId}')
@@ -545,7 +390,7 @@ class FirestoreCleanupService {
       final separator = key.indexOf('/');
       final collection = key.substring(0, separator);
       final documentId = key.substring(separator + 1);
-      final snapshot = await _firestore
+      final snapshot = await _database
           .collection(collection)
           .doc(documentId)
           .get();
@@ -557,6 +402,34 @@ class FirestoreCleanupService {
           Map<String, Object?>.from(data);
     }
     return documents;
+  }
+
+  Future<void> _applyTargetedUpdate(
+    String collection,
+    String documentId,
+    Map<String, Object?> fieldsToSet,
+    List<String> fieldsToDelete,
+  ) async {
+    final updater = documentUpdater;
+    if (updater != null) {
+      await updater(collection, documentId, fieldsToSet, fieldsToDelete);
+      return;
+    }
+    final update = <String, Object?>{...fieldsToSet};
+    for (final field in fieldsToDelete) {
+      update[field] = FieldValue.delete();
+    }
+    // A one-document batch stays safely below Firestore's platform limit and
+    // allows an exact failed document to be reported.
+    final batch = _database.batch();
+    batch.update(_database.collection(collection).doc(documentId), update);
+    await batch.commit();
+  }
+
+  Future<FirestoreAuditReport> _runPostCleanupAudit() {
+    final runner = auditRunner;
+    if (runner != null) return runner();
+    return FirestoreAuditService(firestore: _database).run();
   }
 }
 
@@ -670,50 +543,8 @@ Object? serializeFirestoreValue(Object? value) {
     };
   }
   throw FormatException(
-    'Unsupported Firestore backup value type: ${value.runtimeType}.',
+    'Unsupported Firestore value type: ${value.runtimeType}.',
   );
-}
-
-List<String> validateFirestoreCleanupBackupJson(
-  Map<String, Object?> json, {
-  required String expectedProjectId,
-}) {
-  final errors = <String>[];
-  if (json['projectId'] != expectedProjectId) {
-    errors.add('Backup project ID does not match $expectedProjectId.');
-  }
-  if (json['generatedAt'] is! String ||
-      DateTime.tryParse(json['generatedAt'] as String? ?? '') == null) {
-    errors.add('Backup generatedAt is invalid.');
-  }
-  final documents = json['documents'];
-  if (documents is! List) {
-    errors.add('Backup documents must be a list.');
-    return errors;
-  }
-  for (var index = 0; index < documents.length; index += 1) {
-    final value = documents[index];
-    if (value is! Map) {
-      errors.add('Backup document $index is not an object.');
-      continue;
-    }
-    final document = Map<String, Object?>.from(value);
-    if (_nonEmptyString(document['collection']) == null ||
-        _nonEmptyString(document['documentId']) == null) {
-      errors.add('Backup document $index has invalid identifiers.');
-    }
-    final fields = document['originalFields'];
-    if (fields is! Map) {
-      errors.add('Backup document $index has no original field map.');
-      continue;
-    }
-    _validateSerializedValue(
-      fields,
-      'documents[$index].originalFields',
-      errors,
-    );
-  }
-  return errors;
 }
 
 void _planClassSession(
@@ -991,6 +822,7 @@ Map<String, Object?> _preconditionsFor(
   List<String> fields,
 ) {
   return <String, Object?>{
+    '__documentFingerprint': _documentFingerprint(data),
     for (final field in fields) ...{
       '$field.__present': data.containsKey(field),
       if (data.containsKey(field)) field: data[field],
@@ -1003,7 +835,9 @@ bool _preconditionsMatch(
   Map<String, Object?> current,
 ) {
   for (final entry in operation.preconditions.entries) {
-    if (entry.key.endsWith('.__present')) {
+    if (entry.key == '__documentFingerprint') {
+      if (_documentFingerprint(current) != entry.value) return false;
+    } else if (entry.key.endsWith('.__present')) {
       final field = entry.key.substring(0, entry.key.length - 10);
       if (current.containsKey(field) != entry.value) return false;
     } else if (_canonicalValue(current[entry.key]) !=
@@ -1012,6 +846,19 @@ bool _preconditionsMatch(
     }
   }
   return true;
+}
+
+String _documentFingerprint(Map<String, Object?> document) {
+  final canonical = _canonicalValue(document);
+  var first = 0x811c9dc5;
+  var second = 0x9e3779b9;
+  for (final codeUnit in canonical.codeUnits) {
+    first = ((first ^ codeUnit) * 0x01000193) & 0xffffffff;
+    second = ((second ^ codeUnit) * 0x85ebca6b) & 0xffffffff;
+  }
+  return '${canonical.length}:'
+      '${first.toRadixString(16).padLeft(8, '0')}:'
+      '${second.toRadixString(16).padLeft(8, '0')}';
 }
 
 String _canonicalValue(Object? value) =>
@@ -1064,44 +911,6 @@ Object? _deepClone(Object? value) {
   }
   if (value is List) return value.map(_deepClone).toList();
   return value;
-}
-
-void _validateSerializedValue(Object? value, String path, List<String> errors) {
-  if (value == null || value is String || value is num || value is bool) return;
-  if (value is List) {
-    for (var index = 0; index < value.length; index += 1) {
-      _validateSerializedValue(value[index], '$path[$index]', errors);
-    }
-    return;
-  }
-  if (value is! Map) {
-    errors.add('$path contains an unsupported serialized value.');
-    return;
-  }
-  final map = Map<String, Object?>.from(value);
-  final type = map['__type'];
-  if (type == null) {
-    for (final entry in map.entries) {
-      _validateSerializedValue(entry.value, '$path.${entry.key}', errors);
-    }
-    return;
-  }
-  final valid = switch (type) {
-    'Timestamp' => map['seconds'] is int && map['nanoseconds'] is int,
-    'DateTime' =>
-      map['value'] is String &&
-          DateTime.tryParse(map['value']! as String) != null,
-    'GeoPoint' => map['latitude'] is num && map['longitude'] is num,
-    'DocumentReference' => _nonEmptyString(map['path']) != null,
-    _ => false,
-  };
-  if (!valid) errors.add('$path has an invalid serialized $type value.');
-}
-
-String _backupTimestamp(DateTime value) {
-  String two(int number) => number.toString().padLeft(2, '0');
-  return '${value.year}${two(value.month)}${two(value.day)}_'
-      '${two(value.hour)}${two(value.minute)}${two(value.second)}';
 }
 
 String? _nonEmptyString(Object? value) =>
