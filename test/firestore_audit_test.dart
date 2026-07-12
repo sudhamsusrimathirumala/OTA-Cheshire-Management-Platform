@@ -1,5 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/firestore_schema_update_main.dart'
+    as schema_update;
+import 'package:ota_cheshire_management_platform/models/academy_event.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_audit_service.dart';
 
@@ -197,6 +200,7 @@ void main() {
         now: now,
       );
       expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
+      expect(fields, isNot(contains('linkUrl')));
     });
 
     test('event writes preserve archive state', () {
@@ -215,6 +219,8 @@ void main() {
         now: now,
       );
       expect(fields['isArchived'], isTrue);
+      expect(fields, isNot(contains('registrationDeadline')));
+      expect(fields, isNot(contains('primaryRegistrationResourceId')));
       expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
     });
 
@@ -299,6 +305,7 @@ void main() {
       final publishedAt = DateTime.utc(2026, 6, 2);
       final fields = announcementWriteFields(
         AnnouncementWriteData(
+          id: 'announcement-1',
           title: 'Published',
           summary: 'Summary',
           body: 'Body',
@@ -318,6 +325,184 @@ void main() {
       );
       expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
       expect(fields['priority'], 'important');
+    });
+
+    test('clearing resource link deletes linkUrl on edits', () {
+      final fields = resourceWriteFields(
+        const ResourceWriteData(
+          id: 'resource-1',
+          title: 'Resource',
+          description: 'Description',
+          resourceType: 'form',
+          category: 'forms',
+          locationId: 'ota-cheshire',
+          isPublished: true,
+        ),
+        now: now,
+      );
+
+      expect(fields['linkUrl'], isA<FieldValue>());
+    });
+
+    test('clearing class optionals deletes both fields on edits', () {
+      final fields = classSessionWriteFields(
+        const ClassSessionWriteData(
+          id: 'session-1',
+          className: 'Level 1',
+          classTypeId: 'level-1',
+          locationId: 'ota-cheshire',
+          weekday: 1,
+          startMinutes: 600,
+          endMinutes: 660,
+          eligibleBelts: <String>[],
+          description: 'Class',
+          isActive: true,
+          isPreferred: false,
+        ),
+        now: now,
+      );
+
+      expect(fields['eligibilityNote'], isA<FieldValue>());
+      expect(fields['resumesOn'], isA<FieldValue>());
+    });
+
+    test('clearing event optionals deletes fields and synchronizes links', () {
+      final event = AcademyEvent(
+        id: 'event-1',
+        title: 'Event',
+        description: 'Description',
+        locationId: 'ota-cheshire',
+        eventType: 'event',
+        startDateTime: now,
+        endDateTime: now.add(const Duration(hours: 1)),
+        registrationDeadline: now.add(const Duration(days: 1)),
+        linkedResourceIds: const <String>['old-primary', 'supplement'],
+        primaryRegistrationResourceId: 'old-primary',
+        isPublished: false,
+        createdAt: createdAt,
+        updatedAt: createdAt,
+      );
+      final data = EventWriteData.fromEvent(
+        event,
+        title: event.title,
+        description: event.description,
+        locationId: event.locationId,
+        eventType: event.eventType,
+        startDateTime: event.startDateTime,
+        endDateTime: event.endDateTime,
+        registrationDeadline: null,
+        primaryRegistrationResourceId: null,
+        isPublished: false,
+      );
+      final fields = eventWriteFields(data, now: now);
+
+      expect(fields['registrationDeadline'], isA<FieldValue>());
+      expect(fields['primaryRegistrationResourceId'], isA<FieldValue>());
+      expect(fields['linkedResourceIds'], <String>['supplement']);
+    });
+
+    test('normal edits preserve optional values', () {
+      final resumesOn = DateTime.utc(2026, 8, 1);
+      final resource = resourceWriteFields(
+        const ResourceWriteData(
+          id: 'resource-1',
+          title: 'Resource',
+          description: 'Description',
+          resourceType: 'form',
+          category: 'forms',
+          linkUrl: 'https://example.com',
+          locationId: 'ota-cheshire',
+          isPublished: true,
+        ),
+        now: now,
+      );
+      final session = classSessionWriteFields(
+        ClassSessionWriteData(
+          id: 'session-1',
+          className: 'Level 1',
+          classTypeId: 'level-1',
+          locationId: 'ota-cheshire',
+          weekday: 1,
+          startMinutes: 600,
+          endMinutes: 660,
+          eligibleBelts: const <String>[],
+          description: 'Class',
+          eligibilityNote: 'Instructor approval',
+          resumesOn: resumesOn,
+          isActive: true,
+          isPreferred: false,
+        ),
+        now: now,
+      );
+      final deadline = DateTime.utc(2026, 7, 20);
+      final event = eventWriteFields(
+        EventWriteData(
+          id: 'event-1',
+          title: 'Event',
+          description: 'Description',
+          locationId: 'ota-cheshire',
+          eventType: 'event',
+          startDateTime: now,
+          endDateTime: now.add(const Duration(hours: 1)),
+          registrationDeadline: deadline,
+          primaryRegistrationResourceId: 'registration-resource',
+          isPublished: true,
+        ),
+        now: now,
+      );
+
+      expect(resource['linkUrl'], 'https://example.com');
+      expect(session['eligibilityNote'], 'Instructor approval');
+      expect((session['resumesOn']! as Timestamp).toDate().toUtc(), resumesOn);
+      expect(
+        (event['registrationDeadline']! as Timestamp).toDate().toUtc(),
+        deadline,
+      );
+      expect(event['primaryRegistrationResourceId'], 'registration-resource');
+      expect(event['linkedResourceIds'], <String>['registration-resource']);
+    });
+
+    test('announcement drafts clear only never-published timestamps', () {
+      final draft = announcementWriteFields(
+        const AnnouncementWriteData(
+          id: 'draft-1',
+          title: 'Draft',
+          summary: 'Summary',
+          body: 'Body',
+          announcementType: 'general',
+          priority: 'normal',
+          status: 'draft',
+          locationId: 'ota-cheshire',
+          requiresAction: false,
+        ),
+        now: now,
+      );
+      final publishedAt = DateTime.utc(2026, 6, 2);
+      final archived = announcementWriteFields(
+        AnnouncementWriteData(
+          id: 'archived-1',
+          title: 'Archived',
+          summary: 'Summary',
+          body: 'Body',
+          announcementType: 'general',
+          priority: 'normal',
+          status: 'archived',
+          locationId: 'ota-cheshire',
+          requiresAction: false,
+          publishedAt: publishedAt,
+        ),
+        now: now,
+      );
+
+      expect(draft['publishedAt'], isA<FieldValue>());
+      expect(
+        (archived['publishedAt']! as Timestamp).toDate().toUtc(),
+        publishedAt,
+      );
+    });
+
+    test('approved schema update flag defaults to false', () {
+      expect(schema_update.enableApprovedSchemaUpdate, isFalse);
     });
   });
 }

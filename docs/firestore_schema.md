@@ -23,7 +23,6 @@ Required fields:
 - `email`: String
 - `role`: String
 - `locationId`: String referencing `locations`
-- `dateOfBirth`: Timestamp
 - `approvalStatus`: String (`pending`, `approved`, or `rejected`)
 - `linkedStudentProfileIds`: List<String> referencing `studentProfiles`
 - `selectedStudentProfileId`: String or null; when set, it must reference a
@@ -41,6 +40,7 @@ Required fields:
 - `fullName`: String
 - `beltRank`: String
 - `locationId`: String referencing `locations`
+- `dateOfBirth`: Timestamp
 - `guardianUserIds`: List<String> referencing `users`
 - `preferredClassGroupIds`: List<String>
 - `promotionHistory`: List

@@ -135,7 +135,9 @@ Map<String, Object?> resourceWriteFields(
     'resourceType': resourceType,
     'category': normalizeResourceCategory(data.category),
     if (data.linkUrl != null && data.linkUrl!.trim().isNotEmpty)
-      'linkUrl': data.linkUrl!.trim(),
+      'linkUrl': data.linkUrl!.trim()
+    else if (data.id != null)
+      'linkUrl': FieldValue.delete(),
     'locationId': data.locationId,
     'isPublished': data.isPublished,
     'isArchived': data.isArchived,
@@ -175,7 +177,10 @@ Map<String, Object?> announcementWriteFields(
     'status': data.status,
     'audienceType': data.audienceType,
     'locationId': data.locationId,
-    if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt),
+    if (publishedAt != null)
+      'publishedAt': Timestamp.fromDate(publishedAt)
+    else if (data.id != null && data.status == 'draft')
+      'publishedAt': FieldValue.delete(),
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
     'targetBelts': List<String>.from(data.targetBelts),
@@ -200,11 +205,15 @@ Map<String, Object?> eventWriteFields(
     'eventType': data.eventType,
     'startDateTime': Timestamp.fromDate(data.startDateTime),
     'endDateTime': Timestamp.fromDate(data.endDateTime),
-    'registrationDeadline': data.registrationDeadline == null
-        ? null
-        : Timestamp.fromDate(data.registrationDeadline!),
+    if (data.registrationDeadline != null)
+      'registrationDeadline': Timestamp.fromDate(data.registrationDeadline!)
+    else if (data.id != null)
+      'registrationDeadline': FieldValue.delete(),
     'linkedResourceIds': linkedResourceIds.toList()..sort(),
-    'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
+    if (data.primaryRegistrationResourceId != null)
+      'primaryRegistrationResourceId': data.primaryRegistrationResourceId
+    else if (data.id != null)
+      'primaryRegistrationResourceId': FieldValue.delete(),
     'isPublished': data.isPublished,
     'isArchived': data.isArchived,
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
@@ -227,11 +236,15 @@ Map<String, Object?> classSessionWriteFields(
     'eligibleBelts': List<String>.from(data.eligibleBelts),
     'description': data.description,
     if (data.eligibilityNote != null && data.eligibilityNote!.trim().isNotEmpty)
-      'eligibilityNote': data.eligibilityNote!.trim(),
+      'eligibilityNote': data.eligibilityNote!.trim()
+    else if (data.id != null)
+      'eligibilityNote': FieldValue.delete(),
     'isActive': data.isActive,
     'isPreferred': data.isPreferred,
     if (data.resumesOn != null)
-      'resumesOn': Timestamp.fromDate(data.resumesOn!),
+      'resumesOn': Timestamp.fromDate(data.resumesOn!)
+    else if (data.id != null)
+      'resumesOn': FieldValue.delete(),
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };
@@ -342,6 +355,13 @@ class EventWriteData {
     List<String>? linkedResourceIds,
     String? primaryRegistrationResourceId,
   }) {
+    final synchronizedResourceIds = <String>{
+      ...(linkedResourceIds ?? event.linkedResourceIds),
+    };
+    if (primaryRegistrationResourceId == null &&
+        event.primaryRegistrationResourceId != null) {
+      synchronizedResourceIds.remove(event.primaryRegistrationResourceId);
+    }
     return EventWriteData(
       id: event.id,
       title: title,
@@ -351,7 +371,7 @@ class EventWriteData {
       startDateTime: startDateTime,
       endDateTime: endDateTime,
       registrationDeadline: registrationDeadline,
-      linkedResourceIds: linkedResourceIds ?? event.linkedResourceIds,
+      linkedResourceIds: synchronizedResourceIds.toList(),
       primaryRegistrationResourceId: primaryRegistrationResourceId,
       isPublished: isPublished,
       isArchived: event.isArchived,

@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'firebase_options.dart';
 import 'services/firestore/firestore_schema_update_service.dart';
 
-const bool enableApprovedSchemaUpdate = true;
+const bool enableApprovedSchemaUpdate = false;
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
