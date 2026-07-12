@@ -23,6 +23,7 @@ Required fields:
 - `email`: String
 - `role`: String
 - `locationId`: String referencing `locations`
+- `dateOfBirth`: Timestamp
 - `approvalStatus`: String (`pending`, `approved`, or `rejected`)
 - `linkedStudentProfileIds`: List<String> referencing `studentProfiles`
 - `selectedStudentProfileId`: String or null; when set, it must reference a
@@ -50,9 +51,8 @@ Required fields:
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-`selfUserId`, when present, must resolve to `users`. `age` is a current
-compatibility field and is not migrated in Phase 1. `dateOfBirth` is a possible
-future field.
+`selfUserId`, when present, must resolve to `users`. Readers temporarily accept
+legacy `age` only when `dateOfBirth` is missing; new writes never write `age`.
 
 ## `classSessions/{sessionId}`
 
@@ -111,8 +111,9 @@ Required fields:
 - `updatedAt`: Timestamp
 
 The canonical relationship is from an event to General Resource IDs.
-`registrationUrl`, `registrationDeadline`, and `showInResources` remain optional
-legacy compatibility fields in Phase 1.
+`registrationDeadline` is optional. Registration links live only on the primary
+General Resource; event readers ignore legacy `registrationUrl` and
+`showInResources` fields.
 
 ## `resources/{resourceId}`
 

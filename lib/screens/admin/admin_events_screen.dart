@@ -97,8 +97,6 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
   }
 
   Future<void> _openEventSheet([AcademyEvent? event]) async {
-    // TODO: Registration URLs should later feed both family Events and
-    // Resources pages from the same Firestore event/resource relationship.
     final result = await showModalBottomSheet<_EventFormResult>(
       context: context,
       isScrollControlled: true,
@@ -177,9 +175,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
               _PreviewLine(label: 'Location', value: event.locationId),
               _PreviewLine(
                 label: 'Registration',
-                value: event.registrationUrl == null
+                value: event.primaryRegistrationResourceId == null
                     ? 'No registration link'
-                    : event.registrationUrl!,
+                    : event.primaryRegistrationResourceId!,
               ),
             ],
           ),
@@ -494,11 +492,11 @@ class _EventRow extends StatelessWidget {
               ),
               _Badge(
                 label: event.registrationLabel,
-                tone: event.registrationUrl == null
+                tone: event.primaryRegistrationResourceId == null
                     ? _BadgeTone.neutral
                     : _BadgeTone.important,
               ),
-              if (event.registrationUrl != null)
+              if (event.primaryRegistrationResourceId != null)
                 const _Badge(label: 'Link', tone: _BadgeTone.success),
             ],
           );
@@ -625,10 +623,8 @@ class _DateBadge extends StatelessWidget {
 class _EventFormSheetState extends State<_EventFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _registrationUrlController;
   late final TextEditingController _notesController;
   late _EventType _eventType;
-  late bool _showInResources;
   DateTime? _startDateTime;
   DateTime? _endDateTime;
   DateTime? _registrationDeadline;
@@ -646,13 +642,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     );
     _startDateTime = event?.startDateTime;
     _endDateTime = event?.endDateTime;
-    _registrationUrlController = TextEditingController(
-      text: event?.registrationUrl ?? '',
-    );
     _registrationDeadline = event?.registrationDeadline;
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
-    _showInResources = event?.showInResources ?? false;
     _primaryRegistrationResourceId =
         event?.primaryRegistrationResourceId ??
         event?.linkedResourceIds.firstOrNull;
@@ -665,7 +657,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _registrationUrlController.dispose();
     _notesController.dispose();
     super.dispose();
   }
@@ -728,11 +719,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               ),
             ),
             const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _registrationUrlController,
-              label: 'Registration link / Google Form URL',
-            ),
-            const SizedBox(height: 10),
             LocationDateTimeField(
               label: 'Registration deadline',
               locationId: _adminLocationId(),
@@ -743,12 +729,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             ),
             const SizedBox(height: 10),
             _buildResourceLinkingSection(),
-            const SizedBox(height: 10),
-            _SwitchRow(
-              title: 'Show in resources',
-              value: _showInResources,
-              onChanged: (value) => setState(() => _showInResources = value),
-            ),
             const SizedBox(height: 10),
             _AdminTextField(
               controller: _notesController,
@@ -807,9 +787,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     final startDateTime = _startDateTime;
     final endDateTime = _endDateTime;
     final registrationDeadline = _registrationDeadline;
-    final registrationUrl = _registrationUrlController.text.trim().isEmpty
-        ? null
-        : _registrationUrlController.text.trim();
 
     if (title.isEmpty) {
       setState(() => _validationMessage = 'Title is required.');
@@ -846,10 +823,15 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               )
               .firstOrNull;
     if (action == _EventSaveAction.publish &&
-        validatePublishedEventResource(selectedResource) != null) {
+        validatePublishedEventResource(
+              selectedResource,
+              eventLocationId: locationId,
+            ) !=
+            null) {
       setState(
         () => _validationMessage = validatePublishedEventResource(
           selectedResource,
+          eventLocationId: locationId,
         ),
       );
       return;
@@ -865,14 +847,12 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             eventType: _eventType.id,
             startDateTime: startDateTime,
             endDateTime: endDateTime,
-            registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
             linkedResourceIds: _primaryRegistrationResourceId == null
                 ? const <String>[]
                 : <String>[_primaryRegistrationResourceId!],
             primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
-            showInResources: _showInResources,
           )
         : EventWriteData.fromEvent(
             event,
@@ -882,14 +862,12 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             eventType: _eventType.id,
             startDateTime: startDateTime,
             endDateTime: endDateTime,
-            registrationUrl: registrationUrl,
             registrationDeadline: registrationDeadline,
             linkedResourceIds: _primaryRegistrationResourceId == null
                 ? const <String>[]
                 : <String>[_primaryRegistrationResourceId!],
             primaryRegistrationResourceId: _primaryRegistrationResourceId,
             isPublished: isPublished,
-            showInResources: _showInResources,
           );
 
     Navigator.of(context).pop(
@@ -1293,36 +1271,6 @@ class _TwoColumnFields extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-class _SwitchRow extends StatelessWidget {
-  const _SwitchRow({
-    required this.title,
-    required this.value,
-    required this.onChanged,
-  });
-
-  final String title;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SwitchListTile(
-      value: value,
-      onChanged: onChanged,
-      dense: true,
-      contentPadding: EdgeInsets.zero,
-      activeThumbColor: OtaColors.maroon,
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: OtaColors.ink,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 }

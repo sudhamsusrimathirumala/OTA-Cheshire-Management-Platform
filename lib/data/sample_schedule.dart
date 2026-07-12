@@ -293,10 +293,8 @@ String _classTypeIdFor(String className) {
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',
     'Level 4' => 'level-4',
-    'Black Belt' ||
-    'Teen & Black Belt' ||
-    'Adult' ||
-    'Teen/Adult Sparring' => 'teen-adult',
+    'Black Belt' || 'Teen & Black Belt' || 'Adult' => 'teen-adult',
+    'Teen/Adult Sparring' => 'teen-adult-sparring',
     'Level 1 / Level 2 Sparring' => 'level-1-2-sparring',
     _ => throw ArgumentError.value(
       className,

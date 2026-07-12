@@ -698,44 +698,6 @@ void _auditEvents(
       );
     }
     issues.addAll(validateEventResourceReferences(id, data, resources));
-    if (_nonEmptyString(data['registrationUrl']) != null &&
-        _stringList(data['linkedResourceIds']).isEmpty &&
-        _nonEmptyString(data['primaryRegistrationResourceId']) == null) {
-      issues.add(
-        _issue(
-          FirestoreCollections.events,
-          id,
-          'event.registration_url_without_resource',
-          FirestoreAuditSeverity.warning,
-          'registrationUrl is present without a General Resource relationship.',
-          'Create or link a General Resource after review.',
-        ),
-      );
-    }
-    if (data.containsKey('showInResources')) {
-      issues.add(
-        _issue(
-          FirestoreCollections.events,
-          id,
-          'event.legacy_show_in_resources',
-          FirestoreAuditSeverity.info,
-          'Legacy showInResources field is present.',
-          'Retain it until the future cleanup migration.',
-        ),
-      );
-    }
-    if (isPlaceholderUrl(data['registrationUrl'])) {
-      issues.add(
-        _issue(
-          FirestoreCollections.events,
-          id,
-          'event.placeholder_registration_url',
-          FirestoreAuditSeverity.warning,
-          'registrationUrl looks like sample or placeholder data.',
-          'Review the URL manually.',
-        ),
-      );
-    }
     if (start != null) {
       final key =
           '${_normalized(data['locationId'])}|${_normalized(data['title'])}|${start.toUtc().toIso8601String()}';

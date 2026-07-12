@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/academy_location.dart';
+import '../models/student_profile.dart';
 import 'firestore/firestore_collections.dart';
 
 class LocationTimeService {
@@ -97,6 +98,14 @@ class LocationTimeService {
       otaCheshireTimeZoneId => 'Eastern Time',
       final id => id,
     };
+  }
+
+  int ageForStudent(StudentProfile student, {DateTime? instant}) {
+    final academyDate = toLocationTime(
+      instant ?? DateTime.now(),
+      student.locationId,
+    );
+    return student.ageOn(academyDate);
   }
 
   String formatDateTime(DateTime instant, String locationId) {

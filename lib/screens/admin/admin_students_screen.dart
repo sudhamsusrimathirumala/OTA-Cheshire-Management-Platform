@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -490,7 +491,7 @@ class _AdminStudentRecord {
     return _AdminStudentRecord(
       id: profile.id,
       name: profile.name,
-      age: profile.age,
+      age: const LocationTimeService().ageForStudent(profile),
       belt: profile.belt,
       locationId: profile.locationId,
       stickerCount: profile.stickerCount,

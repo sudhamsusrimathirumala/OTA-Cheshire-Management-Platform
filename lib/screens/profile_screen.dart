@@ -4,6 +4,7 @@ import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
@@ -147,7 +148,7 @@ class _StudentInformationSection extends StatelessWidget {
         ProfileInfoRow(
           icon: Icons.cake_rounded,
           label: 'Age',
-          value: '${student.age}',
+          value: '${const LocationTimeService().ageForStudent(student)}',
         ),
         ProfileInfoRow(
           icon: Icons.workspace_premium_rounded,

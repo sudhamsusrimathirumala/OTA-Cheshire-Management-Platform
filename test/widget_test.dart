@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/data/sample_schedule.dart';
+import 'package:ota_cheshire_management_platform/data/sample_student.dart';
 import 'package:ota_cheshire_management_platform/models/academy_event.dart';
+import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
@@ -26,9 +28,12 @@ import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_migration_service.dart';
+import 'package:ota_cheshire_management_platform/services/firestore/firestore_schema_update_service.dart';
+import 'package:ota_cheshire_management_platform/services/firestore/firestore_seed_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
 import 'package:ota_cheshire_management_platform/widgets/admin/admin_bottom_nav_bar.dart';
 import 'package:ota_cheshire_management_platform/widgets/ota_bottom_nav_bar.dart';
@@ -47,6 +52,14 @@ void main() {
       );
 
       expect(storedClass.className, 'Teen/Adult Sparring');
+      expect(storedClass.classTypeId, 'teen-adult-sparring');
+      expect(storedClass.bulkGroupId, 'teen-adult-sparring-standard');
+      expect(storedClass.isEligibleFor(sampleStudent), isTrue);
+      final levelSparring = rawFridaySchedule.firstWhere(
+        (session) => session.id == 'fri_sparring',
+      );
+      expect(levelSparring.classTypeId, 'level-1-2-sparring');
+      expect(levelSparring.bulkGroupId, 'level-1-2-sparring-standard');
       expect(storedClass.startLabel, '7:20 PM');
       expect(storedClass.isPublished, isFalse);
       expect(storedClass.resumesOn, DateTime(2026, 9, 5));
@@ -534,9 +547,21 @@ void main() {
     ], locationId: 'ota-cheshire');
 
     expect(options.map((item) => item.id), ['draft', 'general']);
-    expect(validatePublishedEventResource(draft), isNotNull);
-    expect(validatePublishedEventResource(archived), isNotNull);
-    expect(validatePublishedEventResource(options.last), isNull);
+    expect(
+      validatePublishedEventResource(draft, eventLocationId: 'ota-cheshire'),
+      isNotNull,
+    );
+    expect(
+      validatePublishedEventResource(archived, eventLocationId: 'ota-cheshire'),
+      isNotNull,
+    );
+    expect(
+      validatePublishedEventResource(
+        options.last,
+        eventLocationId: 'ota-cheshire',
+      ),
+      isNull,
+    );
   });
 
   test('student resources only include visible matching general resources', () {
@@ -689,8 +714,8 @@ void main() {
   test('schedule write data preserves wall clock minutes', () {
     const data = ClassSessionWriteData(
       className: 'Teen/Adult Sparring',
-      classTypeId: 'teen-adult',
-      bulkGroupId: 'teen-adult-evening',
+      classTypeId: 'teen-adult-sparring',
+      bulkGroupId: 'teen-adult-sparring-standard',
       locationId: 'ota-cheshire',
       weekday: DateTime.friday,
       startMinutes: 19 * 60 + 20,
@@ -704,7 +729,7 @@ void main() {
     expect(data.startMinutes, 1160);
     expect(data.startTime.hour, 19);
     expect(data.startTime.minute, 20);
-    expect(data.bulkGroupId, 'teen-adult-evening');
+    expect(data.bulkGroupId, 'teen-adult-sparring-standard');
     expect(minutesForTimeOfDay(const TimeOfDay(hour: 19, minute: 20)), 1160);
   });
 
@@ -772,7 +797,6 @@ void main() {
       linkedResourceIds: const ['old-resource'],
       primaryRegistrationResourceId: 'old-resource',
       isPublished: false,
-      showInResources: false,
       createdAt: createdAt,
       updatedAt: createdAt,
     );
@@ -787,7 +811,6 @@ void main() {
       linkedResourceIds: const [],
       primaryRegistrationResourceId: null,
       isPublished: false,
-      showInResources: false,
     );
     expect(cleared.primaryRegistrationResourceId, isNull);
 
@@ -802,7 +825,6 @@ void main() {
       linkedResourceIds: const [],
       primaryRegistrationResourceId: 'new-resource',
       isPublished: true,
-      showInResources: true,
       createdAt: createdAt,
     );
     final fields = eventWriteFields(linked, now: now);
@@ -823,7 +845,6 @@ void main() {
         'startDateTime',
         'endDateTime',
         'registrationDeadline',
-        'registrationUrl',
         'linkedResourceIds',
         'primaryRegistrationResourceId',
         'isPublished',
@@ -840,8 +861,8 @@ void main() {
     final data = ClassSessionWriteData(
       id: 'fri-sparring',
       className: 'Teen/Adult Sparring',
-      classTypeId: 'teen-adult',
-      bulkGroupId: 'teen-adult-evening',
+      classTypeId: 'teen-adult-sparring',
+      bulkGroupId: 'teen-adult-sparring-standard',
       locationId: 'ota-cheshire',
       weekday: DateTime.friday,
       startMinutes: 1160,
@@ -858,7 +879,7 @@ void main() {
     expect(fields['weekday'], DateTime.friday);
     expect(fields['startMinutes'], 1160);
     expect(fields['endMinutes'], 1200);
-    expect(fields['bulkGroupId'], 'teen-adult-evening');
+    expect(fields['bulkGroupId'], 'teen-adult-sparring-standard');
     expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
     expect(
       fields.keys,
@@ -1076,6 +1097,96 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(WelcomeScreen), findsOneWidget);
+  });
+
+  test('event writes use only General Resource registration fields', () {
+    final fields = eventWriteFields(
+      EventWriteData(
+        title: 'Event',
+        description: 'Description',
+        locationId: 'ota-cheshire',
+        eventType: 'specialEvent',
+        startDateTime: DateTime.utc(2026, 8, 1),
+        endDateTime: DateTime.utc(2026, 8, 1, 1),
+        primaryRegistrationResourceId: 'registration-resource',
+        isPublished: true,
+      ),
+      now: DateTime.utc(2026, 7, 12),
+    );
+
+    expect(fields, isNot(contains('registrationUrl')));
+    expect(fields, isNot(contains('showInResources')));
+    expect(fields['linkedResourceIds'], ['registration-resource']);
+  });
+
+  test('event parser ignores removed legacy event fields', () {
+    final event = academyEventFromFirestoreData('event', {
+      'title': 'Event',
+      'locationId': 'ota-cheshire',
+      'startDateTime': Timestamp.fromDate(DateTime.utc(2026, 8, 1)),
+      'registrationUrl': 'https://legacy.example',
+      'showInResources': true,
+    });
+
+    expect(event, isNotNull);
+    expect(event!.primaryRegistrationResourceId, isNull);
+    expect(event.registrationLabel, 'No registration');
+  });
+
+  test('student profile writes date of birth and never age', () {
+    final fields = studentProfileWriteFields(sampleStudent);
+    expect(fields['dateOfBirth'], isA<Timestamp>());
+    expect(fields, isNot(contains('age')));
+  });
+
+  test('computed age handles birthday boundaries', () {
+    final student = Student(
+      id: 'student',
+      name: 'Student',
+      locationId: 'ota-cheshire',
+      belt: 'Black',
+      dateOfBirth: DateTime(2009, 7, 12),
+      stickerCount: 0,
+      stickersRequired: 0,
+      nextRank: 'Second Dan',
+    );
+
+    expect(student.ageOn(DateTime(2026, 7, 11)), 16);
+    expect(student.ageOn(DateTime(2026, 7, 12)), 17);
+  });
+
+  test('student parser temporarily falls back to legacy age', () {
+    final student = studentProfileFromFirestoreData('student', {
+      'fullName': 'Student',
+      'locationId': 'ota-cheshire',
+      'beltRank': 'Black',
+      'age': 17,
+    });
+
+    expect(student, isNotNull);
+    expect(student!.dateOfBirth, isNull);
+    expect(student.legacyAge, 17);
+  });
+
+  test('approved schema update contains targeted updates and no deletes', () {
+    final operations = approvedSchemaUpdateOperations();
+    expect(operations, hasLength(9));
+    expect(
+      operations.every((operation) => operation.documentId.isNotEmpty),
+      isTrue,
+    );
+    final session = operations.first;
+    expect(session.fields, approvedTeenAdultSparringUpdate());
+    final event = operations.firstWhere(
+      (operation) => operation.documentId == 'parent_night_out',
+    );
+    expect(event.fields['registrationUrl'], isA<FieldValue>());
+    expect(event.fields['showInResources'], isA<FieldValue>());
+    final student = operations.firstWhere(
+      (operation) => operation.documentId == 'student_sudhamsu',
+    );
+    expect(student.fields['dateOfBirth'], isA<Timestamp>());
+    expect(student.fields['age'], isA<FieldValue>());
   });
 }
 

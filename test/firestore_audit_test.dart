@@ -209,7 +209,6 @@ void main() {
           startDateTime: now,
           endDateTime: now.add(const Duration(hours: 1)),
           isPublished: true,
-          showInResources: true,
           isArchived: true,
           createdAt: createdAt,
         ),

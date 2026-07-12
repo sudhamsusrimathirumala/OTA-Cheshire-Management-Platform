@@ -777,32 +777,6 @@ void _addContentAndEventUnresolved(
       ),
     );
   }
-  for (final entry in events.entries) {
-    if (entry.value.containsKey('showInResources')) {
-      unresolved.add(
-        FirestoreCleanupUnresolvedFinding(
-          collection: FirestoreCollections.events,
-          documentId: entry.key,
-          issueCode: 'event.legacy_show_in_resources_preserved',
-          message: 'Legacy showInResources remains for compatibility.',
-          recommendedAction: 'Remove only after compatibility code is retired.',
-        ),
-      );
-    }
-  }
-  for (final id in const ['fall_tournament', 'parent_night_out']) {
-    if (events.containsKey(id)) {
-      unresolved.add(
-        FirestoreCleanupUnresolvedFinding(
-          collection: FirestoreCollections.events,
-          documentId: id,
-          issueCode: 'event.placeholder_registration_url_requires_review',
-          message: 'The placeholder-looking registration URL is preserved.',
-          recommendedAction: 'Review and approve a real URL manually.',
-        ),
-      );
-    }
-  }
   if (events.containsKey('fall_tournament')) {
     unresolved.add(
       const FirestoreCleanupUnresolvedFinding(

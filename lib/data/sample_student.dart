@@ -2,12 +2,12 @@ import '../models/student.dart';
 import '../models/user_account.dart';
 import 'sample_constants.dart';
 
-const sampleStudent = Student(
+final sampleStudent = Student(
   id: 'student_sudhamsu',
   name: 'Sudhamsu',
   locationId: otaCheshireLocationId,
   belt: 'Red-Black',
-  age: 17,
+  dateOfBirth: DateTime.utc(2009, 1, 1),
   stickerCount: 1,
   stickersRequired: 3,
   nextRank: 'Black',
@@ -15,14 +15,14 @@ const sampleStudent = Student(
   preferredClassGroupIds: ['teen-adult', 'level-4'],
 );
 
-const sampleStudentProfiles = [
+final sampleStudentProfiles = [
   sampleStudent,
   Student(
     id: 'student_maya',
     name: 'Maya Patel',
     locationId: otaCheshireLocationId,
     belt: 'Yellow-Green',
-    age: 9,
+    dateOfBirth: DateTime.utc(2016, 1, 1),
     stickerCount: 2,
     stickersRequired: 4,
     nextRank: 'Green',
@@ -34,7 +34,7 @@ const sampleStudentProfiles = [
     name: 'Aarav Patel',
     locationId: otaCheshireLocationId,
     belt: 'White-Yellow',
-    age: 6,
+    dateOfBirth: DateTime.utc(2019, 1, 1),
     stickerCount: 1,
     stickersRequired: 3,
     nextRank: 'Yellow',
@@ -46,7 +46,7 @@ const sampleStudentProfiles = [
     name: 'Elena Rivera',
     locationId: otaCheshireLocationId,
     belt: 'Blue',
-    age: 13,
+    dateOfBirth: DateTime.utc(2013, 1, 1),
     stickerCount: 3,
     stickersRequired: 4,
     nextRank: 'Blue-Red',
@@ -58,7 +58,7 @@ const sampleStudentProfiles = [
     name: 'Daniel Kim',
     locationId: otaCheshireLocationId,
     belt: 'Black',
-    age: 21,
+    dateOfBirth: DateTime.utc(2005, 1, 1),
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'Second Dan',

@@ -8,10 +8,8 @@ class AcademyEvent {
     required this.startDateTime,
     required this.endDateTime,
     required this.isPublished,
-    required this.showInResources,
     required this.createdAt,
     required this.updatedAt,
-    this.registrationUrl,
     this.registrationDeadline,
     this.isArchived = false,
     this.linkedResourceIds = const <String>[],
@@ -25,10 +23,8 @@ class AcademyEvent {
   final String eventType;
   final DateTime startDateTime;
   final DateTime endDateTime;
-  final String? registrationUrl;
   final DateTime? registrationDeadline;
   final bool isPublished;
-  final bool showInResources;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isArchived;
@@ -36,7 +32,7 @@ class AcademyEvent {
   final String? primaryRegistrationResourceId;
 
   bool get isRegistrationOpen {
-    if (registrationUrl == null) {
+    if (primaryRegistrationResourceId == null) {
       return false;
     }
 
@@ -47,7 +43,7 @@ class AcademyEvent {
   String get dateRangeLabel => _formatDateTime(startDateTime);
 
   String get registrationLabel {
-    if (registrationUrl == null) {
+    if (primaryRegistrationResourceId == null) {
       return 'No registration';
     }
 

@@ -613,48 +613,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   AcademyEvent? _eventFromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final data = document.data();
-    final title = _stringValue(data['title']);
-    final locationId = _stringValue(data['locationId']);
-    final startDateTime =
-        (_dateTimeValue(data['startDateTime']) ??
-                _dateTimeValue(data['startsAt']))
-            ?.toUtc();
-
-    if (title == null || locationId == null || startDateTime == null) {
-      return null;
-    }
-
-    final endDateTime =
-        _dateTimeValue(data['endDateTime'])?.toUtc() ??
-        startDateTime.add(const Duration(hours: 1));
-    final createdAt = _dateTimeValue(data['createdAt']) ?? startDateTime;
-    final updatedAt = _dateTimeValue(data['updatedAt']) ?? createdAt;
-
-    return AcademyEvent(
-      id: document.id,
-      title: title,
-      description: _stringValue(data['description']) ?? '',
-      locationId: locationId,
-      eventType: _stringValue(data['eventType']) ?? 'specialEvent',
-      startDateTime: startDateTime,
-      endDateTime: endDateTime,
-      registrationUrl: _stringValue(data['registrationUrl']),
-      registrationDeadline: _dateTimeValue(
-        data['registrationDeadline'],
-      )?.toUtc(),
-      isPublished: _boolValue(data['isPublished']) ?? false,
-      showInResources: _boolValue(data['showInResources']) ?? false,
-      isArchived: _boolValue(data['isArchived']) ?? false,
-      linkedResourceIds: _stringListValue(data['linkedResourceIds']),
-      primaryRegistrationResourceId: _stringValue(
-        data['primaryRegistrationResourceId'],
-      ),
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-    );
-  }
+  ) => academyEventFromFirestoreData(document.id, document.data());
 
   List<AcademyResource> _resourcesFromSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
@@ -736,41 +695,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   StudentProfile? _studentProfileFromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
-  ) {
-    final data = document.data();
-    final name = _stringValue(data['fullName']) ?? _stringValue(data['name']);
-    final locationId = _stringValue(data['locationId']);
-    final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
-    final age = _intValue(data['age']);
-
-    if (name == null || locationId == null || belt == null || age == null) {
-      return null;
-    }
-
-    final stickerProgress = data['stickerProgress'];
-    final stickerProgressMap = stickerProgress is Map
-        ? stickerProgress
-        : const <Object?, Object?>{};
-
-    return Student(
-      id: document.id,
-      name: name,
-      locationId: locationId,
-      belt: belt,
-      age: age,
-      stickerCount: _intValue(stickerProgressMap['current']) ?? 0,
-      stickersRequired: _intValue(stickerProgressMap['required']) ?? 0,
-      nextRank: _stringValue(stickerProgressMap['nextRank']) ?? 'Next rank',
-      guardianUserIds: _stringListValue(data['guardianUserIds']),
-      selfUserId: _stringValue(data['selfUserId']),
-      preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
-      promotionHistory: _stringListValue(data['promotionHistory']),
-      testingNotes: _stringListValue(data['testingNotes']),
-      isActive: _boolValue(data['isActive']) ?? true,
-      createdAt: _dateTimeValue(data['createdAt']),
-      updatedAt: _dateTimeValue(data['updatedAt']),
-    );
-  }
+  ) => studentProfileFromFirestoreData(document.id, document.data());
 
   bool _announcementTargetsSelectedAudience({
     required String audienceType,
@@ -803,11 +728,14 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   Set<String> get _selectedProfileClassGroupIds {
+    final isTeenOrAdult =
+        const LocationTimeService().ageForStudent(selectedStudentProfile) >= 13;
     return {
       ...selectedStudentProfile.preferredClassGroupIds.map(
         _normalizeClassGroupId,
       ),
       ..._inferredClassGroupIdsForBelt(selectedStudentProfile.belt),
+      if (isTeenOrAdult) 'teen-adult-sparring',
     };
   }
 
@@ -837,6 +765,88 @@ int? _intValue(Object? value) {
     num() => value.toInt(),
     _ => null,
   };
+}
+
+AcademyEvent? academyEventFromFirestoreData(
+  String id,
+  Map<String, dynamic> data,
+) {
+  final title = _stringValue(data['title']);
+  final locationId = _stringValue(data['locationId']);
+  final startDateTime =
+      (_dateTimeValue(data['startDateTime']) ??
+              _dateTimeValue(data['startsAt']))
+          ?.toUtc();
+  if (title == null || locationId == null || startDateTime == null) return null;
+
+  final endDateTime =
+      _dateTimeValue(data['endDateTime'])?.toUtc() ??
+      startDateTime.add(const Duration(hours: 1));
+  final createdAt = _dateTimeValue(data['createdAt']) ?? startDateTime;
+  final updatedAt = _dateTimeValue(data['updatedAt']) ?? createdAt;
+  // TODO: Remove this compatibility note after approved event documents have
+  // been updated. Legacy registrationUrl and showInResources are ignored.
+  return AcademyEvent(
+    id: id,
+    title: title,
+    description: _stringValue(data['description']) ?? '',
+    locationId: locationId,
+    eventType: _stringValue(data['eventType']) ?? 'specialEvent',
+    startDateTime: startDateTime,
+    endDateTime: endDateTime,
+    registrationDeadline: _dateTimeValue(data['registrationDeadline'])?.toUtc(),
+    isPublished: _boolValue(data['isPublished']) ?? false,
+    isArchived: _boolValue(data['isArchived']) ?? false,
+    linkedResourceIds: _stringListValue(data['linkedResourceIds']),
+    primaryRegistrationResourceId: _stringValue(
+      data['primaryRegistrationResourceId'],
+    ),
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+  );
+}
+
+StudentProfile? studentProfileFromFirestoreData(
+  String id,
+  Map<String, dynamic> data,
+) {
+  final name = _stringValue(data['fullName']) ?? _stringValue(data['name']);
+  final locationId = _stringValue(data['locationId']);
+  final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
+  final dateOfBirth = _dateTimeValue(data['dateOfBirth']);
+  // TODO: Remove the legacy age fallback after the approved profiles have
+  // been updated with dateOfBirth.
+  final legacyAge = dateOfBirth == null ? _intValue(data['age']) : null;
+  if (name == null ||
+      locationId == null ||
+      belt == null ||
+      (dateOfBirth == null && legacyAge == null)) {
+    return null;
+  }
+
+  final stickerProgress = data['stickerProgress'];
+  final progress = stickerProgress is Map
+      ? stickerProgress
+      : const <Object?, Object?>{};
+  return Student(
+    id: id,
+    name: name,
+    locationId: locationId,
+    belt: belt,
+    dateOfBirth: dateOfBirth,
+    legacyAge: legacyAge,
+    stickerCount: _intValue(progress['current']) ?? 0,
+    stickersRequired: _intValue(progress['required']) ?? 0,
+    nextRank: _stringValue(progress['nextRank']) ?? 'Next rank',
+    guardianUserIds: _stringListValue(data['guardianUserIds']),
+    selfUserId: _stringValue(data['selfUserId']),
+    preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
+    promotionHistory: _stringListValue(data['promotionHistory']),
+    testingNotes: _stringListValue(data['testingNotes']),
+    isActive: _boolValue(data['isActive']) ?? true,
+    createdAt: _dateTimeValue(data['createdAt']),
+    updatedAt: _dateTimeValue(data['updatedAt']),
+  );
 }
 
 bool? _boolValue(Object? value) {
@@ -892,10 +902,8 @@ String _classTypeIdFor(String className) {
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',
     'Level 4' => 'level-4',
-    'Black Belt' ||
-    'Teen & Black Belt' ||
-    'Adult' ||
-    'Teen/Adult Sparring' => 'teen-adult',
+    'Black Belt' || 'Teen & Black Belt' || 'Adult' => 'teen-adult',
+    'Teen/Adult Sparring' => 'teen-adult-sparring',
     'Level 1 / Level 2 Sparring' => 'level-1-2-sparring',
     _ => className.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-'),
   };

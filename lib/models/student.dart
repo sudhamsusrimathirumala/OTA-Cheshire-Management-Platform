@@ -4,7 +4,8 @@ class Student {
     required this.name,
     required this.locationId,
     required this.belt,
-    required this.age,
+    this.dateOfBirth,
+    this.legacyAge,
     required this.stickerCount,
     required this.stickersRequired,
     required this.nextRank,
@@ -22,7 +23,8 @@ class Student {
   final String name;
   final String locationId;
   final String belt;
-  final int age;
+  final DateTime? dateOfBirth;
+  final int? legacyAge;
   final int stickerCount;
   final int stickersRequired;
   final String nextRank;
@@ -34,6 +36,22 @@ class Student {
   final bool isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+
+  int ageOn(DateTime academyLocalDate) {
+    final birthDate = dateOfBirth;
+    if (birthDate == null) {
+      return legacyAge ?? 0;
+    }
+    var result = academyLocalDate.year - birthDate.year;
+    if (academyLocalDate.month < birthDate.month ||
+        (academyLocalDate.month == birthDate.month &&
+            academyLocalDate.day < birthDate.day)) {
+      result--;
+    }
+    return result;
+  }
+
+  int get age => ageOn(DateTime.now());
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));

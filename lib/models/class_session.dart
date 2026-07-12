@@ -79,6 +79,9 @@ class ClassSession {
   }
 
   bool isEligibleFor(StudentProfile student) {
+    if (classTypeId == 'teen-adult-sparring') {
+      return student.age >= 13;
+    }
     return eligibleBelts.contains(student.belt);
   }
 }

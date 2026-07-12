@@ -200,14 +200,12 @@ Map<String, Object?> eventWriteFields(
     'eventType': data.eventType,
     'startDateTime': Timestamp.fromDate(data.startDateTime),
     'endDateTime': Timestamp.fromDate(data.endDateTime),
-    'registrationUrl': data.registrationUrl,
     'registrationDeadline': data.registrationDeadline == null
         ? null
         : Timestamp.fromDate(data.registrationDeadline!),
     'linkedResourceIds': linkedResourceIds.toList()..sort(),
     'primaryRegistrationResourceId': data.primaryRegistrationResourceId,
     'isPublished': data.isPublished,
-    'showInResources': data.showInResources,
     'isArchived': data.isArchived,
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
@@ -323,9 +321,7 @@ class EventWriteData {
     required this.startDateTime,
     required this.endDateTime,
     required this.isPublished,
-    required this.showInResources,
     this.id,
-    this.registrationUrl,
     this.registrationDeadline,
     this.linkedResourceIds = const <String>[],
     this.primaryRegistrationResourceId,
@@ -342,8 +338,6 @@ class EventWriteData {
     required DateTime startDateTime,
     required DateTime endDateTime,
     required bool isPublished,
-    required bool showInResources,
-    String? registrationUrl,
     DateTime? registrationDeadline,
     List<String>? linkedResourceIds,
     String? primaryRegistrationResourceId,
@@ -356,12 +350,10 @@ class EventWriteData {
       eventType: eventType,
       startDateTime: startDateTime,
       endDateTime: endDateTime,
-      registrationUrl: registrationUrl,
       registrationDeadline: registrationDeadline,
       linkedResourceIds: linkedResourceIds ?? event.linkedResourceIds,
       primaryRegistrationResourceId: primaryRegistrationResourceId,
       isPublished: isPublished,
-      showInResources: showInResources,
       isArchived: event.isArchived,
       createdAt: event.createdAt,
     );
@@ -374,12 +366,10 @@ class EventWriteData {
   final String eventType;
   final DateTime startDateTime;
   final DateTime endDateTime;
-  final String? registrationUrl;
   final DateTime? registrationDeadline;
   final List<String> linkedResourceIds;
   final String? primaryRegistrationResourceId;
   final bool isPublished;
-  final bool showInResources;
   final bool isArchived;
   final DateTime? createdAt;
 }

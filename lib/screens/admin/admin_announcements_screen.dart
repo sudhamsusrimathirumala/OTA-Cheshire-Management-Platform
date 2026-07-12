@@ -1576,6 +1576,7 @@ class _TargetOption {
 const _announcementClassGroups = [
   _TargetOption(id: 'little-tigers', label: 'Little Tigers'),
   _TargetOption(id: 'teen-adult', label: 'Teen and Adult'),
+  _TargetOption(id: 'teen-adult-sparring', label: 'Teen/Adult Sparring'),
   _TargetOption(id: 'level-1', label: 'Level 1'),
   _TargetOption(id: 'level-2', label: 'Level 2'),
   _TargetOption(id: 'level-3', label: 'Level 3'),

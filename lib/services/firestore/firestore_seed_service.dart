@@ -56,7 +56,7 @@ class FirestoreSeedService {
         _firestore
             .collection(FirestoreCollections.studentProfiles)
             .doc(profile.id),
-        _studentProfileData(profile),
+        studentProfileWriteFields(profile),
       );
     }
 
@@ -148,13 +148,13 @@ Map<String, Object?> _userAccountData(UserAccount account) {
   };
 }
 
-Map<String, Object?> _studentProfileData(Student profile) {
+Map<String, Object?> studentProfileWriteFields(Student profile) {
   // TODO: Replace mock seed data with production student profile records.
   final now = FieldValue.serverTimestamp();
 
   return {
     'fullName': profile.name,
-    'age': profile.age,
+    'dateOfBirth': Timestamp.fromDate(profile.dateOfBirth!),
     'beltRank': profile.belt,
     'locationId': profile.locationId,
     'guardianUserIds': profile.guardianUserIds,
@@ -235,14 +235,12 @@ Map<String, Object?> _eventData(AcademyEvent event) {
     'eventType': event.eventType,
     'startDateTime': Timestamp.fromDate(event.startDateTime),
     'endDateTime': Timestamp.fromDate(event.endDateTime),
-    'registrationUrl': event.registrationUrl,
     'registrationDeadline': event.registrationDeadline == null
         ? null
         : Timestamp.fromDate(event.registrationDeadline!),
     'linkedResourceIds': event.linkedResourceIds,
     'primaryRegistrationResourceId': event.primaryRegistrationResourceId,
     'isPublished': event.isPublished,
-    'showInResources': event.showInResources,
     'isArchived': event.isArchived,
     'createdAt': Timestamp.fromDate(event.createdAt),
     'updatedAt': Timestamp.fromDate(event.updatedAt),

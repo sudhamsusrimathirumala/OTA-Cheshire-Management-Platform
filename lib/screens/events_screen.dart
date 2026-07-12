@@ -215,7 +215,7 @@ class _EventCard extends StatelessWidget {
                 height: 1.35,
               ),
             ),
-            if (primaryResource != null || event.registrationUrl != null) ...[
+            if (primaryResource != null) ...[
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -227,7 +227,7 @@ class _EventCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      primaryResource?.title ?? 'Registration link available',
+                      primaryResource.title,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: OtaColors.maroon,
                         fontWeight: FontWeight.w800,
@@ -258,7 +258,6 @@ void _showEventDetails(
   final primaryResource = event.primaryRegistrationResourceId == null
       ? null
       : resourcesById[event.primaryRegistrationResourceId];
-  final eventResource = primaryResource ?? linkedResources.firstOrNull;
 
   showModalBottomSheet<void>(
     context: context,
@@ -299,7 +298,7 @@ void _showEventDetails(
                   height: 1.35,
                 ),
               ),
-              if (eventResource != null) ...[
+              if (primaryResource != null) ...[
                 const SizedBox(height: 18),
                 FilledButton(
                   onPressed: () {
@@ -308,7 +307,7 @@ void _showEventDetails(
                     navigator.push(
                       MaterialPageRoute<void>(
                         builder: (context) =>
-                            ResourceDetailScreen(resource: eventResource),
+                            ResourceDetailScreen(resource: primaryResource),
                       ),
                     );
                   },
@@ -330,10 +329,6 @@ void _showEventDetails(
                 const SizedBox(height: 18),
                 _DetailSectionTitle(label: 'Registration'),
                 _ResourceLinkTile(resource: primaryResource),
-              ] else if (event.registrationUrl != null) ...[
-                const SizedBox(height: 18),
-                _DetailSectionTitle(label: 'Registration'),
-                _CopyableLink(url: event.registrationUrl!),
               ],
               if (linkedResources.isNotEmpty) ...[
                 const SizedBox(height: 18),
