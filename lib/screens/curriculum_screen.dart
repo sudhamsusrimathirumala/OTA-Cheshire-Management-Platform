@@ -354,9 +354,12 @@ class _CurriculumItemView extends StatelessWidget {
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child:
-                    videoBuilder?.call(context, videoId) ??
-                    _EmbeddedYoutubePlayer(videoId: videoId),
+                child: KeyedSubtree(
+                  key: ValueKey<String>('youtube-player-$videoId'),
+                  child:
+                      videoBuilder?.call(context, videoId) ??
+                      _EmbeddedYoutubePlayer(videoId: videoId),
+                ),
               ),
           ],
         ],

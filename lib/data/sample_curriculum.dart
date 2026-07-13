@@ -24,8 +24,8 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   'White': _curriculum(
     'White',
     forms: const [
-      'Taegeuk form placeholder',
-      'Basic stance sequence placeholder',
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Basic stance sequence placeholder'),
     ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
@@ -38,7 +38,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'White-Yellow': _curriculum(
     'White-Yellow',
-    forms: const ['Taegeuk form placeholder', 'Low block practice sequence'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Low block practice sequence'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -47,7 +50,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Yellow': _curriculum(
     'Yellow',
-    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Practice sequence placeholder'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -57,7 +63,7 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Yellow-Green': _curriculum(
     'Yellow-Green',
-    forms: const ['Taegeuk form placeholder'],
+    forms: const [LocalCurriculumFormData(title: 'Taegeuk form placeholder')],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Distance control partner drill',
@@ -71,7 +77,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Green': _curriculum(
     'Green',
-    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Practice sequence placeholder'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -84,7 +93,7 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Green-Blue': _curriculum(
     'Green-Blue',
-    forms: const ['Taegeuk form placeholder'],
+    forms: const [LocalCurriculumFormData(title: 'Taegeuk form placeholder')],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -95,7 +104,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Blue': _curriculum(
     'Blue',
-    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Practice sequence placeholder'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Counter-kick partner drill',
@@ -111,7 +123,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Blue-Red': _curriculum(
     'Blue-Red',
-    forms: const ['Taegeuk form placeholder', 'Advanced transition sequence'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Advanced transition sequence'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -121,7 +136,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Red': _curriculum(
     'Red',
-    forms: const ['Taegeuk form placeholder', 'Practice sequence placeholder'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Practice sequence placeholder'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -138,8 +156,8 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   'Red-Yellow': _curriculum(
     'Red-Yellow',
     forms: const [
-      'Taegeuk form placeholder',
-      'Black belt prep sequence placeholder',
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Black belt prep sequence placeholder'),
     ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
@@ -150,7 +168,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Red-Green': _curriculum(
     'Red-Green',
-    forms: const ['Taegeuk form placeholder', 'Precision sequence placeholder'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Precision sequence placeholder'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Partner drill placeholder',
@@ -167,8 +188,8 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   'Red-Blue': _curriculum(
     'Red-Blue',
     forms: const [
-      'Taegeuk form placeholder',
-      'Advanced practice sequence placeholder',
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Advanced practice sequence placeholder'),
     ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
@@ -179,7 +200,10 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
   'Red-Black': _curriculum(
     'Red-Black',
-    forms: const ['Taegeuk form placeholder', 'Black belt readiness sequence'],
+    forms: const [
+      LocalCurriculumFormData(title: 'Taegeuk form placeholder'),
+      LocalCurriculumFormData(title: 'Black belt readiness sequence'),
+    ],
     oneStepSparring: const [
       'One-step sparring combination placeholder',
       'Advanced partner drill placeholder',
@@ -196,8 +220,8 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   'Black': _curriculum(
     'Black',
     forms: const [
-      'Black belt form placeholder',
-      'Degree curriculum sequence placeholder',
+      LocalCurriculumFormData(title: 'Black belt form placeholder'),
+      LocalCurriculumFormData(title: 'Degree curriculum sequence placeholder'),
     ],
     oneStepSparring: const [
       'Advanced one-step sparring placeholder',
@@ -208,9 +232,16 @@ final sampleCurriculum = <String, CurriculumRequirement>{
   ),
 };
 
+class LocalCurriculumFormData {
+  const LocalCurriculumFormData({required this.title, this.videoUrl});
+
+  final String title;
+  final String? videoUrl;
+}
+
 CurriculumRequirement _curriculum(
   String belt, {
-  List<String> forms = const <String>[],
+  List<LocalCurriculumFormData> forms = const <LocalCurriculumFormData>[],
   List<String> oneStepSparring = const <String>[],
   List<String> breakingTechniques = const <String>[],
   List<String> kickingCombinations = const <String>[],
@@ -220,13 +251,7 @@ CurriculumRequirement _curriculum(
     locationId: otaCheshireLocationId,
     belt: belt,
     sections: <CurriculumSection>[
-      _section(
-        id: 'forms',
-        title: 'Forms',
-        sortOrder: 0,
-        values: forms,
-        contentType: CurriculumContentType.video,
-      ),
+      buildLocalCurriculumFormsSection(forms),
       _section(
         id: 'one-step-sparring',
         title: 'One-Step Sparring',
@@ -255,12 +280,31 @@ CurriculumRequirement _curriculum(
   );
 }
 
+CurriculumSection buildLocalCurriculumFormsSection(
+  List<LocalCurriculumFormData> forms,
+) {
+  return CurriculumSection(
+    id: 'forms',
+    title: 'Forms',
+    sortOrder: 0,
+    items: <CurriculumItem>[
+      for (var index = 0; index < forms.length; index++)
+        CurriculumItem(
+          id: 'forms-${index + 1}',
+          title: forms[index].title,
+          videoUrl: forms[index].videoUrl,
+          contentType: CurriculumContentType.video,
+          sortOrder: index,
+        ),
+    ],
+  );
+}
+
 CurriculumSection _section({
   required String id,
   required String title,
   required int sortOrder,
   required List<String> values,
-  CurriculumContentType contentType = CurriculumContentType.text,
 }) {
   return CurriculumSection(
     id: id,
@@ -271,7 +315,7 @@ CurriculumSection _section({
         CurriculumItem(
           id: '$id-${index + 1}',
           title: values[index],
-          contentType: contentType,
+          contentType: CurriculumContentType.text,
           sortOrder: index,
         ),
     ],

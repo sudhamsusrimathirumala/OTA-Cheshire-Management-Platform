@@ -882,6 +882,39 @@ void main() {
     );
   });
 
+  test('local curriculum forms keep independent optional video URLs', () {
+    const firstVideoId = 'abcdefghijk';
+    const secondVideoUrl = 'https://youtu.be/lmnopqrstuv';
+    final section = curriculum_data.buildLocalCurriculumFormsSection(const [
+      curriculum_data.LocalCurriculumFormData(
+        title: 'First approved form',
+        videoUrl: firstVideoId,
+      ),
+      curriculum_data.LocalCurriculumFormData(
+        title: 'Second approved form',
+        videoUrl: secondVideoUrl,
+      ),
+      curriculum_data.LocalCurriculumFormData(
+        title: 'Taegeuk form placeholder',
+      ),
+    ]);
+
+    expect(section.items, hasLength(3));
+    expect(section.items[0].videoUrl, firstVideoId);
+    expect(section.items[1].videoUrl, secondVideoUrl);
+    expect(section.items[2].videoUrl, isNull);
+    expect(
+      section.items.map((item) => item.videoUrl),
+      isNot(contains('https://youtube.com/@OlympicTaekwondoAcademy')),
+    );
+    expect(
+      curriculum_data.sampleCurriculum.values
+          .expand((curriculum) => curriculum.sections.first.items)
+          .every((item) => item.videoUrl == null),
+      isTrue,
+    );
+  });
+
   test('curriculum belt selection falls back safely', () {
     final curriculum = <String, CurriculumRequirement>{
       'No Belt': _testCurriculum('No Belt'),
@@ -1031,6 +1064,55 @@ void main() {
     expect(find.text('First step details'), findsOneWidget);
     expect(find.text('Second step'), findsOneWidget);
     expect(find.textContaining('youtube.com/@'), findsNothing);
+  });
+
+  testWidgets('embedded player identity changes with the video ID', (
+    tester,
+  ) async {
+    var videoId = 'abcdefghijk';
+    late StateSetter updateVideo;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) {
+            updateVideo = setState;
+            return Scaffold(
+              body: CurriculumSectionCard(
+                section: CurriculumSection(
+                  id: 'forms',
+                  title: 'Forms',
+                  sortOrder: 0,
+                  items: [
+                    CurriculumItem(
+                      id: 'form-1',
+                      title: 'Form',
+                      contentType: CurriculumContentType.video,
+                      sortOrder: 0,
+                      videoUrl: videoId,
+                    ),
+                  ],
+                ),
+                videoBuilder: (context, parsedVideoId) =>
+                    Text('player:$parsedVideoId'),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    const firstKey = ValueKey<String>('youtube-player-abcdefghijk');
+    const secondKey = ValueKey<String>('youtube-player-lmnopqrstuv');
+    expect(find.byKey(firstKey), findsOneWidget);
+    expect(find.byKey(secondKey), findsNothing);
+
+    updateVideo(() => videoId = 'lmnopqrstuv');
+    await tester.pump();
+
+    expect(find.byKey(firstKey), findsNothing);
+    expect(find.byKey(secondKey), findsOneWidget);
+    expect(find.text('player:lmnopqrstuv'), findsOneWidget);
   });
 
   testWidgets('curriculum fits a narrow mobile layout', (tester) async {
