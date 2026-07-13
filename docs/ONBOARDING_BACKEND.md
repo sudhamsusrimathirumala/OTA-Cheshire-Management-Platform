@@ -1,83 +1,65 @@
-# Secure Onboarding Backend
+# Spark-Compatible Onboarding
 
-`submitOnboardingApplication` is an authenticated Firebase callable function.
-It is the only supported onboarding write path for creating user/profile
-relationships. The Flutter app does not write initial `users` or
-`studentProfiles` documents directly.
+The onboarding foundation uses Firebase Authentication and client-side
+Firestore atomic writes. It does not use Cloud Functions or another paid
+Google Cloud service.
 
-## Callable request
+## Applicant submission
 
-Accepted top-level fields:
+`FirestoreOnboardingService.submitApplication` requires the current Firebase
+Auth user, loads the selected active location, evaluates the age gate against
+that location's IANA time zone, and validates all application fields. It derives
+the UID and normalized account email from Auth. A Google account ID is included
+only when it appears in the authenticated user's `google.com` provider entry.
 
-- `firstName`, `lastName`, and `dateOfBirth` (`YYYY-MM-DD`)
-- `beltRank` when the applicant receives a student profile
-- optional `phoneNumber`
-- `role`: `student` or `parent`
-- `locationId`
-- `guardianEmail` for an independent student
-- `parentIsStudent`
-- `additionalStudents`
+One `WriteBatch` creates exactly:
 
-Each additional student supplies `firstName`, `lastName`, `dateOfBirth`,
-`beltRank`, and `guardianEmail`. Unknown fields are rejected. In particular,
-the client cannot submit UID, Auth email, Google provider ID, approval status,
-family application ID, selected/linked profile IDs, guardian user IDs, or a
-linked user ID.
+- `users/{firebaseUid}`
+- `onboardingApplications/{firebaseUid}`
 
-The function derives identity from the verified callable Auth context. The
-Firebase UID becomes `users/{uid}`; contact email comes from the Auth token;
-and `googleAccountId`, when present, comes only from the token's `google.com`
-identity.
+The UID is both document IDs. No student profile or permanent family
+relationship is created before review. Firestore Rules use `getAfter()` to
+require both documents in the same atomic operation. If the batch fails, the
+Auth account remains and the user can retry; the service never deletes Auth
+users and never uses email as an identity key. `loadCurrentAccountState`
+returns `needsOnboarding` when both records are absent, so a later login can
+route the authenticated user back into onboarding.
 
-## Validation and writes
+Applications support student applicants and parent applicants with up to ten
+additional students. Every future student has a date of birth, belt rank, and
+explicit guardian email. The application contains pending data only and cannot
+include finalized IDs, guardian user relationships, or approval overrides.
 
-The function rejects unauthenticated, duplicate, under-16, invalid-location,
-inactive-location, malformed, and incomplete applications. Applicant age is
-calculated against the current calendar date in the selected location's IANA
-time zone.
+## Admin review
 
-One Firestore transaction reads the user and location, then creates the user
-and every student profile. Parent applications receive one server-generated
-`familyApplicationId`. Server-generated profile IDs are written reciprocally
-to `users.linkedStudentProfileIds`; the first profile is selected, with a
-parent's own profile allocated first. A failed create aborts the whole
-transaction, leaving no partial family application.
+Approved location admins may review pending applications for their own
+location. Super Admin may review any location. Approval runs in one Firestore
+transaction: it revalidates the reviewer, application, and active location;
+creates every approved student profile; writes reciprocal user links; and marks
+the user and application approved. Parent approvals generate one shared family
+application ID. The parent's own profile is selected first when applicable.
 
-The callable returns `userId`, `studentProfileIds`,
-`selectedStudentProfileId`, and optional `familyApplicationId`.
+Rejection atomically marks the user and application rejected, records reviewer
+metadata and an optional short reason, and creates no profiles. Failed or
+duplicate reviews leave no partial writes.
 
 ## Local validation
 
-Install Functions dependencies and run pure tests:
+Use the demo project ID so emulator tests cannot reach live Firebase:
 
 ```powershell
-npm --prefix functions install
-npm --prefix functions run lint
-npm --prefix functions test
-```
-
-Run Firestore transaction and rules tests with the local emulator. On this
-Windows checkout, Android Studio's bundled JBR can provide Java:
-
-```powershell
+npm --prefix tool/firebase_emulator_tests install
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix functions run test:emulator"
+firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix tool/firebase_emulator_tests test"
 ```
 
-The `demo-` project ID prevents fallback access to non-emulated Firebase
-services.
+## Release
 
-## Manual release steps
-
-After review, configure the intended Firebase project, confirm Node.js 22 is
-supported, rerun all tests, and deploy deliberately:
+Only Firestore Security Rules are deployed for this architecture:
 
 ```powershell
-firebase deploy --only functions:submitOnboardingApplication
-firebase deploy --only firestore:rules
+firebase deploy --only firestore:rules --project ota-management-platform
 ```
 
-Deployment order must be coordinated with the future onboarding UI. No
-function or rule deployment occurs as part of repository development or test
-runs.
+No database seed, migration, or data deployment is part of onboarding release.

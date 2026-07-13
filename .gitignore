@@ -6,8 +6,8 @@
 *.swp
 .buildlog/
 .history
-functions/node_modules/
-!functions/package-lock.json
+tool/firebase_emulator_tests/node_modules/
+!tool/firebase_emulator_tests/package-lock.json
 
 
 

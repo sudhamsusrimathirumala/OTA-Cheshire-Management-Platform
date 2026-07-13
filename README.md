@@ -10,6 +10,16 @@ sample data are centered on the `ota-cheshire` location.
 
 The application is under active development and is not production-ready.
 
+## Permanent Cost and Service Constraint
+
+This project must remain on Firebase's no-cost Spark plan with no billing
+account or payment method. It uses no deployed Cloud Functions or paid Google
+Cloud services and includes no advertisements, subscriptions, in-app
+purchases, paid memberships, donations, fees, or other monetization. If a
+Spark quota is exceeded, service is limited until the quota resets; there is no
+paid overage because billing is not linked. This is a permanent architectural
+constraint.
+
 ## Current Capabilities
 
 ### Student and Parent Experience
@@ -115,10 +125,10 @@ for the current data flow and fallback boundaries.
 
 ### Partially Implemented
 
-- Firebase UID/user-document identity, email/password and Google dependency
-  preparation, the secure onboarding callable, canonical account/profile
-  parsing, and Firestore rules are present, but Authentication is not connected
-  to login or signup UI.
+- Firebase UID/user-document identity, Email/Password and Google dependency
+  preparation, Spark-compatible pending onboarding writes, admin approval
+  transactions, canonical account/profile parsing, and Firestore Rules are
+  present, but Authentication is not connected to login or signup UI.
 - User roles, approval status, guardian links, family application grouping,
   and selected-profile fields are modeled, but approval UI and role routing
   are not implemented.
@@ -185,8 +195,9 @@ project ID is `ota-management-platform`, and the Android application ID is
 configuration and Firestore permissions. Do not place credentials in
 documentation or source control.
 
-`firestore.rules` is present and emulator-tested, but it is not deployed by
-repository development tasks.
+`firestore.rules` protects atomic pending applications and admin review writes.
+Firebase deployments are limited to explicit Firestore Rules releases; no
+database data or server code is deployed.
 
 ## Testing and Validation
 

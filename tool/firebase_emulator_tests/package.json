@@ -1,0 +1,12 @@
+{
+  "name": "ota-firestore-emulator-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-force-exit"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.7.0"
+  }
+}

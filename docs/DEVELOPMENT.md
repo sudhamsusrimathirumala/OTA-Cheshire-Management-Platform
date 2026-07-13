@@ -24,10 +24,10 @@ The normal application initializes Firebase from `lib/firebase_options.dart`.
 
 ## Firebase Authentication setup
 
-The code includes `firebase_auth`, `google_sign_in`, `cloud_functions`, a
-Firebase UID identity contract, provider-data extraction, and the authenticated
-`submitOnboardingApplication` callable. Full login, signup, linking,
-onboarding, and approval screens are intentionally not implemented yet.
+The code includes `firebase_auth`, `google_sign_in`, a Firebase UID identity
+contract, provider-data extraction, and Spark-compatible Firestore onboarding
+and approval services. Full login, signup, linking, onboarding, and approval
+screens are intentionally not implemented yet.
 
 Manual Firebase/platform setup still required:
 
@@ -42,13 +42,17 @@ Manual Firebase/platform setup still required:
 6. Re-run `flutterfire configure` after Firebase app/provider configuration
    changes and review generated files before committing.
 
-Onboarding UI must call `submitOnboardingApplication`; it must not create user
-or profile relationship documents directly. The callable creates
-`users/{FirebaseAuth.currentUser.uid}`, derives Auth email and Google identity,
-and atomically creates reciprocal profile links with approval `pending`.
-Normal academy data remains unavailable until approval. See
-[Secure onboarding backend](ONBOARDING_BACKEND.md) for its contract, emulator
-tests, and manual deployment steps.
+Onboarding UI must use `FirestoreOnboardingService`. Applicant submission
+derives identity from `FirebaseAuth.currentUser` and atomically creates only the
+pending user and onboarding-application documents. Approved admins later
+materialize profiles and reciprocal links in one transaction. Normal academy
+data remains unavailable until approval. See
+[Spark-compatible onboarding](ONBOARDING_BACKEND.md) for the contract and
+emulator workflow.
+
+This project permanently targets the no-cost Firebase Spark plan. Do not link a
+billing account, add a paid service, deploy server functions, or add
+monetization. Deploy only Firestore Rules when explicitly required.
 
 ## Common Run Targets
 
@@ -84,6 +88,13 @@ dart format lib test
 flutter analyze
 flutter test
 git diff --check
+```
+
+Firestore emulator tests:
+
+```powershell
+npm --prefix tool/firebase_emulator_tests install
+firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix tool/firebase_emulator_tests test"
 ```
 
 ## Safe Development Rules

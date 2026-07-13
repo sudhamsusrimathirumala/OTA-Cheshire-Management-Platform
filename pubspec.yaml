@@ -42,7 +42,6 @@ dependencies:
   youtube_player_iframe: ^6.0.2
   url_launcher: ^6.3.2
   google_sign_in: ^7.2.0
-  cloud_functions: 6.3.3
 
 dev_dependencies:
   flutter_test:

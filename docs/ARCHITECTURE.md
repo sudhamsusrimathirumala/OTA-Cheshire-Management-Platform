@@ -1,5 +1,14 @@
 # Architecture
 
+## Permanent Spark-Only Constraint
+
+The app must remain on Firebase's no-cost Spark plan without a billing account
+or payment method. It uses Firebase Authentication and Firestore client SDKs,
+but no deployed Cloud Functions or paid Google Cloud services. The product has
+no advertising, subscriptions, purchases, paid memberships, donations, fees,
+or revenue features. Spark quota exhaustion causes temporary service limitation,
+not paid overage.
+
 ## Application Layers
 
 - **UI and screens:** Flutter screens under `lib/screens/` and shared widgets
@@ -12,7 +21,8 @@
   `app_data_service_provider.dart` selects its implementation.
 - **Firebase services:** `FirebaseAppDataService` owns Firestore snapshot
   listeners and parsing. `FirebaseAdminWriteService` owns implemented admin
-  writes and canonical payload construction.
+  writes and canonical payload construction. `FirestoreOnboardingService` owns
+  atomic applicant submission and admin application review writes.
 - **Mock fallback:** `MockAppDataService` and `lib/data/` provide local data for
   unavailable Firebase and for features that have not moved to Firebase.
 - **Development utilities:** Separate `*_main.dart` entrypoints provide audit,
