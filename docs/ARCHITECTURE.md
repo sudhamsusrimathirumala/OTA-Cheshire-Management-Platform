@@ -73,14 +73,23 @@ authentication, ownership, and curriculum persistence are implemented.
 ## Event and Resource Design
 
 Events contain relationships to General Resources; General Resources contain
-the actual `linkUrl`. An event may designate one
-`primaryRegistrationResourceId`, which is synchronized into
-`linkedResourceIds`. Published event forms only accept a published,
-non-archived General Resource from the event's location.
+the actual `linkUrl`. New and edited events designate zero or one
+`primaryRegistrationResourceId`, synchronized with the sole value in
+`linkedResourceIds`. Resources are optional for drafts and published events. If
+selected, the resource must be a published, non-archived General Resource from
+the event's location. Legacy documents with multiple linked IDs remain
+read-compatible; no schema migration was performed for this rule.
 
-Student event details open and display the primary resource. There is no direct
-event registration URL fallback, and events do not control whether resources
-appear on the Resources screen.
+The student Events screen is a seven-column month calendar. Events are assigned
+to every academy-local date spanned by their start and end instants, including
+past published events. It can be pushed from Dashboard or Resources and has no
+bottom navigation, so Back returns through the natural route stack. Student
+event details retain the existing bottom sheet and primary-resource flow.
+The open bottom sheet listens to the shared data service so event and resource
+changes from Firestore snapshots are reflected without reopening it.
+
+Admin Events is reached from the combined **Events & Resources** landing and
+remains a list-management interface. There is no standalone admin Events tab.
 
 ## Student Identity Model
 

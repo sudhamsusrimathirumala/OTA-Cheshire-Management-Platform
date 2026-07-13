@@ -26,14 +26,16 @@ class _AdminResourcesScreenState extends State<AdminResourcesScreen> {
   Widget build(BuildContext context) {
     return AdminPageShell(
       selectedDestination: AdminNavDestination.resources,
-      title: 'Resources',
-      subtitle: 'Review curriculum or manage academy forms and links.',
+      title: 'Events & Resources',
+      subtitle:
+          'Review curriculum, manage general resources, and manage events.',
       child: ResourcesLandingView(
         presentation: ResourcesPresentation.admin,
         onOpenCurriculum: () =>
             Navigator.pushNamed(context, OtaRoutes.adminCurriculum),
         onOpenGeneralResources: () =>
             Navigator.pushNamed(context, OtaRoutes.adminGeneralResources),
+        onOpenEvents: () => Navigator.pushNamed(context, OtaRoutes.adminEvents),
       ),
     );
   }
@@ -94,6 +96,14 @@ class _AdminGeneralResourcesScreenState
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed(OtaRoutes.adminResources),
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Back to Events & Resources'),
+              ),
+              const SizedBox(height: 14),
               _ResourcesToolbar(onCreateResource: () => _openResourceSheet()),
               const SizedBox(height: 14),
               _FilterRow(

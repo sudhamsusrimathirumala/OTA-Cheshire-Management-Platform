@@ -80,8 +80,8 @@ cleanup and schema-update work is not listed as active work.
 
 - [ ] Validate the resource-based event registration flow end to end with
   production content.
-- [ ] Add calendar-oriented event UX only after core release blockers are
-  complete.
+- [x] Add the academy-local student month calendar with browseable past events.
+- [x] Consolidate Admin Events into the Events & Resources navigation landing.
 
 ### Multi-Location Administration
 
@@ -114,6 +114,8 @@ cleanup and schema-update work is not listed as active work.
   categories, zero or multiple forms per belt, and independent optional video
   data per form.
 - [x] Resource-based event registration.
+- [x] Optional zero-or-one General Resource validation and synchronized
+  compatible event resource fields for new and edited event writes.
 - [x] Canonical recurring schedule fields and separate Teen/Adult Sparring type.
 - [x] Student `dateOfBirth` with computed age and temporary legacy-age read
   compatibility.

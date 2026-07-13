@@ -20,8 +20,10 @@ The application is under active development and is not production-ready.
   detail presentation.
 - Firestore-backed announcements, notification filters, and notification
   details.
-- Firestore-backed published events with linked General Resources for
-  registration.
+- Firestore-backed published events in a seven-column month calendar, using
+  academy-local dates and retaining published past events for browsing. Events
+  open from Dashboard or Resources, and the Events page intentionally has no
+  bottom navigation bar.
 - Firestore-backed published General Resources with validated copy/open-link
   actions and detail pages.
 - Local, read-only curriculum organized by belt, including No Belt and five
@@ -35,12 +37,15 @@ implemented.
 
 ### Administrator Experience
 
-- Admin dashboard and navigation.
+- Admin dashboard and navigation, with event management reached through the
+  combined **Events & Resources** destination rather than a standalone Events
+  tab.
 - Firestore-backed schedule listing plus create, edit, and single-session
   delete operations. Bulk actions are preview-only.
 - Firestore-backed announcement create, edit, publish, archive, and delete
   operations with audience targeting.
-- Firestore-backed event create, edit, publish, archive, and delete operations.
+- Firestore-backed event create, edit, publish, archive, and delete operations
+  in the existing list-management interface.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
 - Firestore-backed student directory and details. Student profile editing is
@@ -98,6 +103,10 @@ for the current data flow and fallback boundaries.
 - Admin writes for individual class sessions, announcements, events, and
   General Resources.
 - Resource-based event registration and academy-location time handling.
+- Events may have no General Resource or one valid General Resource. When one is
+  selected, the compatible `linkedResourceIds` and
+  `primaryRegistrationResourceId` fields are retained and synchronized; legacy
+  documents with multiple linked IDs remain readable.
 - Read-only Firestore audit/export utilities and guarded write utilities.
 
 ### Partially Implemented

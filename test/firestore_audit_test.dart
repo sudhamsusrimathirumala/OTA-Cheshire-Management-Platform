@@ -212,6 +212,8 @@ void main() {
           eventType: 'event',
           startDateTime: now,
           endDateTime: now.add(const Duration(hours: 1)),
+          linkedResourceIds: const <String>['registration-resource'],
+          primaryRegistrationResourceId: 'registration-resource',
           isPublished: true,
           isArchived: true,
           createdAt: createdAt,
@@ -220,7 +222,7 @@ void main() {
       );
       expect(fields['isArchived'], isTrue);
       expect(fields, isNot(contains('registrationDeadline')));
-      expect(fields, isNot(contains('primaryRegistrationResourceId')));
+      expect(fields['primaryRegistrationResourceId'], 'registration-resource');
       expect((fields['createdAt']! as Timestamp).toDate().toUtc(), createdAt);
     });
 
@@ -449,6 +451,7 @@ void main() {
         startDateTime: event.startDateTime,
         endDateTime: event.endDateTime,
         registrationDeadline: null,
+        linkedResourceIds: const <String>[],
         primaryRegistrationResourceId: null,
         isPublished: false,
       );
@@ -456,7 +459,7 @@ void main() {
 
       expect(fields['registrationDeadline'], isA<FieldValue>());
       expect(fields['primaryRegistrationResourceId'], isA<FieldValue>());
-      expect(fields['linkedResourceIds'], <String>['supplement']);
+      expect(fields['linkedResourceIds'], isEmpty);
     });
 
     test('normal edits preserve optional values', () {
@@ -503,6 +506,7 @@ void main() {
           startDateTime: now,
           endDateTime: now.add(const Duration(hours: 1)),
           registrationDeadline: deadline,
+          linkedResourceIds: const <String>['registration-resource'],
           primaryRegistrationResourceId: 'registration-resource',
           isPublished: true,
         ),

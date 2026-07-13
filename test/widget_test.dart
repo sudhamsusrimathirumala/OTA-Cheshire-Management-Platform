@@ -209,10 +209,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AdminStudentsScreen), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(TextButton, 'Events'));
-    await tester.pumpAndSettle();
-    expect(find.byType(AdminEventsScreen), findsOneWidget);
-
     await tester.tap(find.widgetWithText(TextButton, 'Announcements'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminAnnouncementsScreen), findsOneWidget);
@@ -221,8 +217,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AdminScheduleScreen), findsOneWidget);
 
-    await tester.ensureVisible(find.widgetWithText(TextButton, 'Resources'));
-    final resourcesTab = find.widgetWithText(TextButton, 'Resources');
+    await tester.ensureVisible(
+      find.widgetWithText(TextButton, 'Events & Resources'),
+    );
+    final resourcesTab = find.widgetWithText(TextButton, 'Events & Resources');
     await tester.ensureVisible(resourcesTab);
     await tester.tap(resourcesTab);
     await tester.pumpAndSettle();
@@ -296,6 +294,34 @@ void main() {
     expect(find.text('Registration deadline'), findsOneWidget);
     expect(find.text('Start date'), findsNothing);
     expect(find.text('Start time'), findsNothing);
+    expect(
+      find.widgetWithText(TextButton, 'Events & Resources'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(TextButton, 'Events'), findsNothing);
+    expect(find.text('Create Event'), findsWidgets);
+    expect(find.text('Draft'), findsWidgets);
+    expect(find.text('Published'), findsWidgets);
+    expect(find.text('Past'), findsOneWidget);
+    expect(find.text('Back to Events & Resources'), findsOneWidget);
+  });
+
+  testWidgets('selected combined admin destination returns to its landing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        initialRoute: OtaRoutes.adminEvents,
+        routes: {
+          OtaRoutes.adminEvents: (_) => const AdminEventsScreen(),
+          OtaRoutes.adminResources: (_) => const AdminResourcesScreen(),
+        },
+      ),
+    );
+    await tester.tap(find.text('Back to Events & Resources'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminResourcesScreen), findsOneWidget);
+    expect(find.text('Curriculum'), findsOneWidget);
   });
 
   testWidgets('admin announcements page displays filters and mock form', (
@@ -384,23 +410,75 @@ void main() {
       ),
     );
 
-    final resourcesTab = find.widgetWithText(TextButton, 'Resources');
+    final resourcesTab = find.widgetWithText(TextButton, 'Events & Resources');
     await tester.ensureVisible(resourcesTab);
     await tester.tap(resourcesTab);
     expect(tapped, isTrue);
   });
 
-  testWidgets('student and admin resources landings share two destinations', (
+  testWidgets('student and admin resources landings share three destinations', (
     tester,
   ) async {
     await tester.pumpWidget(const MaterialApp(home: ResourcesScreen()));
     expect(find.text('Curriculum'), findsOneWidget);
     expect(find.text('General Resources'), findsOneWidget);
+    expect(find.text('Events'), findsOneWidget);
 
     await tester.pumpWidget(const MaterialApp(home: AdminResourcesScreen()));
     expect(find.text('Curriculum'), findsOneWidget);
     expect(find.text('General Resources'), findsOneWidget);
+    expect(find.text('Events'), findsOneWidget);
+    expect(find.text('Events & Resources'), findsWidgets);
     expect(find.text('Create Resource'), findsNothing);
+  });
+
+  testWidgets('resource landing event cards use student and admin routes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        key: const ValueKey('student-resources-routes'),
+        home: const ResourcesScreen(),
+        routes: {
+          OtaRoutes.events: (_) => const Scaffold(body: Text('Student events')),
+        },
+      ),
+    );
+    await tester.ensureVisible(find.text('Events'));
+    await tester.tap(find.text('Events'));
+    await tester.pumpAndSettle();
+    expect(find.text('Student events'), findsOneWidget);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        key: const ValueKey('admin-resources-routes'),
+        home: const AdminResourcesScreen(),
+        routes: {
+          OtaRoutes.adminEvents: (_) =>
+              const Scaffold(body: Text('Admin events')),
+        },
+      ),
+    );
+    await tester.ensureVisible(find.text('Events'));
+    await tester.tap(find.text('Events'));
+    await tester.pumpAndSettle();
+    expect(find.text('Admin events'), findsOneWidget);
+  });
+
+  testWidgets('events card follows General Resources on a narrow landing', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: ResourcesScreen()));
+    expect(
+      tester.getTopLeft(find.text('Events')).dy,
+      greaterThan(tester.getTopLeft(find.text('General Resources')).dy),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Resources visible and system Back return to dashboard', (
@@ -411,6 +489,7 @@ void main() {
       routes: {
         OtaRoutes.dashboard: (_) => const Scaffold(body: Text('Dashboard')),
         OtaRoutes.resources: (_) => const ResourcesScreen(),
+        OtaRoutes.events: (_) => const EventsScreen(),
       },
     );
 
@@ -493,6 +572,7 @@ void main() {
       const MaterialApp(home: AdminGeneralResourcesScreen()),
     );
     expect(find.text('Create Resource'), findsOneWidget);
+    expect(find.text('Back to Events & Resources'), findsOneWidget);
     expect(find.byTooltip('Edit resource'), findsWidgets);
 
     await tester.tap(find.text('Create Resource'));
@@ -654,8 +734,16 @@ void main() {
   testWidgets('event popup opens its linked resource detail page', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: EventsScreen()));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventsScreen(
+          dataService: const MockAppDataService(),
+          now: DateTime.utc(2026, 7, 12, 16),
+        ),
+      ),
+    );
 
+    await tester.ensureVisible(find.text('Parent Night Out').first);
     await tester.tap(find.text('Parent Night Out').first);
     await tester.pumpAndSettle();
     expect(find.text('Go to Resource for Event'), findsOneWidget);
@@ -665,6 +753,181 @@ void main() {
 
     expect(find.byType(ResourceDetailScreen), findsOneWidget);
     expect(find.text('Parent Night Out Registration'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(EventsScreen), findsOneWidget);
+    expect(find.byKey(const Key('month-calendar-grid')), findsOneWidget);
+  });
+
+  testWidgets('open student event popup updates from live service changes', (
+    tester,
+  ) async {
+    final original = _testEvent(
+      id: 'live-event',
+      title: 'Original Live Title',
+      start: DateTime.utc(2026, 1, 15, 15),
+      end: DateTime.utc(2026, 1, 15, 16),
+    );
+    final service = _LiveEventsTestService([original]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventsScreen(
+          dataService: service,
+          now: DateTime.utc(2026, 1, 15, 17),
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Original Live Title'));
+    await tester.tap(find.text('Original Live Title'));
+    await tester.pumpAndSettle();
+
+    service.replaceEvent(
+      AcademyEvent(
+        id: original.id,
+        title: 'Updated Live Title',
+        description: 'Updated live description',
+        locationId: original.locationId,
+        eventType: original.eventType,
+        startDateTime: original.startDateTime,
+        endDateTime: original.endDateTime,
+        isPublished: true,
+        createdAt: original.createdAt,
+        updatedAt: DateTime.utc(2026, 1, 15, 18),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Updated Live Title'), findsWidgets);
+    expect(find.text('Updated live description'), findsOneWidget);
+    expect(find.text('Original Live Title'), findsNothing);
+  });
+
+  testWidgets('events back uses the caller route for dashboard and resources', (
+    tester,
+  ) async {
+    Future<void> verifyCaller({
+      required String key,
+      required Widget origin,
+      required String openLabel,
+      required String originLabel,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          key: ValueKey(key),
+          home: origin,
+          routes: {
+            OtaRoutes.events: (_) => EventsScreen(
+              dataService: const MockAppDataService(),
+              now: DateTime.utc(2026, 7, 12, 16),
+            ),
+          },
+        ),
+      );
+      final eventAction = find.widgetWithText(InkWell, openLabel);
+      await tester.ensureVisible(eventAction);
+      await tester.pumpAndSettle();
+      await tester.tap(eventAction);
+      await tester.pumpAndSettle();
+      expect(find.byType(EventsScreen), findsOneWidget);
+      await tester.tap(find.byTooltip('Back'));
+      await tester.pumpAndSettle();
+      expect(find.text(originLabel), findsWidgets);
+
+      await tester.ensureVisible(eventAction);
+      await tester.tap(eventAction);
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text(originLabel), findsWidgets);
+    }
+
+    await verifyCaller(
+      key: 'dashboard-events-back',
+      origin: const StudentDashboardScreen(),
+      openLabel: 'Events',
+      originLabel: 'Good Evening, Sudhamsu',
+    );
+    await verifyCaller(
+      key: 'resources-events-back',
+      origin: const ResourcesScreen(),
+      openLabel: 'Events',
+      originLabel: 'Curriculum',
+    );
+  });
+
+  testWidgets('student events calendar renders and navigates across years', (
+    tester,
+  ) async {
+    final service = _EventsTestService(events: const <AcademyEvent>[]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventsScreen(
+          dataService: service,
+          now: DateTime.utc(2026, 1, 15, 17),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('month-calendar-grid')), findsOneWidget);
+    for (final weekday in const [
+      'Sun',
+      'Mon',
+      'Tue',
+      'Wed',
+      'Thu',
+      'Fri',
+      'Sat',
+    ]) {
+      expect(find.text(weekday), findsOneWidget);
+    }
+    expect(find.text('January 2026'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('previous-month')));
+    await tester.pump();
+    expect(find.text('December 2025'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('next-month')));
+    await tester.pump();
+    expect(find.text('January 2026'), findsOneWidget);
+    expect(find.byKey(const Key('calendar-day-2026-1-15')), findsOneWidget);
+    expect(find.byType(OtaBottomNavBar), findsNothing);
+  });
+
+  testWidgets('calendar marks dates, filters selection, and sorts events', (
+    tester,
+  ) async {
+    final events = [
+      _testEvent(
+        id: 'later',
+        title: 'Later Event',
+        start: DateTime.utc(2026, 1, 15, 20),
+        end: DateTime.utc(2026, 1, 15, 21),
+      ),
+      _testEvent(
+        id: 'earlier',
+        title: 'Earlier Event',
+        start: DateTime.utc(2026, 1, 15, 15),
+        end: DateTime.utc(2026, 1, 15, 16),
+      ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: EventsScreen(
+          dataService: _EventsTestService(events: events),
+          now: DateTime.utc(2026, 1, 15, 17),
+        ),
+      ),
+    );
+
+    expect(find.byKey(const Key('event-marker-2026-1-15')), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Earlier Event')).dy,
+      lessThan(tester.getTopLeft(find.text('Later Event')).dy),
+    );
+    await tester.tap(find.byKey(const Key('calendar-day-2026-1-16')));
+    await tester.pump();
+    expect(find.text('Earlier Event'), findsNothing);
+    expect(find.text('Later Event'), findsNothing);
+    expect(find.text('No events on this date.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('admin curriculum is read only', (tester) async {
@@ -698,6 +961,17 @@ void main() {
 
     final draft = resource('draft', published: false);
     final archived = resource('archived', archived: true);
+    final wrongLocation = AcademyResource(
+      id: 'wrong-location',
+      title: 'wrong-location',
+      description: '',
+      resourceType: 'document',
+      category: 'general',
+      locationId: 'other-location',
+      isPublished: true,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
     final options = eventGeneralResourceOptions([
       resource('general'),
       resource('curriculum', section: 'curriculum'),
@@ -707,11 +981,22 @@ void main() {
 
     expect(options.map((item) => item.id), ['draft', 'general']);
     expect(
+      validatePublishedEventResource(null, eventLocationId: 'ota-cheshire'),
+      isNull,
+    );
+    expect(
       validatePublishedEventResource(draft, eventLocationId: 'ota-cheshire'),
       isNotNull,
     );
     expect(
       validatePublishedEventResource(archived, eventLocationId: 'ota-cheshire'),
+      isNotNull,
+    );
+    expect(
+      validatePublishedEventResource(
+        wrongLocation,
+        eventLocationId: 'ota-cheshire',
+      ),
       isNotNull,
     );
     expect(
@@ -1258,7 +1543,7 @@ void main() {
       eventType: event.eventType,
       startDateTime: event.startDateTime,
       endDateTime: event.endDateTime,
-      linkedResourceIds: const [],
+      linkedResourceIds: const ['new-resource'],
       primaryRegistrationResourceId: 'new-resource',
       isPublished: true,
       createdAt: createdAt,
@@ -1288,6 +1573,53 @@ void main() {
         'createdAt',
         'updatedAt',
       }),
+    );
+  });
+
+  test('event writes allow no resource and reject contradictory links', () {
+    EventWriteData data({
+      required bool published,
+      List<String> linked = const <String>[],
+      String? primary,
+    }) => EventWriteData(
+      title: 'Event',
+      description: 'Description',
+      locationId: 'ota-cheshire',
+      eventType: 'specialEvent',
+      startDateTime: DateTime.utc(2026, 8, 1),
+      endDateTime: DateTime.utc(2026, 8, 1, 1),
+      linkedResourceIds: linked,
+      primaryRegistrationResourceId: primary,
+      isPublished: published,
+    );
+
+    expect(
+      eventWriteFields(
+        data(published: true),
+        now: DateTime.utc(2026),
+      )['linkedResourceIds'],
+      isEmpty,
+    );
+    expect(
+      () => eventWriteFields(
+        data(published: false, linked: const ['one', 'two'], primary: 'one'),
+        now: DateTime.utc(2026),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => eventWriteFields(
+        data(published: false, linked: const ['one'], primary: 'two'),
+        now: DateTime.utc(2026),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      eventWriteFields(
+        data(published: false),
+        now: DateTime.utc(2026),
+      )['linkedResourceIds'],
+      isEmpty,
     );
   });
 
@@ -1545,6 +1877,7 @@ void main() {
         startDateTime: DateTime.utc(2026, 8, 1),
         endDateTime: DateTime.utc(2026, 8, 1, 1),
         primaryRegistrationResourceId: 'registration-resource',
+        linkedResourceIds: const ['registration-resource'],
         isPublished: true,
       ),
       now: DateTime.utc(2026, 7, 12),
@@ -1568,6 +1901,85 @@ void main() {
     expect(event!.primaryRegistrationResourceId, isNull);
     expect(event.registrationLabel, 'No registration');
   });
+
+  test(
+    'student calendar filtering keeps published past matching events only',
+    () {
+      final visible = _testEvent(
+        id: 'past',
+        title: 'Past Event',
+        start: DateTime.utc(2025, 1, 1, 15),
+        end: DateTime.utc(2025, 1, 1, 16),
+      );
+      final filtered = visibleStudentCalendarEvents([
+        visible,
+        _testEvent(
+          id: 'draft',
+          title: 'Draft',
+          start: DateTime.utc(2026, 1, 1),
+          end: DateTime.utc(2026, 1, 1, 1),
+          published: false,
+        ),
+        _testEvent(
+          id: 'archived',
+          title: 'Archived',
+          start: DateTime.utc(2026, 1, 1),
+          end: DateTime.utc(2026, 1, 1, 1),
+          archived: true,
+        ),
+        _testEvent(
+          id: 'closure',
+          title: 'Closure',
+          start: DateTime.utc(2026, 1, 1),
+          end: DateTime.utc(2026, 1, 1, 1),
+          eventType: 'closure',
+        ),
+        _testEvent(
+          id: 'other-location',
+          title: 'Other',
+          start: DateTime.utc(2026, 1, 1),
+          end: DateTime.utc(2026, 1, 1, 1),
+          locationId: 'other',
+        ),
+      ], locationId: 'ota-cheshire');
+
+      expect(filtered, [visible]);
+    },
+  );
+
+  test(
+    'academy-local multi-day event dates cross DST month and year safely',
+    () {
+      final dstEvent = _testEvent(
+        id: 'dst',
+        title: 'DST Event',
+        start: DateTime.utc(2026, 3, 8, 4, 30),
+        end: DateTime.utc(2026, 3, 9, 3, 30),
+      );
+      expect(eventAcademyLocalStartDate(dstEvent), DateTime(2026, 3, 7));
+      expect(eventAcademyLocalEndDate(dstEvent), DateTime(2026, 3, 8));
+      expect(eventOccursOnAcademyDate(dstEvent, DateTime(2026, 3, 7)), isTrue);
+      expect(eventOccursOnAcademyDate(dstEvent, DateTime(2026, 3, 8)), isTrue);
+      expect(eventOccursOnAcademyDate(dstEvent, DateTime(2026, 3, 9)), isFalse);
+
+      final yearEvent = _testEvent(
+        id: 'year',
+        title: 'New Year Event',
+        start: DateTime.utc(2027, 1, 1, 4),
+        end: DateTime.utc(2027, 1, 1, 6),
+      );
+      expect(
+        eventOccursOnAcademyDate(yearEvent, DateTime(2026, 12, 31)),
+        isTrue,
+      );
+      expect(eventOccursOnAcademyDate(yearEvent, DateTime(2027, 1, 1)), isTrue);
+      expect(monthGridDates(DateTime(2026, 12)).length % 7, 0);
+      expect(
+        monthGridDates(DateTime(2027, 1)).whereType<DateTime>().length,
+        31,
+      );
+    },
+  );
 
   test('student profile writes date of birth and never age', () {
     final fields = studentProfileWriteFields(sampleStudent);
@@ -1698,6 +2110,65 @@ class _CurriculumTestService extends MockAppDataService {
   @override
   String beltDisplayLabel(String belt) =>
       curriculum_data.beltDisplayLabel(belt);
+}
+
+AcademyEvent _testEvent({
+  required String id,
+  required String title,
+  required DateTime start,
+  required DateTime end,
+  String locationId = 'ota-cheshire',
+  String eventType = 'specialEvent',
+  bool published = true,
+  bool archived = false,
+}) {
+  return AcademyEvent(
+    id: id,
+    title: title,
+    description: '$title description',
+    locationId: locationId,
+    eventType: eventType,
+    startDateTime: start,
+    endDateTime: end,
+    isPublished: published,
+    isArchived: archived,
+    createdAt: DateTime.utc(2025),
+    updatedAt: DateTime.utc(2025),
+  );
+}
+
+class _EventsTestService extends MockAppDataService {
+  const _EventsTestService({required this.events});
+
+  @override
+  final List<AcademyEvent> events;
+
+  @override
+  List<AcademyResource> get resources => const <AcademyResource>[];
+}
+
+class _LiveEventsTestService extends MockAppDataService {
+  _LiveEventsTestService(List<AcademyEvent> events)
+    : _events = List<AcademyEvent>.from(events);
+
+  final Set<VoidCallback> _listeners = <VoidCallback>{};
+  List<AcademyEvent> _events;
+
+  @override
+  List<AcademyEvent> get events => List<AcademyEvent>.unmodifiable(_events);
+
+  @override
+  void addListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
+
+  void replaceEvent(AcademyEvent event) {
+    _events = <AcademyEvent>[event];
+    for (final listener in List<VoidCallback>.from(_listeners)) {
+      listener();
+    }
+  }
 }
 
 class _StudentNavigationTestApp extends StatelessWidget {

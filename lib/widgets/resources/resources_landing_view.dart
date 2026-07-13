@@ -9,12 +9,14 @@ class ResourcesLandingView extends StatelessWidget {
     required this.presentation,
     required this.onOpenCurriculum,
     required this.onOpenGeneralResources,
+    required this.onOpenEvents,
     super.key,
   });
 
   final ResourcesPresentation presentation;
   final VoidCallback onOpenCurriculum;
   final VoidCallback onOpenGeneralResources;
+  final VoidCallback onOpenEvents;
 
   @override
   Widget build(BuildContext context) {
@@ -35,20 +37,32 @@ class ResourcesLandingView extends StatelessWidget {
             description: 'Open academy forms, links, and reference material.',
             onTap: onOpenGeneralResources,
           ),
+          ResourcesLandingCard(
+            presentation: presentation,
+            icon: Icons.event_rounded,
+            title: 'Events',
+            description: 'View academy events and registration details.',
+            onTap: onOpenEvents,
+          ),
         ];
 
         if (constraints.maxWidth < 620) {
           return Column(
-            children: [cards.first, const SizedBox(height: 14), cards.last],
+            children: [
+              for (var index = 0; index < cards.length; index++) ...[
+                cards[index],
+                if (index != cards.length - 1) const SizedBox(height: 14),
+              ],
+            ],
           );
         }
 
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
           children: [
-            Expanded(child: cards.first),
-            const SizedBox(width: 14),
-            Expanded(child: cards.last),
+            for (final card in cards)
+              SizedBox(width: (constraints.maxWidth - 14) / 2, child: card),
           ],
         );
       },

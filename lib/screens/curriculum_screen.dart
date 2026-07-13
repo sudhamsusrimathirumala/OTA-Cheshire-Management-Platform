@@ -102,10 +102,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
           setState(() => _selectedBelt = belt);
         }
       },
-      onBack: widget.isAdmin
-          ? null
-          : () =>
-                Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
+      onBack: () => Navigator.of(context).pushReplacementNamed(
+        widget.isAdmin ? OtaRoutes.adminResources : OtaRoutes.resources,
+      ),
     );
 
     if (widget.isAdmin) {

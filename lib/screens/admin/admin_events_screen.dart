@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
+import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../services/event_resource_rules.dart';
@@ -65,12 +66,23 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         final events = _filteredEvents(appDataService.events);
 
         return AdminPageShell(
-          selectedDestination: AdminNavDestination.events,
+          selectedDestination: AdminNavDestination.resources,
           title: 'Events',
           subtitle: 'Create and update academy events and registration links.',
+          onSelectedDestinationTap: () => Navigator.of(
+            context,
+          ).pushReplacementNamed(OtaRoutes.adminResources),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pushReplacementNamed(OtaRoutes.adminResources),
+                icon: const Icon(Icons.arrow_back_rounded),
+                label: const Text('Back to Events & Resources'),
+              ),
+              const SizedBox(height: 14),
               _EventsToolbar(onCreateEvent: () => _openEventSheet()),
               const SizedBox(height: 14),
               _FilterRow(
@@ -628,7 +640,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   DateTime? _startDateTime;
   DateTime? _endDateTime;
   DateTime? _registrationDeadline;
-  final _linkedResourceIds = <String>{};
   String? _primaryRegistrationResourceId;
   String? _validationMessage;
 
@@ -645,12 +656,11 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _registrationDeadline = event?.registrationDeadline;
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
+    final validResourceIds = _resourceOptions().map((resource) => resource.id);
     _primaryRegistrationResourceId =
-        event?.primaryRegistrationResourceId ??
-        event?.linkedResourceIds.firstOrNull;
-    if (_primaryRegistrationResourceId != null) {
-      _linkedResourceIds.add(_primaryRegistrationResourceId!);
-    }
+        validResourceIds.contains(event?.primaryRegistrationResourceId)
+        ? event?.primaryRegistrationResourceId
+        : event?.linkedResourceIds.where(validResourceIds.contains).firstOrNull;
   }
 
   @override
@@ -929,15 +939,12 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             onChanged: (resourceId) {
               setState(() {
                 _primaryRegistrationResourceId = resourceId;
-                _linkedResourceIds
-                  ..clear()
-                  ..addAll(resourceId == null ? const [] : [resourceId]);
               });
             },
           ),
           const SizedBox(height: 6),
           Text(
-            'Published events can only link to published General Resources.',
+            'If selected, published events can only link to published General Resources.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: OtaColors.mutedText,
               fontWeight: FontWeight.w600,

@@ -16,7 +16,7 @@ class ResourcesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return _StudentResourcesShell(
       title: 'Resources',
-      subtitle: 'Choose curriculum or academy forms and links.',
+      subtitle: 'Choose curriculum, academy resources, or events.',
       onBack: () =>
           Navigator.of(context).pushReplacementNamed(OtaRoutes.dashboard),
       child: ResourcesLandingView(
@@ -25,6 +25,7 @@ class ResourcesScreen extends StatelessWidget {
             Navigator.pushNamed(context, OtaRoutes.curriculum),
         onOpenGeneralResources: () =>
             Navigator.pushNamed(context, OtaRoutes.generalResources),
+        onOpenEvents: () => Navigator.pushNamed(context, OtaRoutes.events),
       ),
     );
   }

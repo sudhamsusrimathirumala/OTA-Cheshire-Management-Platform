@@ -6,14 +6,17 @@ import '../../theme/ota_colors.dart';
 enum AdminNavDestination {
   dashboard('Dashboard', OtaRoutes.adminDashboard, Icons.dashboard_outlined),
   students('Students', OtaRoutes.adminStudents, Icons.groups_outlined),
-  events('Events', OtaRoutes.adminEvents, Icons.event_outlined),
   announcements(
     'Announcements',
     OtaRoutes.adminAnnouncements,
     Icons.campaign_outlined,
   ),
   schedule('Schedule', OtaRoutes.adminSchedule, Icons.calendar_month_outlined),
-  resources('Resources', OtaRoutes.adminResources, Icons.folder_copy_outlined);
+  resources(
+    'Events & Resources',
+    OtaRoutes.adminResources,
+    Icons.folder_copy_outlined,
+  );
 
   const AdminNavDestination(this.label, this.route, this.icon);
 

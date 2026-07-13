@@ -210,9 +210,28 @@ Map<String, Object?> eventWriteFields(
   EventWriteData data, {
   required DateTime now,
 }) {
-  final linkedResourceIds = <String>{...data.linkedResourceIds};
-  if (data.primaryRegistrationResourceId != null) {
-    linkedResourceIds.add(data.primaryRegistrationResourceId!);
+  final linkedResourceIds = data.linkedResourceIds
+      .map((id) => id.trim())
+      .where((id) => id.isNotEmpty)
+      .toList();
+  final primaryRegistrationResourceId = data.primaryRegistrationResourceId
+      ?.trim();
+  final hasPrimary =
+      primaryRegistrationResourceId != null &&
+      primaryRegistrationResourceId.isNotEmpty;
+  if (linkedResourceIds.length > 1) {
+    throw ArgumentError.value(
+      data.linkedResourceIds,
+      'linkedResourceIds',
+      'Events may link to at most one General Resource.',
+    );
+  }
+  if (linkedResourceIds.isNotEmpty != hasPrimary ||
+      (hasPrimary &&
+          linkedResourceIds.single != primaryRegistrationResourceId)) {
+    throw ArgumentError(
+      'linkedResourceIds and primaryRegistrationResourceId must contain the same resource ID.',
+    );
   }
   return {
     'title': data.title,
@@ -225,9 +244,9 @@ Map<String, Object?> eventWriteFields(
       'registrationDeadline': Timestamp.fromDate(data.registrationDeadline!)
     else if (data.id != null)
       'registrationDeadline': FieldValue.delete(),
-    'linkedResourceIds': linkedResourceIds.toList()..sort(),
-    if (data.primaryRegistrationResourceId != null)
-      'primaryRegistrationResourceId': data.primaryRegistrationResourceId
+    'linkedResourceIds': linkedResourceIds,
+    if (hasPrimary)
+      'primaryRegistrationResourceId': primaryRegistrationResourceId
     else if (data.id != null)
       'primaryRegistrationResourceId': FieldValue.delete(),
     'isPublished': data.isPublished,

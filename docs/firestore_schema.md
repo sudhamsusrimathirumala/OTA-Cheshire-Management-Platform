@@ -156,12 +156,15 @@ Optional fields:
 - `primaryRegistrationResourceId`: String referencing a General Resource
 - `registrationDeadline`: Timestamp
 
-Registration is resource-based. A primary registration resource must also be
-present in `linkedResourceIds`, must belong to the same location, and must be a
-published, non-archived General Resource before the event is published. The
-actual URL is stored in the resource's `linkUrl`. `registrationUrl` is not
-canonical, and `showInResources` has been removed. The reader intentionally
-ignores either legacy event field.
+Registration is resource-based but optional. For new and edited events,
+`linkedResourceIds` contains zero or one ID. When present,
+`primaryRegistrationResourceId` contains that same ID, and the resource must
+belong to the same location and be a published, non-archived General Resource
+before a published event is saved. Existing documents with multiple linked IDs
+remain readable; no migration or live-data cleanup was performed for this rule.
+The actual URL is stored in the resource's `linkUrl`.
+`registrationUrl` is not canonical, and `showInResources` has been removed. The
+reader intentionally ignores either legacy event field.
 
 ## `resources/{resourceId}`
 
