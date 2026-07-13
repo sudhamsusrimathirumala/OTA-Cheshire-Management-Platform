@@ -11,8 +11,8 @@ void main() {
     test('normalizes known and canonical resource categories', () {
       expect(normalizeResourceCategory('beltTesting'), 'testing');
       expect(normalizeResourceCategory('belt-testing'), 'testing');
-      expect(normalizeResourceCategory('event'), 'events');
-      expect(normalizeResourceCategory('form'), 'forms');
+      expect(normalizeResourceCategory('event'), 'general');
+      expect(normalizeResourceCategory('form'), 'general');
       expect(
         normalizeResourceCategory('academyInformation'),
         'academy-information',
@@ -191,8 +191,7 @@ void main() {
         ResourceWriteData(
           title: 'Resource',
           description: 'Description',
-          resourceType: 'form',
-          category: 'forms',
+          category: 'general',
           locationId: 'ota-cheshire',
           isPublished: true,
           createdAt: createdAt,
@@ -255,7 +254,6 @@ void main() {
         ResourceWriteData(
           title: 'Registration',
           description: 'Registration form',
-          resourceType: 'form',
           category: 'testing',
           linkUrl: 'https://ota-cheshire.com/register',
           locationId: 'ota-cheshire',
@@ -269,42 +267,17 @@ void main() {
       expect(fields['resourceSection'], 'general');
     });
 
-    test('resource writes reject an empty resourceType', () {
-      expect(
-        () => resourceWriteFields(
-          const ResourceWriteData(
+    test('resource writes reject unsupported category and URL', () {
+      ResourceWriteData data({String category = 'general', String? link}) =>
+          ResourceWriteData(
             title: 'Resource',
             description: 'Description',
-            resourceType: ' ',
-            category: 'general',
+            category: category,
+            linkUrl: link,
             locationId: 'ota-cheshire',
             isPublished: false,
-          ),
-          now: now,
-        ),
-        throwsArgumentError,
-      );
-    });
+          );
 
-    test('resource writes reject unsupported type, category, and URL', () {
-      ResourceWriteData data({
-        String type = 'general',
-        String category = 'general',
-        String? link,
-      }) => ResourceWriteData(
-        title: 'Resource',
-        description: 'Description',
-        resourceType: type,
-        category: category,
-        linkUrl: link,
-        locationId: 'ota-cheshire',
-        isPublished: false,
-      );
-
-      expect(
-        () => resourceWriteFields(data(type: 'curriculum'), now: now),
-        throwsArgumentError,
-      );
       expect(
         () => resourceWriteFields(data(category: 'other'), now: now),
         throwsArgumentError,
@@ -320,7 +293,6 @@ void main() {
         const ResourceWriteData(
           title: 'Resource',
           description: 'Description',
-          resourceType: 'general',
           category: 'general',
           linkUrl: '',
           locationId: 'ota-cheshire',
@@ -334,7 +306,6 @@ void main() {
         'title',
         'description',
         'resourceSection',
-        'resourceType',
         'category',
         'locationId',
         'isPublished',
@@ -393,8 +364,7 @@ void main() {
           id: 'resource-1',
           title: 'Resource',
           description: 'Description',
-          resourceType: 'form',
-          category: 'forms',
+          category: 'general',
           locationId: 'ota-cheshire',
           isPublished: true,
         ),
@@ -469,8 +439,7 @@ void main() {
           id: 'resource-1',
           title: 'Resource',
           description: 'Description',
-          resourceType: 'form',
-          category: 'forms',
+          category: 'general',
           linkUrl: 'https://example.com',
           locationId: 'ota-cheshire',
           isPublished: true,

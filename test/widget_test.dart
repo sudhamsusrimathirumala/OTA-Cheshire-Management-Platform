@@ -662,8 +662,7 @@ void main() {
       id: 'test-resource',
       title: 'Test Resource',
       description: 'Shared card test',
-      resourceType: 'document',
-      category: 'forms',
+      category: 'general',
       locationId: 'ota-cheshire',
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
@@ -705,6 +704,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Save Draft'), findsOneWidget);
     expect(find.text('Publish Resource'), findsOneWidget);
+    expect(find.text('Category'), findsOneWidget);
+    expect(find.text('Resource type'), findsNothing);
+    expect(find.text('Forms'), findsNothing);
+    expect(find.text('Events'), findsNothing);
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
@@ -748,7 +751,6 @@ void main() {
       id: 'linked',
       title: 'Linked Resource',
       description: '',
-      resourceType: 'document',
       category: 'general',
       linkUrl: 'https://example.com/resource',
       locationId: 'ota-cheshire',
@@ -775,7 +777,6 @@ void main() {
       id: 'linked',
       title: 'Linked Resource',
       description: '',
-      resourceType: 'document',
       category: 'general',
       linkUrl: 'https://example.com/resource',
       locationId: 'ota-cheshire',
@@ -803,7 +804,6 @@ void main() {
       id: 'resource',
       title: 'Resource',
       description: '',
-      resourceType: 'document',
       category: 'general',
       linkUrl: link,
       locationId: 'ota-cheshire',
@@ -1199,7 +1199,6 @@ void main() {
       title: id,
       description: '',
       resourceSection: section,
-      resourceType: 'document',
       category: 'general',
       locationId: 'ota-cheshire',
       isPublished: published,
@@ -1214,7 +1213,6 @@ void main() {
       id: 'wrong-location',
       title: 'wrong-location',
       description: '',
-      resourceType: 'document',
       category: 'general',
       locationId: 'other-location',
       isPublished: true,
@@ -1368,7 +1366,6 @@ void main() {
       title: id,
       description: '',
       resourceSection: section,
-      resourceType: 'document',
       category: 'general',
       locationId: locationId,
       isPublished: published,
@@ -1809,8 +1806,7 @@ void main() {
       id: 'existing-resource',
       title: 'Original',
       description: 'Original description',
-      resourceType: 'document',
-      category: 'forms',
+      category: 'general',
       locationId: 'ota-cheshire',
       isPublished: true,
       createdAt: createdAt,
@@ -1820,8 +1816,7 @@ void main() {
       resource,
       title: 'Updated',
       description: 'Updated description',
-      resourceType: 'document',
-      category: 'forms',
+      category: 'general',
       locationId: resource.locationId,
       isPublished: true,
       linkUrl: 'https://example.com/resource',
@@ -1840,7 +1835,6 @@ void main() {
         'title',
         'description',
         'resourceSection',
-        'resourceType',
         'category',
         'linkUrl',
         'locationId',
@@ -2120,16 +2114,19 @@ void main() {
       }),
       isEmpty,
     );
-    expect(migrationLocationBackfill({}), {
-      'name': 'OTA Cheshire',
-      'timeZoneId': 'America/New_York',
-      'isActive': true,
-    });
+    final locationBackfill = migrationLocationBackfill({});
+    expect(locationBackfill['name'], 'OTA Cheshire');
+    expect(locationBackfill['timeZoneId'], 'America/New_York');
+    expect(locationBackfill['isActive'], true);
+    expect(locationBackfill['createdAt'], isA<FieldValue>());
+    expect(locationBackfill['updatedAt'], isA<FieldValue>());
     expect(
       migrationLocationBackfill({
         'name': 'Existing Academy Name',
         'timeZoneId': 'America/Chicago',
         'isActive': false,
+        'createdAt': DateTime.utc(2026),
+        'updatedAt': DateTime.utc(2026),
       }),
       isEmpty,
     );
@@ -2512,7 +2509,6 @@ AcademyResource _testResource({
     id: id,
     title: title,
     description: description,
-    resourceType: 'document',
     category: 'general',
     linkUrl: linkUrl,
     locationId: locationId,

@@ -146,7 +146,6 @@ class GeneralResourceCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _Badge(label: resource.categoryLabel),
-                  _Badge(label: resource.resourceTypeLabel, accent: true),
                   if (isAdmin) _Badge(label: resource.statusLabel),
                 ],
               ),
@@ -187,23 +186,22 @@ class GeneralResourceCard extends StatelessWidget {
 }
 
 class _Badge extends StatelessWidget {
-  const _Badge({required this.label, this.accent = false});
+  const _Badge({required this.label});
 
   final String label;
-  final bool accent;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: accent ? OtaColors.softRed : const Color(0xFFEFF2F7),
+        color: const Color(0xFFEFF2F7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: accent ? OtaColors.maroon : OtaColors.navy,
+          color: OtaColors.navy,
           fontWeight: FontWeight.w900,
         ),
       ),

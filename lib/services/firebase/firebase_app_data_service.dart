@@ -13,6 +13,7 @@ import '../../models/notification_item.dart';
 import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
+import 'firebase_identity_contract.dart';
 import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
 import '../location_time_service.dart';
@@ -644,33 +645,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   AcademyResource? _resourceFromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {
-    final data = document.data();
-    final title = _stringValue(data['title']);
-    final locationId = _stringValue(data['locationId']);
-    final createdAt = _dateTimeValue(data['createdAt']);
-    final updatedAt = _dateTimeValue(data['updatedAt']);
-
-    if (title == null ||
-        locationId == null ||
-        createdAt == null ||
-        updatedAt == null) {
-      return null;
-    }
-
-    return AcademyResource(
-      id: document.id,
-      title: title,
-      description: _stringValue(data['description']) ?? '',
-      resourceSection: _stringValue(data['resourceSection']) ?? 'general',
-      resourceType: _stringValue(data['resourceType']) ?? 'general',
-      category: _stringValue(data['category']) ?? 'general',
-      linkUrl: _stringValue(data['linkUrl']) ?? _stringValue(data['url']),
-      locationId: locationId,
-      isPublished: _boolValue(data['isPublished']) ?? false,
-      isArchived: _boolValue(data['isArchived']) ?? false,
-      createdAt: createdAt,
-      updatedAt: updatedAt,
-    );
+    return academyResourceFromFirestoreData(document.id, document.data());
   }
 
   List<StudentProfile> _adminStudentsFromSnapshot(
@@ -810,7 +785,11 @@ StudentProfile? studentProfileFromFirestoreData(
   String id,
   Map<String, dynamic> data,
 ) {
-  final name = _stringValue(data['fullName']) ?? _stringValue(data['name']);
+  final firstName = _stringValue(data['firstName']);
+  final lastName = _stringValue(data['lastName']);
+  final name = firstName != null && lastName != null
+      ? '$firstName $lastName'
+      : _stringValue(data['fullName']) ?? _stringValue(data['name']);
   final locationId = _stringValue(data['locationId']);
   final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
   final dateOfBirth = _dateTimeValue(data['dateOfBirth']);
@@ -831,15 +810,24 @@ StudentProfile? studentProfileFromFirestoreData(
   return Student(
     id: id,
     name: name,
+    canonicalFirstName: firstName,
+    canonicalLastName: lastName,
     locationId: locationId,
     belt: belt,
+    canonicalBeltRank: belt,
     dateOfBirth: dateOfBirth,
     legacyAge: legacyAge,
     stickerCount: _intValue(progress['current']) ?? 0,
     stickersRequired: _intValue(progress['required']) ?? 0,
     nextRank: _stringValue(progress['nextRank']) ?? 'Next rank',
     guardianUserIds: _stringListValue(data['guardianUserIds']),
-    selfUserId: _stringValue(data['selfUserId']),
+    guardianEmail: _normalizedOptionalEmail(data['guardianEmail']),
+    selfUserId:
+        _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
+    linkedUserId:
+        _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
+    approvalStatus: _studentApprovalStatus(data['approvalStatus']),
+    familyApplicationId: _stringValue(data['familyApplicationId']),
     preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
     promotionHistory: _stringListValue(data['promotionHistory']),
     testingNotes: _stringListValue(data['testingNotes']),
@@ -847,6 +835,21 @@ StudentProfile? studentProfileFromFirestoreData(
     createdAt: _dateTimeValue(data['createdAt']),
     updatedAt: _dateTimeValue(data['updatedAt']),
   );
+}
+
+String? _normalizedOptionalEmail(Object? value) {
+  final email = _stringValue(value);
+  return email?.toLowerCase();
+}
+
+StudentApprovalStatus _studentApprovalStatus(Object? value) {
+  return switch (value) {
+    'incomplete' => StudentApprovalStatus.incomplete,
+    'pending' => StudentApprovalStatus.pending,
+    'rejected' => StudentApprovalStatus.rejected,
+    'disabled' => StudentApprovalStatus.disabled,
+    _ => StudentApprovalStatus.approved,
+  };
 }
 
 bool? _boolValue(Object? value) {

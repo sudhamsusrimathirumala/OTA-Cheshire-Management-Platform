@@ -136,13 +136,20 @@ Map<String, Object?> _userAccountData(UserAccount account) {
   final now = FieldValue.serverTimestamp();
 
   return {
-    'displayName': account.displayName,
+    'firstName': account.firstName,
+    'lastName': account.lastName,
     'email': account.email,
     'role': account.role.name,
-    'locationId': account.locationId,
+    if (account.locationId.isNotEmpty) 'locationId': account.locationId,
     'approvalStatus': account.approvalStatus.name,
     'linkedStudentProfileIds': account.linkedStudentProfileIds,
-    'selectedStudentProfileId': account.selectedStudentProfileId,
+    if (account.phoneNumber != null) 'phoneNumber': account.phoneNumber,
+    if (account.selectedStudentProfileId != null)
+      'selectedStudentProfileId': account.selectedStudentProfileId,
+    if (account.googleAccountId != null)
+      'googleAccountId': account.googleAccountId,
+    if (account.familyApplicationId != null)
+      'familyApplicationId': account.familyApplicationId,
     'createdAt': now,
     'updatedAt': now,
   };
@@ -153,12 +160,17 @@ Map<String, Object?> studentProfileWriteFields(Student profile) {
   final now = FieldValue.serverTimestamp();
 
   return {
-    'fullName': profile.name,
+    'firstName': profile.firstName,
+    'lastName': profile.lastName,
     'dateOfBirth': Timestamp.fromDate(profile.dateOfBirth!),
-    'beltRank': profile.belt,
+    'beltRank': profile.beltRank,
     'locationId': profile.locationId,
+    if (profile.guardianEmail != null) 'guardianEmail': profile.guardianEmail,
     'guardianUserIds': profile.guardianUserIds,
-    'selfUserId': profile.selfUserId,
+    'approvalStatus': profile.approvalStatus.name,
+    if (profile.linkedUserId != null) 'linkedUserId': profile.linkedUserId,
+    if (profile.familyApplicationId != null)
+      'familyApplicationId': profile.familyApplicationId,
     'preferredClassGroupIds': profile.preferredClassGroupIds,
     'stickerProgress': {
       'current': profile.stickerCount,
@@ -253,7 +265,6 @@ Map<String, Object?> _resourceData(AcademyResource resource) {
     'title': resource.title,
     'description': resource.description,
     'resourceSection': resource.resourceSection,
-    'resourceType': resource.resourceType,
     'category': resource.category,
     'linkUrl': resource.linkUrl,
     'locationId': resource.locationId,

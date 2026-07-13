@@ -435,10 +435,6 @@ class _ResourceRow extends StatelessWidget {
             runSpacing: 6,
             children: [
               _Badge(label: resource.categoryLabel, tone: _BadgeTone.navy),
-              _Badge(
-                label: resource.resourceTypeLabel,
-                tone: _BadgeTone.neutral,
-              ),
               _Badge(label: resource.statusLabel, tone: statusTone),
             ],
           );
@@ -525,7 +521,6 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _linkController;
-  late String _resourceType;
   late String _category;
   String? _validationMessage;
 
@@ -538,11 +533,11 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
       text: resource?.description ?? '',
     );
     _linkController = TextEditingController(text: resource?.linkUrl ?? '');
-    _resourceType = canonicalResourceTypes.contains(resource?.resourceType)
-        ? resource!.resourceType
-        : 'general';
-    _category = canonicalResourceCategories.contains(resource?.category)
-        ? resource!.category
+    final normalizedCategory = normalizeLegacyResourceCategory(
+      resource?.category ?? 'general',
+    );
+    _category = canonicalResourceCategories.contains(normalizedCategory)
+        ? normalizedCategory
         : 'general';
   }
 
@@ -583,39 +578,18 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
               maxLines: 3,
             ),
             const SizedBox(height: 10),
-            _TwoColumnFields(
-              first: DropdownButtonFormField<String>(
-                initialValue: _resourceType,
-                decoration: _fieldDecoration('Resource type'),
-                items: [
-                  for (final option in _resourceTypeOptions)
-                    DropdownMenuItem(
-                      value: option.id,
-                      child: Text(option.label),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _resourceType = value);
-                  }
-                },
-              ),
-              second: DropdownButtonFormField<String>(
-                initialValue: _category,
-                decoration: _fieldDecoration('Category'),
-                items: [
-                  for (final option in _categoryOptions)
-                    DropdownMenuItem(
-                      value: option.id,
-                      child: Text(option.label),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _category = value);
-                  }
-                },
-              ),
+            DropdownButtonFormField<String>(
+              initialValue: _category,
+              decoration: _fieldDecoration('Category'),
+              items: [
+                for (final option in _categoryOptions)
+                  DropdownMenuItem(value: option.id, child: Text(option.label)),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _category = value);
+                }
+              },
             ),
             const SizedBox(height: 10),
             _AdminTextField(
@@ -689,7 +663,6 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
         ? ResourceWriteData(
             title: title,
             description: _descriptionController.text.trim(),
-            resourceType: _resourceType,
             category: _category,
             linkUrl: link.isEmpty ? null : link,
             locationId: _adminLocationId(),
@@ -699,7 +672,6 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             resource,
             title: title,
             description: _descriptionController.text.trim(),
-            resourceType: _resourceType,
             category: _category,
             linkUrl: link.isEmpty ? null : link,
             locationId: resource.locationId,
@@ -1022,32 +994,6 @@ class _AdminTextField extends StatelessWidget {
   }
 }
 
-class _TwoColumnFields extends StatelessWidget {
-  const _TwoColumnFields({required this.first, required this.second});
-
-  final Widget first;
-  final Widget second;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 620) {
-          return Column(children: [first, const SizedBox(height: 10), second]);
-        }
-
-        return Row(
-          children: [
-            Expanded(child: first),
-            const SizedBox(width: 10),
-            Expanded(child: second),
-          ],
-        );
-      },
-    );
-  }
-}
-
 class _BadgeColors {
   const _BadgeColors({
     required this.background,
@@ -1141,21 +1087,9 @@ _BadgeColors _badgeColors(_BadgeTone tone) {
   };
 }
 
-const _resourceTypeOptions = [
-  _FormOption(id: 'form', label: 'Form'),
-  _FormOption(id: 'testing', label: 'Testing'),
-  _FormOption(id: 'registration', label: 'Registration'),
-  _FormOption(id: 'document', label: 'Document'),
-  _FormOption(id: 'video', label: 'Video'),
-  _FormOption(id: 'externalLink', label: 'External Link'),
-  _FormOption(id: 'general', label: 'General'),
-];
-
 const _categoryOptions = [
   _FormOption(id: 'registration', label: 'Registration'),
   _FormOption(id: 'testing', label: 'Testing'),
-  _FormOption(id: 'forms', label: 'Forms'),
-  _FormOption(id: 'events', label: 'Events'),
   _FormOption(id: 'academy-information', label: 'Academy Information'),
   _FormOption(id: 'general', label: 'General'),
 ];

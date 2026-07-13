@@ -151,30 +151,6 @@ void main() {
       expect(cleaned['resources']!['resource']!['category'], 'testing');
     });
 
-    test('belt testing checklist gets document resource type', () {
-      final resource = _resource()..['resourceType'] = '';
-      final cleaned = simulateFirestoreCleanup(
-        _collections(resources: {'belt_testing_checklist': resource}),
-        _plan(resources: {'belt_testing_checklist': resource}),
-      );
-      expect(
-        cleaned['resources']!['belt_testing_checklist']!['resourceType'],
-        'document',
-      );
-    });
-
-    test('student handbook gets document resource type', () {
-      final resource = _resource()..remove('resourceType');
-      final cleaned = simulateFirestoreCleanup(
-        _collections(resources: {'student_handbook': resource}),
-        _plan(resources: {'student_handbook': resource}),
-      );
-      expect(
-        cleaned['resources']!['student_handbook']!['resourceType'],
-        'document',
-      );
-    });
-
     test(
       'resource publication, archive, timestamps, and content are preserved',
       () {
@@ -239,9 +215,7 @@ void main() {
     });
 
     test('placeholder content is not changed', () {
-      final resource = _resource()
-        ..['description'] = 'Placeholder description'
-        ..['resourceType'] = '';
+      final resource = _resource()..['description'] = 'Placeholder description';
       final announcement = <String, Object?>{
         'title': 'Placeholder title',
         'body': 'Placeholder body',

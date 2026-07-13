@@ -541,7 +541,7 @@ void _auditResources(
         ),
       );
     }
-    for (final field in const ['resourceType', 'category', 'locationId']) {
+    for (final field in const ['category', 'locationId']) {
       _requireString(data, field, id, FirestoreCollections.resources, issues);
     }
     final category = _nonEmptyString(data['category']);

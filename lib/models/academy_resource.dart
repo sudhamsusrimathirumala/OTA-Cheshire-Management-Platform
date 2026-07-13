@@ -4,7 +4,6 @@ class AcademyResource {
     required this.title,
     required this.description,
     this.resourceSection = 'general',
-    required this.resourceType,
     required this.category,
     required this.locationId,
     required this.createdAt,
@@ -18,7 +17,6 @@ class AcademyResource {
   final String title;
   final String description;
   final String resourceSection;
-  final String resourceType;
   final String category;
   final String? linkUrl;
   final String locationId;
@@ -27,26 +25,12 @@ class AcademyResource {
   final DateTime createdAt;
   final DateTime updatedAt;
 
-  String get resourceTypeLabel {
-    return switch (resourceType) {
-      'form' => 'Form',
-      'curriculum' => 'Curriculum',
-      'testing' => 'Testing',
-      'registration' => 'Registration',
-      'document' => 'Document',
-      'video' => 'Video',
-      'externalLink' || 'external-link' => 'External Link',
-      _ => 'General',
-    };
-  }
-
   String get categoryLabel {
     return switch (category) {
       'registration' => 'Registration',
       'curriculum' => 'Curriculum',
       'testing' || 'beltTesting' || 'belt-testing' => 'Testing',
-      'forms' || 'form' => 'Forms',
-      'events' || 'event' => 'Events',
+      'forms' || 'form' || 'events' || 'event' => 'General',
       'academy-information' => 'Academy Information',
       _ => 'General',
     };
@@ -60,24 +44,24 @@ class AcademyResource {
   }
 }
 
-const canonicalResourceTypes = <String>{
-  'form',
-  'testing',
-  'registration',
-  'document',
-  'video',
-  'externalLink',
-  'general',
-};
-
 const canonicalResourceCategories = <String>{
   'registration',
   'testing',
-  'forms',
-  'events',
   'academy-information',
   'general',
 };
+
+String normalizeLegacyResourceCategory(String value) {
+  final compact = value.trim().replaceAll(RegExp(r'[_\s-]+'), '').toLowerCase();
+  return switch (compact) {
+    'belttesting' || 'testing' => 'testing',
+    'registration' => 'registration',
+    'academyinformation' => 'academy-information',
+    'form' || 'forms' || 'event' || 'events' => 'general',
+    'general' => 'general',
+    _ => value.trim().toLowerCase().replaceAll(RegExp(r'[_\s]+'), '-'),
+  };
+}
 
 Uri? validResourceLinkUri(String? value) {
   final trimmed = value?.trim();

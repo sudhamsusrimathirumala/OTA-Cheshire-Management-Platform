@@ -9,7 +9,7 @@ current source before running any write-capable target.
 | Audit | `lib/firestore_audit_main.dart` | Read-only | No write flag; refuses release mode | Reads the seven application collections, validates schema and relationships, and copies a JSON report | Yes | Does not modify Firestore |
 | Export | `lib/firestore_export_main.dart` | Read-only | No write flag; refuses release mode | Exports the seven top-level application collections as formatted JSON for review | Yes | Copy or save the generated JSON; this is not a restore/backup system |
 | Cleanup planner/apply | `lib/firestore_cleanup_main.dart` | Read, then optional targeted writes | `enableFirestoreCleanupApply` is currently `true` | Generates a deterministic plan, validates preconditions, applies targeted field updates/deletions, and reruns the audit | Planning: yes. Apply: designed to be idempotent, but run only with explicit approval | Requires exact confirmation and project ID match; supports no document deletion; no backup is required |
-| MVP readiness migration | `lib/seed_firestore_main.dart` | Read/write | `_enableFirestoreMigration` is currently `true` in the working tree | Runs the older merge-oriented readiness migration and may create missing starter resources | Generally idempotent, but historical | Despite its filename, it does not call the full seed service. Do not run against production/shared data without a new review |
+| MVP readiness migration | `lib/seed_firestore_main.dart` | Read/write | `_enableFirestoreMigration` is `false` | Runs the merge-only readiness migration and may create missing starter resources | Yes, designed to be idempotent | The only manual migration entrypoint; do not run against production/shared data without a fresh backup and review |
 | Approved schema update | `lib/firestore_schema_update_main.dart` | Targeted writes | `enableApprovedSchemaUpdate` is `false` | Historical one-time update for sparring IDs, event legacy-field removal, and five student birth dates | Technically repeatable if all target documents exist, but intended once | Already applied; keep disabled |
 | Full development seed | `tool/seed_firestore.dart` | Writes complete sample documents | No entrypoint guard; internal service flag does not protect this script | Writes sample users, profiles, sessions, announcements, events, and resources using fixed IDs | No | May overwrite documents with matching IDs; do not use on the shared database |
 
@@ -40,16 +40,20 @@ service rereads all affected documents before the first write, stops on the
 exact failed document, performs no document deletion, and runs a post-cleanup
 audit.
 
-Historical MVP readiness migration:
+MVP readiness migration:
 
 ```powershell
 flutter run -t lib/seed_firestore_main.dart
 ```
 
-This entrypoint calls `FirestoreMigrationService`, not
-`FirestoreSeedService.seedAll()`. It merges/backfills known fields and can
-create missing starter resources. It is historical and should not be treated
-as a general production migration framework.
+This entrypoint calls `FirestoreMigrationService.runMvpReadinessMigration()`,
+not `FirestoreSeedService.seedAll()`. To run it deliberately, review the code
+and target project, take a backup, temporarily set
+`_enableFirestoreMigration = true`, run once, capture the displayed counts,
+then restore the flag to `false`. It never deletes user, profile, location, or
+resource documents. It normalizes safe user fields, derives only unambiguous
+guardian emails, reports missing email/address data, maps legacy resource
+categories to `general`, and explicitly deletes legacy `resourceType` fields.
 
 Historical approved schema update:
 

@@ -52,6 +52,14 @@ class LocationTimeService {
         name: name is String && name.isNotEmpty ? name : 'OTA Cheshire',
         timeZoneId: timeZoneIdFor(locationId),
         isActive: isActive is bool ? isActive : true,
+        addressLine1: _stringValue(data?['addressLine1']),
+        addressLine2: _stringValue(data?['addressLine2']),
+        city: _stringValue(data?['city']),
+        state: _stringValue(data?['state']),
+        postalCode: _stringValue(data?['postalCode']),
+        country: _stringValue(data?['country']),
+        createdAt: _dateTimeValue(data?['createdAt']),
+        updatedAt: _dateTimeValue(data?['updatedAt']),
       );
     } catch (_) {
       return AcademyLocation(
@@ -116,6 +124,20 @@ class LocationTimeService {
     final period = local.hour >= 12 ? 'PM' : 'AM';
     return '$month ${local.day}, ${local.year} at $hour:$minute $period ${local.timeZoneName}';
   }
+}
+
+String? _stringValue(Object? value) {
+  if (value is! String) return null;
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+DateTime? _dateTimeValue(Object? value) {
+  return switch (value) {
+    Timestamp() => value.toDate(),
+    DateTime() => value,
+    _ => null,
+  };
 }
 
 const _monthNames = <String>[

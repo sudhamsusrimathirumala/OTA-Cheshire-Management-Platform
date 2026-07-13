@@ -115,11 +115,12 @@ for the current data flow and fallback boundaries.
 
 ### Partially Implemented
 
-- Firebase packages and configuration are present, but Firebase Authentication
-  is not connected to the login or signup UI.
-- User roles, approval status, guardian links, and selected-profile fields are
-  modeled, but production identity, ownership, approval, and role routing are
-  not implemented.
+- Firebase UID/user-document identity, email/password and Google dependency
+  preparation, canonical account/profile parsing, and Firestore rules are
+  present, but Authentication is not connected to login or signup UI.
+- User roles, approval status, guardian links, family application grouping,
+  and selected-profile fields are modeled, but approval UI and role routing
+  are not implemented.
 - Firestore data is location-aware, but administration is currently centered
   on OTA Cheshire rather than a complete multi-location workflow.
 - Announcements are live Firestore data, but device push notifications are not

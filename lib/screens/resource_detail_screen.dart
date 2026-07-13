@@ -87,7 +87,7 @@ class _ResourceHeroCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
             ),
             child: Icon(
-              _resourceIcon(resource.resourceType),
+              _resourceIcon(resource.category),
               color: OtaColors.white,
               size: 28,
             ),
@@ -102,10 +102,6 @@ class _ResourceHeroCard extends StatelessWidget {
                   runSpacing: 8,
                   children: [
                     _DetailBadge(label: resource.categoryLabel),
-                    _DetailBadge(
-                      label: resource.resourceTypeLabel,
-                      accent: true,
-                    ),
                     if (showAdminStatus)
                       _DetailBadge(label: resource.statusLabel),
                   ],
@@ -288,23 +284,22 @@ class _SurfaceCard extends StatelessWidget {
 }
 
 class _DetailBadge extends StatelessWidget {
-  const _DetailBadge({required this.label, this.accent = false});
+  const _DetailBadge({required this.label});
 
   final String label;
-  final bool accent;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: accent ? OtaColors.maroon : OtaColors.softRed,
+        color: OtaColors.softRed,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: accent ? OtaColors.white : OtaColors.ink,
+          color: OtaColors.ink,
           fontWeight: FontWeight.w900,
         ),
       ),
@@ -312,12 +307,11 @@ class _DetailBadge extends StatelessWidget {
   }
 }
 
-IconData _resourceIcon(String resourceType) {
-  return switch (resourceType) {
-    'form' => Icons.description_outlined,
+IconData _resourceIcon(String category) {
+  return switch (category) {
+    'testing' => Icons.checklist_rounded,
     'registration' => Icons.how_to_reg_outlined,
-    'video' => Icons.play_circle_outline_rounded,
-    'externalLink' || 'external-link' => Icons.open_in_new_rounded,
+    'academy-information' => Icons.info_outline_rounded,
     _ => Icons.folder_copy_outlined,
   };
 }

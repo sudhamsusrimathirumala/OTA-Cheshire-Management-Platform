@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath(uid) {
+      return /databases/$(database)/documents/users/$(uid);
+    }
+
+    function hasUserDocument() {
+      return signedIn() && exists(userPath(request.auth.uid));
+    }
+
+    function currentUser() {
+      return get(userPath(request.auth.uid)).data;
+    }
+
+    function isApproved() {
+      return hasUserDocument() && currentUser().approvalStatus == 'approved';
+    }
+
+    function isSuperAdmin() {
+      return isApproved() && currentUser().role == 'superAdmin';
+    }
+
+    function isLocationAdmin() {
+      return isApproved() && currentUser().role == 'admin';
+    }
+
+    function canAdminLocation(locationId) {
+      return isSuperAdmin() ||
+          (isLocationAdmin() && currentUser().locationId == locationId);
+    }
+
+    function isSafeInitialRole() {
+      return request.resource.data.role in ['student', 'parent'];
+    }
+
+    function isSafeInitialApproval() {
+      return request.resource.data.approvalStatus in ['incomplete', 'pending'];
+    }
+
+    function googleIdentityMatchesToken() {
+      return !request.resource.data.keys().hasAny(['googleAccountId']) ||
+          (request.auth.token.firebase.identities.keys().hasAny(['google.com']) &&
+           request.resource.data.googleAccountId in
+             request.auth.token.firebase.identities['google.com']);
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn() && request.auth.uid == uid &&
+          isSafeInitialRole() && isSafeInitialApproval() &&
+          request.resource.data.linkedStudentProfileIds.size() == 0 &&
+          googleIdentityMatchesToken() &&
+          request.resource.data.keys().hasAll([
+            'firstName', 'lastName', 'email', 'role', 'approvalStatus',
+            'linkedStudentProfileIds', 'createdAt', 'updatedAt'
+          ]) &&
+          request.resource.data.keys().hasOnly([
+            'firstName', 'lastName', 'email', 'role', 'approvalStatus',
+            'linkedStudentProfileIds', 'createdAt', 'updatedAt', 'phoneNumber',
+            'locationId', 'selectedStudentProfileId', 'googleAccountId',
+            'familyApplicationId'
+          ]);
+      allow read: if signedIn() &&
+          (request.auth.uid == uid || isSuperAdmin() ||
+           (isLocationAdmin() &&
+            resource.data.locationId == currentUser().locationId));
+      allow update: if signedIn() &&
+        request.resource.data.get('googleAccountId', null) ==
+          resource.data.get('googleAccountId', null) && (
+          (request.auth.uid == uid &&
+           request.resource.data.role == resource.data.role &&
+           request.resource.data.approvalStatus == resource.data.approvalStatus &&
+           request.resource.data.linkedStudentProfileIds ==
+             resource.data.linkedStudentProfileIds &&
+           request.resource.data.get('locationId', '') ==
+             resource.data.get('locationId', '')) ||
+          isSuperAdmin() ||
+          (isLocationAdmin() &&
+           resource.data.locationId == currentUser().locationId &&
+           request.resource.data.locationId == currentUser().locationId &&
+           request.resource.data.role != 'superAdmin')
+        );
+      allow delete: if isSuperAdmin();
+    }
+
+    match /studentProfiles/{profileId} {
+      allow read: if isApproved() && (
+          resource.data.get('linkedUserId', '') == request.auth.uid ||
+          profileId in currentUser().linkedStudentProfileIds ||
+          request.auth.uid in resource.data.get('guardianUserIds', []) ||
+          canAdminLocation(resource.data.locationId)
+        );
+      allow create: if hasUserDocument() &&
+          currentUser().role in ['student', 'parent'] &&
+          currentUser().approvalStatus in ['incomplete', 'pending', 'approved'] &&
+          request.resource.data.locationId == currentUser().locationId &&
+          request.resource.data.approvalStatus in ['incomplete', 'pending'] &&
+          request.resource.data.get('guardianUserIds', []).size() <= 1 &&
+          (request.resource.data.get('guardianUserIds', []).size() == 0 ||
+           request.auth.uid in request.resource.data.guardianUserIds) &&
+          (!request.resource.data.keys().hasAny(['linkedUserId']) ||
+           request.resource.data.linkedUserId == request.auth.uid);
+      allow update: if canAdminLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId;
+      allow delete: if isSuperAdmin();
+    }
+
+    match /locations/{locationId} {
+      allow read: if signedIn() && resource.data.isActive == true;
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /{collectionName}/{documentId} {
+      allow read: if collectionName in [
+          'classSessions', 'announcements', 'events', 'resources'
+        ] && isApproved() &&
+        canAccessAcademyDocument(resource.data.locationId);
+      allow create: if collectionName in [
+          'classSessions', 'announcements', 'events', 'resources'
+        ] && canAdminLocation(request.resource.data.locationId);
+      allow update: if collectionName in [
+          'classSessions', 'announcements', 'events', 'resources'
+        ] && canAdminLocation(resource.data.locationId) &&
+        request.resource.data.locationId == resource.data.locationId;
+      allow delete: if collectionName in [
+          'classSessions', 'announcements', 'events', 'resources'
+        ] && canAdminLocation(resource.data.locationId);
+    }
+
+    function canAccessAcademyDocument(locationId) {
+      return isSuperAdmin() || currentUser().locationId == locationId;
+    }
+  }
+}

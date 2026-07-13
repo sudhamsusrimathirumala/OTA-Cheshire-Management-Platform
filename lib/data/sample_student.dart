@@ -68,7 +68,8 @@ final sampleStudentProfiles = [
 
 const sampleUserAccount = UserAccount(
   id: 'user_parent_demo',
-  displayName: 'OTA Parent',
+  firstName: 'OTA',
+  lastName: 'Parent',
   email: 'parent@example.com',
   role: UserAccountRole.parent,
   locationId: otaCheshireLocationId,

@@ -636,11 +636,6 @@ void _planResource(
     final normalized = normalizeResourceCategory(category);
     if (normalized != category) fieldsToSet['category'] = normalized;
   }
-  if ((id == 'belt_testing_checklist' || id == 'student_handbook') &&
-      _nonEmptyString(data['resourceType']) == null) {
-    fieldsToSet['resourceType'] = 'document';
-  }
-
   final hasUrl = data.containsKey('url');
   final url = _nonEmptyString(data['url']);
   final linkUrl = _nonEmptyString(data['linkUrl']);
@@ -656,7 +651,6 @@ void _planResource(
 
   final preconditions = _preconditionsFor(data, const [
     'resourceSection',
-    'resourceType',
     'category',
     'url',
     'linkUrl',

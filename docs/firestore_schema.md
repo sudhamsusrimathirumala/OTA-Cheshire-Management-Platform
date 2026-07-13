@@ -11,52 +11,68 @@ Locations provide the scope and IANA time zone used by other records.
 Required fields:
 
 - `name`: String
+- `addressLine1`: String
+- `city`: String
+- `state`: String
+- `postalCode`: String
+- `country`: String
 - `timeZoneId`: String
 - `isActive`: bool
+- `createdAt`: Timestamp
+- `updatedAt`: Timestamp
+
+Optional field: `addressLine2`. The model's formatted address omits a blank
+second line safely. The migration never invents a real street address; it
+reports locations missing required address fields for manual completion.
 
 The configured location is `ota-cheshire`, named `OTA Cheshire`, with
 `America/New_York` as its time zone. Other collections reference a location by
 `locationId`.
 
-## `users/{userId}`
+## `users/{firebaseUid}`
+
+The document ID is always the Firebase Authentication UID. Email is mutable
+contact information and is never the identity key. Linking password and Google
+providers to one Firebase user must continue using the same document.
 
 Required fields:
 
-- `displayName`: String
-- `email`: String
-- `role`: `parent`, `student`, `instructor`, or `admin`
-- `locationId`: String referencing `locations`
-- `approvalStatus`: `pending`, `approved`, or `rejected`
+- `firstName`: String
+- `lastName`: String
+- `email`: normalized lowercase String
+- `role`: `student`, `parent`, `admin`, or `superAdmin`
+- `approvalStatus`: `incomplete`, `pending`, `approved`, `rejected`, or
+  `disabled`
 - `linkedStudentProfileIds`: List<String> referencing `studentProfiles`
-- `selectedStudentProfileId`: String or null; when set, it must appear in
-  `linkedStudentProfileIds`
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-The account/profile model exists, but the normal application still obtains the
-current account and selected profile from fallback data rather than loading an
-authenticated user document.
+Optional fields are `phoneNumber`, `locationId`, `selectedStudentProfileId`,
+`googleAccountId`, and `familyApplicationId`. Blank phone numbers are omitted
+or deleted. `googleAccountId` comes only from the `google.com` entry in Firebase
+`User.providerData`; it is never derived from email.
 
 ## `studentProfiles/{studentProfileId}`
 
 Required fields:
 
-- `fullName`: String
+- `firstName`: String
+- `lastName`: String
 - `beltRank`: String
 - `dateOfBirth`: Timestamp
 - `locationId`: String referencing `locations`
+- `guardianEmail`: normalized lowercase String
 - `guardianUserIds`: List<String> referencing `users`
-- `preferredClassGroupIds`: List<String>
-- `stickerProgress`: Map containing `current`, `required`, and `nextRank`
-- `promotionHistory`: List
-- `testingNotes`: List
-- `isActive`: bool
+- `approvalStatus`: `incomplete`, `pending`, `approved`, `rejected`, or
+  `disabled`
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional field:
-
-- `selfUserId`: String referencing `users`
+Optional fields are `linkedUserId`, `familyApplicationId`, and
+`preferredClassGroupIds`. `guardianEmail` is a contact/notification address;
+it does not create a user or replace `guardianUserIds`. Existing profiles may
+temporarily omit it. Migration derives it only from one unambiguous existing
+parent relationship and otherwise reports it missing.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when
@@ -179,8 +195,7 @@ Required fields:
 - `title`: String
 - `description`: String
 - `resourceSection`: the literal `general`
-- `resourceType`: non-empty String
-- `category`: String
+- `category`: `testing`, `registration`, `academy-information`, or `general`
 - `locationId`: String referencing `locations`
 - `isPublished`: bool
 - `isArchived`: bool
@@ -191,9 +206,10 @@ Optional field:
 
 - `linkUrl`: String
 
-Canonical categories written by the helper include `testing`, `registration`,
-`events`, `forms`, `academy-information`, and `general`. Known legacy category
-spellings are normalized. Readers temporarily fall back from `linkUrl` to the
+Legacy `forms` and `events` categories remain readable as `general` and are
+normalized to `general` by the migration. `resourceType` is not canonical: new
+writes omit it, readers ignore it, and the migration deletes it with
+`FieldValue.delete()`. Readers temporarily fall back from `linkUrl` to the
 legacy `url` field, but new writes never write `url`.
 
 Curriculum is currently local `CurriculumRequirement` data. It is not stored as
@@ -219,7 +235,8 @@ publication history are preserved on edits.
 
 ## Relationships and Integrity
 
-- `users.linkedStudentProfileIds` and student `guardianUserIds`/`selfUserId`
+- `users.linkedStudentProfileIds` and student
+  `guardianUserIds`/`linkedUserId`
   form bidirectional account/profile relationships.
 - Event resource IDs must resolve to same-location General Resources. The
   primary registration resource must be included in `linkedResourceIds`.

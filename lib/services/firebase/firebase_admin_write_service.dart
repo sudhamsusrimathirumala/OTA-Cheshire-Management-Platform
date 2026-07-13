@@ -120,14 +120,6 @@ Map<String, Object?> resourceWriteFields(
   ResourceWriteData data, {
   required DateTime now,
 }) {
-  final resourceType = data.resourceType.trim();
-  if (!canonicalResourceTypes.contains(resourceType)) {
-    throw ArgumentError.value(
-      data.resourceType,
-      'resourceType',
-      'Unsupported resource type.',
-    );
-  }
   final category = data.category.trim();
   if (!canonicalResourceCategories.contains(category)) {
     throw ArgumentError.value(
@@ -148,7 +140,6 @@ Map<String, Object?> resourceWriteFields(
     'title': data.title,
     'description': data.description,
     'resourceSection': 'general',
-    'resourceType': resourceType,
     'category': category,
     if (link != null && link.isNotEmpty)
       'linkUrl': link
@@ -169,8 +160,7 @@ String normalizeResourceCategory(String value) {
     'belttesting' => 'testing',
     'testing' => 'testing',
     'registration' => 'registration',
-    'event' || 'events' => 'events',
-    'form' || 'forms' => 'forms',
+    'event' || 'events' || 'form' || 'forms' => 'general',
     'academyinformation' => 'academy-information',
     'general' => 'general',
     _ => trimmed.toLowerCase().replaceAll(RegExp(r'[_\s]+'), '-'),
@@ -447,7 +437,6 @@ class ResourceWriteData {
   const ResourceWriteData({
     required this.title,
     required this.description,
-    required this.resourceType,
     required this.category,
     required this.locationId,
     required this.isPublished,
@@ -462,7 +451,6 @@ class ResourceWriteData {
     AcademyResource resource, {
     required String title,
     required String description,
-    required String resourceType,
     required String category,
     required String locationId,
     required bool isPublished,
@@ -473,7 +461,6 @@ class ResourceWriteData {
       id: resource.id,
       title: title,
       description: description,
-      resourceType: resourceType,
       resourceSection: resource.resourceSection,
       category: category,
       locationId: locationId,
@@ -487,7 +474,6 @@ class ResourceWriteData {
   final String? id;
   final String title;
   final String description;
-  final String resourceType;
   final String resourceSection;
   final String category;
   final String? linkUrl;
