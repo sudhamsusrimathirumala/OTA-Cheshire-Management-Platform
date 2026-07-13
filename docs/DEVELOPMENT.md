@@ -24,8 +24,9 @@ The normal application initializes Firebase from `lib/firebase_options.dart`.
 
 ## Firebase Authentication setup
 
-The code includes `firebase_auth`, `google_sign_in`, a Firebase UID identity
-contract, and provider-data extraction. Full login, signup, linking,
+The code includes `firebase_auth`, `google_sign_in`, `cloud_functions`, a
+Firebase UID identity contract, provider-data extraction, and the authenticated
+`submitOnboardingApplication` callable. Full login, signup, linking,
 onboarding, and approval screens are intentionally not implemented yet.
 
 Manual Firebase/platform setup still required:
@@ -41,13 +42,13 @@ Manual Firebase/platform setup still required:
 6. Re-run `flutterfire configure` after Firebase app/provider configuration
    changes and review generated files before committing.
 
-Onboarding must create `users/{FirebaseAuth.currentUser.uid}` with only safe
-fields, role `student` or `parent`, and initial approval `incomplete` or
-`pending`. It must not query by email as identity, choose an admin role,
-self-approve, or set `googleAccountId` except from authenticated `google.com`
-provider data. Normal academy data remains unavailable until approval. The
-rules in `firestore.rules` must be reviewed with emulator tests before deploy;
-this repository change does not deploy them.
+Onboarding UI must call `submitOnboardingApplication`; it must not create user
+or profile relationship documents directly. The callable creates
+`users/{FirebaseAuth.currentUser.uid}`, derives Auth email and Google identity,
+and atomically creates reciprocal profile links with approval `pending`.
+Normal academy data remains unavailable until approval. See
+[Secure onboarding backend](ONBOARDING_BACKEND.md) for its contract, emulator
+tests, and manual deployment steps.
 
 ## Common Run Targets
 

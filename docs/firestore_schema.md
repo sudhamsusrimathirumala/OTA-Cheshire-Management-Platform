@@ -34,6 +34,9 @@ The configured location is `ota-cheshire`, named `OTA Cheshire`, with
 The document ID is always the Firebase Authentication UID. Email is mutable
 contact information and is never the identity key. Linking password and Google
 providers to one Firebase user must continue using the same document.
+Initial user documents and reciprocal student relationships are created only
+by the authenticated `submitOnboardingApplication` callable through the Admin
+SDK. Firestore rules reject direct client creates and relationship changes.
 
 Required fields:
 
@@ -73,6 +76,11 @@ Optional fields are `linkedUserId`, `familyApplicationId`, and
 it does not create a user or replace `guardianUserIds`. Existing profiles may
 temporarily omit it. Migration derives it only from one unambiguous existing
 parent relationship and otherwise reports it missing.
+
+Onboarding profile IDs are server-generated. Independent students and parents
+who are also students receive `linkedUserId`; child profiles receive the parent
+UID in `guardianUserIds`. Parent applications share one server-generated
+`familyApplicationId` across the parent user and every created profile.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when

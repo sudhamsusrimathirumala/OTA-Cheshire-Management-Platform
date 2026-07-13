@@ -6,6 +6,8 @@
 *.swp
 .buildlog/
 .history
+functions/node_modules/
+!functions/package-lock.json
 
 
 

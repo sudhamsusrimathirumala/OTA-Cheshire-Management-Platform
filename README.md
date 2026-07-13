@@ -116,8 +116,9 @@ for the current data flow and fallback boundaries.
 ### Partially Implemented
 
 - Firebase UID/user-document identity, email/password and Google dependency
-  preparation, canonical account/profile parsing, and Firestore rules are
-  present, but Authentication is not connected to login or signup UI.
+  preparation, the secure onboarding callable, canonical account/profile
+  parsing, and Firestore rules are present, but Authentication is not connected
+  to login or signup UI.
 - User roles, approval status, guardian links, family application grouping,
   and selected-profile fields are modeled, but approval UI and role routing
   are not implemented.
@@ -133,9 +134,9 @@ for the current data flow and fallback boundaries.
 
 ### Planned or Remaining
 
-- Authentication, account recovery, signup/onboarding, role guards, and admin
+- Authentication, account recovery, onboarding screens, role guards, and admin
   approval.
-- Production Firestore security rules and authorization testing.
+- Production deployment and broader authorization testing for Firestore rules.
 - Firebase-backed user identity, profile ownership/switching, and guardian name
   resolution.
 - Admin student profile editing and production curriculum data.
@@ -184,7 +185,8 @@ project ID is `ota-management-platform`, and the Android application ID is
 configuration and Firestore permissions. Do not place credentials in
 documentation or source control.
 
-No production Firestore rules file is present in this repository.
+`firestore.rules` is present and emulator-tested, but it is not deployed by
+repository development tasks.
 
 ## Testing and Validation
 
