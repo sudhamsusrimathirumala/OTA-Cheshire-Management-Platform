@@ -190,7 +190,9 @@ spellings are normalized. Readers temporarily fall back from `linkUrl` to the
 legacy `url` field, but new writes never write `url`.
 
 Curriculum is currently local `CurriculumRequirement` data. It is not stored as
-`AcademyResource` documents.
+`AcademyResource` documents. Bundled form entries map their title and optional
+individual YouTube URL or video ID into `CurriculumItem`; no shared channel URL
+is assigned automatically.
 
 ## Optional Field Clearing
 

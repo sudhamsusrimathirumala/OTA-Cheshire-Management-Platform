@@ -73,7 +73,8 @@ cleanup and schema-update work is not listed as active work.
 - [ ] Replace local sample curriculum and placeholder items with approved
   production curriculum content.
 - [ ] Add approved individual YouTube video URLs for form items where videos
-  are available.
+  are available. The bundled data already supports an independent optional URL
+  or video ID for each form; placeholder forms intentionally keep this null.
 
 ### Events
 
@@ -110,7 +111,8 @@ cleanup and schema-update work is not listed as active work.
 - [x] General Resource create, edit, publish, archive, delete, canonical write
   validation, and external link actions.
 - [x] Local read-only section-based curriculum with No Belt and five canonical
-  categories.
+  categories, zero or multiple forms per belt, and independent optional video
+  data per form.
 - [x] Resource-based event registration.
 - [x] Canonical recurring schedule fields and separate Teen/Adult Sparring type.
 - [x] Student `dateOfBirth` with computed age and temporary legacy-age read

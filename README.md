@@ -25,7 +25,8 @@ The application is under active development and is not production-ready.
 - Firestore-backed published General Resources with validated copy/open-link
   actions and detail pages.
 - Local, read-only curriculum organized by belt, including No Belt and five
-  canonical sections. Form items support embedded YouTube videos.
+  canonical sections. Each form item independently supports an optional
+  embedded YouTube video; unavailable videos show a coming-soon fallback.
 - Student profile and linked account presentation.
 
 The selected user account, linked profiles, and active student profile are
@@ -111,8 +112,9 @@ for the current data flow and fallback boundaries.
 - Announcements are live Firestore data, but device push notifications are not
   implemented.
 - Curriculum is functional, section-based UI backed by bundled data rather
-  than Firestore; approved curriculum text and individual form videos remain
-  content work.
+  than Firestore. The local data supports zero or multiple forms per belt and
+  an independent optional video URL per form; approved curriculum text and
+  video URLs remain content work.
 - Admin schedule bulk actions show an impact preview but do not write.
 
 ### Planned or Remaining

@@ -103,7 +103,11 @@ The following areas still use local/fallback data:
 - Current user account.
 - Linked and selected student profiles used by student-facing screens.
 - Read-only curriculum content and belt order. Curriculum uses five canonical
-  local sections per belt and is never stored as a General Resource.
+  local sections per belt and is never stored as a General Resource. Form
+  entries contain a title and independent optional YouTube URL or video ID, so
+  a belt may render zero or multiple form cells without sharing a channel URL.
+  Embedded players are keyed by parsed video ID to prevent a previous belt's
+  player from being retained when curriculum content changes.
 - Full data fallback when Firebase is unavailable during service construction.
 
 The admin student directory is Firestore-backed, but it is read-only and shows
