@@ -90,16 +90,13 @@ class _AdminGeneralResourcesScreenState
           selectedDestination: AdminNavDestination.resources,
           title: 'General Resources',
           subtitle: 'Manage family forms, links, and academy references.',
-          onSelectedDestinationTap: () => Navigator.of(
-            context,
-          ).pushReplacementNamed(OtaRoutes.adminResources),
+          onSelectedDestinationTap: () =>
+              returnToAdminResourcesLanding(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               OutlinedButton.icon(
-                onPressed: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed(OtaRoutes.adminResources),
+                onPressed: () => returnToAdminResourcesLanding(context),
                 icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Back to Events & Resources'),
               ),

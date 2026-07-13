@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
-import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../services/event_resource_rules.dart';
@@ -24,6 +23,20 @@ enum _EventType {
   const _EventType(this.label);
 
   final String label;
+}
+
+String? initialEventResourceId(
+  AcademyEvent? event,
+  Iterable<AcademyResource> availableResources,
+) {
+  if (event == null) return null;
+  final availableIds = availableResources
+      .map((resource) => resource.id)
+      .toSet();
+  if (availableIds.contains(event.primaryRegistrationResourceId)) {
+    return event.primaryRegistrationResourceId;
+  }
+  return event.linkedResourceIds.where(availableIds.contains).firstOrNull;
 }
 
 class AdminEventsScreen extends StatefulWidget {
@@ -69,16 +82,13 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
           selectedDestination: AdminNavDestination.resources,
           title: 'Events',
           subtitle: 'Create and update academy events and registration links.',
-          onSelectedDestinationTap: () => Navigator.of(
-            context,
-          ).pushReplacementNamed(OtaRoutes.adminResources),
+          onSelectedDestinationTap: () =>
+              returnToAdminResourcesLanding(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               OutlinedButton.icon(
-                onPressed: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed(OtaRoutes.adminResources),
+                onPressed: () => returnToAdminResourcesLanding(context),
                 icon: const Icon(Icons.arrow_back_rounded),
                 label: const Text('Back to Events & Resources'),
               ),
@@ -656,11 +666,10 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _registrationDeadline = event?.registrationDeadline;
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
-    final validResourceIds = _resourceOptions().map((resource) => resource.id);
-    _primaryRegistrationResourceId =
-        validResourceIds.contains(event?.primaryRegistrationResourceId)
-        ? event?.primaryRegistrationResourceId
-        : event?.linkedResourceIds.where(validResourceIds.contains).firstOrNull;
+    _primaryRegistrationResourceId = initialEventResourceId(
+      event,
+      _resourceOptions(),
+    );
   }
 
   @override
@@ -917,6 +926,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
+            key: ValueKey(_primaryRegistrationResourceId),
             initialValue:
                 resources.any(
                   (resource) => resource.id == _primaryRegistrationResourceId,
@@ -944,12 +954,22 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            'If selected, published events can only link to published General Resources.',
+            'Linking a General Resource is optional. If selected, published events can only link to a published General Resource.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: OtaColors.mutedText,
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (_primaryRegistrationResourceId != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: () {
+                setState(() => _primaryRegistrationResourceId = null);
+              },
+              icon: const Icon(Icons.link_off_rounded),
+              label: const Text('Remove linked resource'),
+            ),
+          ],
         ],
       ),
     );

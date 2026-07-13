@@ -166,6 +166,10 @@ The actual URL is stored in the resource's `linkUrl`.
 `registrationUrl` is not canonical, and `showInResources` has been removed. The
 reader intentionally ignores either legacy event field.
 
+The admin form may clear the optional relationship. A cleared existing event
+writes an empty `linkedResourceIds` list and deletes
+`primaryRegistrationResourceId`; blank and placeholder IDs are not written.
+
 ## `resources/{resourceId}`
 
 This collection stores General Resources.

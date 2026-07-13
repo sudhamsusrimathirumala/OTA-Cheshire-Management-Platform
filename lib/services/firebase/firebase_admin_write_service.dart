@@ -210,9 +210,23 @@ Map<String, Object?> eventWriteFields(
   EventWriteData data, {
   required DateTime now,
 }) {
+  if (data.linkedResourceIds.any((id) => id.trim().isEmpty)) {
+    throw ArgumentError.value(
+      data.linkedResourceIds,
+      'linkedResourceIds',
+      'Resource IDs cannot be blank.',
+    );
+  }
+  if (data.primaryRegistrationResourceId != null &&
+      data.primaryRegistrationResourceId!.trim().isEmpty) {
+    throw ArgumentError.value(
+      data.primaryRegistrationResourceId,
+      'primaryRegistrationResourceId',
+      'The primary resource ID cannot be blank.',
+    );
+  }
   final linkedResourceIds = data.linkedResourceIds
       .map((id) => id.trim())
-      .where((id) => id.isNotEmpty)
       .toList();
   final primaryRegistrationResourceId = data.primaryRegistrationResourceId
       ?.trim();

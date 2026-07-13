@@ -492,10 +492,18 @@ void _showEventDetails(
       return AnimatedBuilder(
         animation: dataService,
         builder: (context, child) {
-          final liveEvent = dataService.events
-              .where((candidate) => candidate.id == event.id)
-              .firstOrNull;
-          final displayedEvent = liveEvent ?? event;
+          final locationId = dataService.selectedStudentProfile.locationId;
+          final liveEvent = visibleStudentEventById(
+            dataService.events,
+            eventId: event.id,
+            locationId: locationId,
+          );
+          if (liveEvent == null) {
+            return _UnavailableEventDetails(
+              onClose: () => Navigator.of(context).pop(),
+            );
+          }
+          final displayedEvent = liveEvent;
           final resourcesById = {
             for (final resource in dataService.resources)
               if (resource.resourceSection == 'general' &&
@@ -595,6 +603,49 @@ void _showEventDetails(
       );
     },
   );
+}
+
+class _UnavailableEventDetails extends StatelessWidget {
+  const _UnavailableEventDetails({required this.onClose});
+
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.event_busy_rounded,
+              color: OtaColors.maroon,
+              size: 36,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'This event is no longer available.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: OtaColors.ink,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: onClose,
+              style: FilledButton.styleFrom(
+                backgroundColor: OtaColors.maroon,
+                foregroundColor: OtaColors.white,
+              ),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailSectionTitle extends StatelessWidget {
@@ -853,6 +904,17 @@ List<AcademyEvent> visibleStudentCalendarEvents(
       )
       .toList()
     ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+}
+
+AcademyEvent? visibleStudentEventById(
+  Iterable<AcademyEvent> events, {
+  required String eventId,
+  required String locationId,
+}) {
+  return visibleStudentCalendarEvents(
+    events,
+    locationId: locationId,
+  ).where((event) => event.id == eventId).firstOrNull;
 }
 
 List<AcademyEvent> eventsForAcademyDate(

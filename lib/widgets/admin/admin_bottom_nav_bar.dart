@@ -3,6 +3,15 @@ import 'package:flutter/material.dart';
 import '../../routes.dart';
 import '../../theme/ota_colors.dart';
 
+void returnToAdminResourcesLanding(BuildContext context) {
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.pop();
+  } else {
+    navigator.pushReplacementNamed(OtaRoutes.adminResources);
+  }
+}
+
 enum AdminNavDestination {
   dashboard('Dashboard', OtaRoutes.adminDashboard, Icons.dashboard_outlined),
   students('Students', OtaRoutes.adminStudents, Icons.groups_outlined),

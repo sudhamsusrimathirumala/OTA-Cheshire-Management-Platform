@@ -97,14 +97,16 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       selectedBelt: selectedBelt,
       beltDisplayLabel: _service.beltDisplayLabel,
       videoBuilder: widget.videoBuilder,
+      backLabel: widget.isAdmin ? 'Back to Events & Resources' : null,
       onBeltChanged: (belt) {
         if (belt != null && _service.curriculum.containsKey(belt)) {
           setState(() => _selectedBelt = belt);
         }
       },
-      onBack: () => Navigator.of(context).pushReplacementNamed(
-        widget.isAdmin ? OtaRoutes.adminResources : OtaRoutes.resources,
-      ),
+      onBack: widget.isAdmin
+          ? () => returnToAdminResourcesLanding(context)
+          : () =>
+                Navigator.of(context).pushReplacementNamed(OtaRoutes.resources),
     );
 
     if (widget.isAdmin) {
@@ -112,9 +114,7 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
         selectedDestination: AdminNavDestination.resources,
         title: 'Curriculum',
         subtitle: 'Read-only curriculum content used by students and families.',
-        onSelectedDestinationTap: () => Navigator.of(
-          context,
-        ).pushReplacementNamed(OtaRoutes.adminResources),
+        onSelectedDestinationTap: () => returnToAdminResourcesLanding(context),
         child: content,
       );
     }
@@ -158,6 +158,7 @@ class _CurriculumContent extends StatelessWidget {
     required this.onBeltChanged,
     this.videoBuilder,
     this.onBack,
+    this.backLabel,
   });
 
   final CurriculumRequirement? curriculum;
@@ -167,6 +168,7 @@ class _CurriculumContent extends StatelessWidget {
   final ValueChanged<String?> onBeltChanged;
   final CurriculumVideoBuilder? videoBuilder;
   final VoidCallback? onBack;
+  final String? backLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -180,6 +182,7 @@ class _CurriculumContent extends StatelessWidget {
           beltDisplayLabel: beltDisplayLabel,
           onBeltChanged: onBeltChanged,
           onBack: onBack,
+          backLabel: backLabel,
         ),
         const SizedBox(height: 18),
         if (curriculum == null)
@@ -204,6 +207,7 @@ class _CurriculumHeader extends StatelessWidget {
     required this.beltDisplayLabel,
     required this.onBeltChanged,
     this.onBack,
+    this.backLabel,
   });
 
   final List<String> beltOrder;
@@ -211,6 +215,7 @@ class _CurriculumHeader extends StatelessWidget {
   final String Function(String) beltDisplayLabel;
   final ValueChanged<String?> onBeltChanged;
   final VoidCallback? onBack;
+  final String? backLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -220,11 +225,18 @@ class _CurriculumHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton.filledTonal(
-                onPressed: onBack ?? () => Navigator.maybePop(context),
-                icon: const Icon(Icons.arrow_back_rounded),
-                tooltip: 'Back',
-              ),
+              if (backLabel == null)
+                IconButton.filledTonal(
+                  onPressed: onBack ?? () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  tooltip: 'Back',
+                )
+              else
+                OutlinedButton.icon(
+                  onPressed: onBack,
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  label: Text(backLabel!),
+                ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(

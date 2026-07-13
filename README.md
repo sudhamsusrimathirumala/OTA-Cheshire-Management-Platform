@@ -106,7 +106,11 @@ for the current data flow and fallback boundaries.
 - Events may have no General Resource or one valid General Resource. When one is
   selected, the compatible `linkedResourceIds` and
   `primaryRegistrationResourceId` fields are retained and synchronized; legacy
-  documents with multiple linked IDs remain readable.
+  documents with multiple linked IDs remain readable. Admins can remove the
+  optional link while editing.
+- Open student event details reflect live event and resource changes. Events
+  that become unavailable show an in-sheet unavailable state instead of stale
+  details.
 - Read-only Firestore audit/export utilities and guarded write utilities.
 
 ### Partially Implemented

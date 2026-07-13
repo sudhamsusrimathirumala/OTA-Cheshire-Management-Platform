@@ -86,10 +86,17 @@ past published events. It can be pushed from Dashboard or Resources and has no
 bottom navigation, so Back returns through the natural route stack. Student
 event details retain the existing bottom sheet and primary-resource flow.
 The open bottom sheet listens to the shared data service so event and resource
-changes from Firestore snapshots are reflected without reopening it.
+changes from Firestore snapshots are reflected without reopening it. If the
+event is removed or no longer student-visible, the sheet stays open with an
+unavailable state rather than retaining a stale snapshot. Resource removal or
+invalidation removes only the resource actions while the event remains visible.
 
 Admin Events is reached from the combined **Events & Resources** landing and
 remains a list-management interface. There is no standalone admin Events tab.
+Admins can explicitly remove the optional linked resource; subsequent writes
+contain zero or one synchronized resource ID. Nested Events, General Resources,
+and Curriculum pages pop back to the existing combined landing, with a route
+replacement used only when a nested page was opened directly.
 
 ## Student Identity Model
 
