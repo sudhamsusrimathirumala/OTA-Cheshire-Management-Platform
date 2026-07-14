@@ -34,10 +34,9 @@ The configured location is `ota-cheshire`, named `OTA Cheshire`, with
 The document ID is always the Firebase Authentication UID. Email is mutable
 contact information and is never the identity key. Linking password and Google
 providers to one Firebase user must continue using the same document.
-Initial user and application documents are created together by an authenticated
-client `WriteBatch`. Firestore Rules require matching Auth identity and
-cross-document fields with `getAfter()`. Student relationships are created only
-when an approved admin reviews the application in one transaction.
+The UID user and all permanent student profiles are created together by a
+verified authenticated client `WriteBatch`. Firestore Rules require canonical
+relationships and verify every linked profile in the atomic post-write state.
 
 Required fields:
 
@@ -51,29 +50,15 @@ Required fields:
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `phoneNumber`, `locationId`, `selectedStudentProfileId`,
+Optional fields are `phoneNumber`, `locationId`,
 `googleAccountId`, and `familyApplicationId`. Blank phone numbers are omitted
 or deleted. `googleAccountId` comes only from the `google.com` entry in Firebase
 `User.providerData`; it is never derived from email.
 
-During initial onboarding, `locationId` is required, `role` is only `student`
-or `parent`, `approvalStatus` is `pending`, and
-`linkedStudentProfileIds` is empty. Selected-profile and family fields are
-absent until approval.
-
-## `onboardingApplications/{firebaseUid}`
-
-The document ID and `applicantUid` are the authenticated Firebase UID. Required
-fields are `applicantUid`, `firstName`, `lastName`, normalized `email`,
-`dateOfBirth`, `role`, `locationId`, `status: pending`, `parentIsStudent`,
-`additionalStudents`, `createdAt`, and `updatedAt`. Optional applicant fields
-are `phoneNumber`, `applicantBeltRank`, and `guardianEmail`.
-
-Each `additionalStudents` item contains exactly `firstName`, `lastName`,
-`dateOfBirth`, `beltRank`, and normalized `guardianEmail`. At most ten are
-accepted. Review adds `reviewedAt`, `reviewedBy`, and optionally
-`rejectionReason`; applicants cannot write review or finalized relationship
-fields.
+During initial creation, `role` is only `student` or `parent`,
+`approvalStatus` is `incomplete`, `selectedStudentProfileId` is required and
+must be linked, and `locationId` is absent. `users.locationId` is added later
+only for the account holder's own student membership.
 
 ## `studentProfiles/{studentProfileId}`
 
@@ -83,7 +68,6 @@ Required fields:
 - `lastName`: String
 - `beltRank`: String
 - `dateOfBirth`: Timestamp
-- `locationId`: String referencing `locations`
 - `guardianEmail`: normalized lowercase String
 - `guardianUserIds`: List<String> referencing `users`
 - `approvalStatus`: `incomplete`, `pending`, `approved`, `rejected`, or
@@ -91,18 +75,20 @@ Required fields:
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `linkedUserId`, `familyApplicationId`, and
-`preferredClassGroupIds`. `guardianEmail` is a contact/notification address;
+Optional fields are `linkedUserId`, `familyApplicationId`, `locationId`,
+`preferredClassGroupIds`, `reviewedAt`, `reviewedBy`, and `rejectionReason`.
+`guardianEmail` is a contact/notification address;
 it does not create a user or replace `guardianUserIds`. Existing profiles may
 temporarily omit it. Migration derives it only from one unambiguous existing
 parent relationship and otherwise reports it missing.
 
-Onboarding profile IDs are generated during admin approval. Independent students and parents
-who are also students receive `linkedUserId`; child profiles receive the parent
-UID in `guardianUserIds`. Parent applications share one server-generated
-`familyApplicationId` across the parent user and every created profile.
-Approved profiles also retain `applicationUid` as immutable provenance for
-Security Rules to verify the atomic approval relationship.
+Initial profiles are permanent, `incomplete`, and have no `locationId`.
+Independent students and parents who are also students receive `linkedUserId`;
+child profiles receive the parent UID in `guardianUserIds`. Parent families
+share one generated `familyApplicationId`. Applying writes an active
+`locationId` and `pending`; review retains the location and writes
+`approved`/`rejected` plus reviewer metadata; leaving removes location and
+review fields and restores `incomplete`.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when

@@ -14,6 +14,7 @@ import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import 'firebase_identity_contract.dart';
+import 'firebase_session_controller.dart';
 import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
 import '../location_time_service.dart';
@@ -25,7 +26,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     AppDataService? fallbackService,
   }) : _fallbackService = fallbackService ?? const MockAppDataService() {
     _firestore = firestore;
-    _listenToFirestore();
+    firebaseSessionController.addListener(_handleSessionChanged);
+    _handleSessionChanged();
   }
 
   FirebaseFirestore? _firestore;
@@ -57,8 +59,36 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _isAdminStudentsLoading = true;
   String? _adminStudentsErrorMessage;
   bool _isUsingFallbackData = false;
+  String? _listeningLocationId;
+  bool _listeningAsSuperAdmin = false;
 
-  void _listenToFirestore() {
+  void _handleSessionChanged() {
+    final session = firebaseSessionController;
+    final account = session.account;
+    final profile = session.selectedProfile;
+    final superAdmin =
+        session.stage == SessionStage.admin &&
+        account?.role == UserAccountRole.superAdmin;
+    final locationId = session.stage == SessionStage.admin
+        ? account?.locationId
+        : session.stage == SessionStage.approved
+        ? profile?.locationId
+        : null;
+    if (!superAdmin && (locationId == null || locationId.isEmpty)) {
+      _stopFirestoreListeners();
+      return;
+    }
+    if (_listeningLocationId == locationId &&
+        _listeningAsSuperAdmin == superAdmin) {
+      return;
+    }
+    _stopFirestoreListeners();
+    _listeningLocationId = locationId;
+    _listeningAsSuperAdmin = superAdmin;
+    _listenToFirestore(locationId: locationId, superAdmin: superAdmin);
+  }
+
+  void _listenToFirestore({String? locationId, required bool superAdmin}) {
     try {
       if (_firestore == null && Firebase.apps.isEmpty) {
         _useFallbackDataForUnavailableFirebase();
@@ -73,14 +103,49 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           LocationTimeService.otaCheshireLocationId,
         ),
       );
-      _listenToSchedule(firestore);
-      _listenToAnnouncements(firestore);
-      _listenToEvents(firestore);
-      _listenToResources(firestore);
-      _listenToAdminStudents(firestore);
+      _listenToSchedule(firestore, locationId, superAdmin);
+      _listenToAnnouncements(firestore, locationId, superAdmin);
+      _listenToEvents(firestore, locationId, superAdmin);
+      _listenToResources(firestore, locationId, superAdmin);
+      if (firebaseSessionController.stage == SessionStage.admin) {
+        _listenToAdminStudents(firestore, locationId, superAdmin);
+      }
     } catch (_) {
       _useFallbackDataForUnavailableFirebase();
     }
+  }
+
+  void _stopFirestoreListeners() {
+    unawaited(_scheduleSubscription?.cancel());
+    unawaited(_announcementsSubscription?.cancel());
+    unawaited(_eventsSubscription?.cancel());
+    unawaited(_resourcesSubscription?.cancel());
+    unawaited(_adminStudentsSubscription?.cancel());
+    _scheduleSubscription = null;
+    _announcementsSubscription = null;
+    _eventsSubscription = null;
+    _resourcesSubscription = null;
+    _adminStudentsSubscription = null;
+    _listeningLocationId = null;
+    _listeningAsSuperAdmin = false;
+    _schedule = const <int, List<ClassSession>>{};
+    _notifications = const <NotificationItem>[];
+    _adminAnnouncements = const <AcademyAnnouncement>[];
+    _events = const <AcademyEvent>[];
+    _resources = const <AcademyResource>[];
+    _adminStudentProfiles = const <StudentProfile>[];
+    _isUsingFallbackData = false;
+    _isScheduleLoading = true;
+    _isAnnouncementsLoading = true;
+    _isEventsLoading = true;
+    _isResourcesLoading = true;
+    _isAdminStudentsLoading = true;
+    _scheduleErrorMessage = null;
+    _announcementsErrorMessage = null;
+    _eventsErrorMessage = null;
+    _resourcesErrorMessage = null;
+    _adminStudentsErrorMessage = null;
+    notifyListeners();
   }
 
   void _useFallbackDataForUnavailableFirebase() {
@@ -103,47 +168,80 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminStudentsErrorMessage = null;
   }
 
-  void _listenToSchedule(FirebaseFirestore firestore) {
-    _scheduleSubscription = firestore
-        .collection(FirestoreCollections.classSessions)
+  void _listenToSchedule(
+    FirebaseFirestore firestore,
+    String? locationId,
+    bool superAdmin,
+  ) {
+    Query<Map<String, dynamic>> query = firestore.collection(
+      FirestoreCollections.classSessions,
+    );
+    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    _scheduleSubscription = query
         .orderBy('weekday')
         .orderBy('startMinutes')
         .snapshots()
         .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
   }
 
-  void _listenToAnnouncements(FirebaseFirestore firestore) {
-    _announcementsSubscription = firestore
-        .collection(FirestoreCollections.announcements)
-        .snapshots()
-        .listen(
-          _handleAnnouncementsSnapshot,
-          onError: _handleAnnouncementsError,
-        );
+  void _listenToAnnouncements(
+    FirebaseFirestore firestore,
+    String? locationId,
+    bool superAdmin,
+  ) {
+    Query<Map<String, dynamic>> query = firestore.collection(
+      FirestoreCollections.announcements,
+    );
+    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    _announcementsSubscription = query.snapshots().listen(
+      _handleAnnouncementsSnapshot,
+      onError: _handleAnnouncementsError,
+    );
   }
 
-  void _listenToEvents(FirebaseFirestore firestore) {
-    _eventsSubscription = firestore
-        .collection(FirestoreCollections.events)
-        .snapshots()
-        .listen(_handleEventsSnapshot, onError: _handleEventsError);
+  void _listenToEvents(
+    FirebaseFirestore firestore,
+    String? locationId,
+    bool superAdmin,
+  ) {
+    Query<Map<String, dynamic>> query = firestore.collection(
+      FirestoreCollections.events,
+    );
+    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    _eventsSubscription = query.snapshots().listen(
+      _handleEventsSnapshot,
+      onError: _handleEventsError,
+    );
   }
 
-  void _listenToResources(FirebaseFirestore firestore) {
-    _resourcesSubscription = firestore
-        .collection(FirestoreCollections.resources)
-        .snapshots()
-        .listen(_handleResourcesSnapshot, onError: _handleResourcesError);
+  void _listenToResources(
+    FirebaseFirestore firestore,
+    String? locationId,
+    bool superAdmin,
+  ) {
+    Query<Map<String, dynamic>> query = firestore.collection(
+      FirestoreCollections.resources,
+    );
+    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    _resourcesSubscription = query.snapshots().listen(
+      _handleResourcesSnapshot,
+      onError: _handleResourcesError,
+    );
   }
 
-  void _listenToAdminStudents(FirebaseFirestore firestore) {
-    _adminStudentsSubscription = firestore
-        .collection(FirestoreCollections.studentProfiles)
-        .snapshots()
-        .listen(
-          _handleAdminStudentsSnapshot,
-          onError: _handleAdminStudentsError,
-        );
+  void _listenToAdminStudents(
+    FirebaseFirestore firestore,
+    String? locationId,
+    bool superAdmin,
+  ) {
+    Query<Map<String, dynamic>> query = firestore.collection(
+      FirestoreCollections.studentProfiles,
+    );
+    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    _adminStudentsSubscription = query.snapshots().listen(
+      _handleAdminStudentsSnapshot,
+      onError: _handleAdminStudentsError,
+    );
   }
 
   void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
@@ -236,6 +334,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   void dispose() {
+    firebaseSessionController.removeListener(_handleSessionChanged);
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
@@ -246,12 +345,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   // TODO: Replace mock delegation with Firebase Auth and Firestore-backed users.
   @override
-  UserAccount get currentUserAccount => _fallbackService.currentUserAccount;
+  UserAccount get currentUserAccount =>
+      firebaseSessionController.account ?? _fallbackService.currentUserAccount;
 
   // TODO: Replace mock delegation with Firestore-backed student profiles.
   @override
   List<StudentProfile> get linkedStudentProfiles =>
-      _fallbackService.linkedStudentProfiles;
+      firebaseSessionController.profiles.isNotEmpty
+      ? firebaseSessionController.profiles
+      : _fallbackService.linkedStudentProfiles;
 
   @override
   List<StudentProfile> get adminStudentProfiles => _adminStudentProfiles;
@@ -259,6 +361,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   // TODO: Replace mock delegation with Firestore-backed selected profiles.
   @override
   StudentProfile get selectedStudentProfile =>
+      firebaseSessionController.selectedProfile ??
       _fallbackService.selectedStudentProfile;
 
   @override
@@ -790,14 +893,13 @@ StudentProfile? studentProfileFromFirestoreData(
   final name = firstName != null && lastName != null
       ? '$firstName $lastName'
       : _stringValue(data['fullName']) ?? _stringValue(data['name']);
-  final locationId = _stringValue(data['locationId']);
+  final locationId = _stringValue(data['locationId']) ?? '';
   final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
   final dateOfBirth = _dateTimeValue(data['dateOfBirth']);
   // TODO: Remove the legacy age fallback after the approved profiles have
   // been updated with dateOfBirth.
   final legacyAge = dateOfBirth == null ? _intValue(data['age']) : null;
   if (name == null ||
-      locationId == null ||
       belt == null ||
       (dateOfBirth == null && legacyAge == null)) {
     return null;
@@ -834,6 +936,9 @@ StudentProfile? studentProfileFromFirestoreData(
     isActive: _boolValue(data['isActive']) ?? true,
     createdAt: _dateTimeValue(data['createdAt']),
     updatedAt: _dateTimeValue(data['updatedAt']),
+    reviewedAt: _dateTimeValue(data['reviewedAt']),
+    reviewedBy: _stringValue(data['reviewedBy']),
+    rejectionReason: _stringValue(data['rejectionReason']),
   );
 }
 

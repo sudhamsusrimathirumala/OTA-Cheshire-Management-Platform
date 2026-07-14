@@ -2,189 +2,183 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
-
+    function signedIn() { return request.auth != null; }
     function userPath(uid) {
       return /databases/$(database)/documents/users/$(uid);
     }
-
-    function applicationPath(uid) {
-      return /databases/$(database)/documents/onboardingApplications/$(uid);
+    function profilePath(profileId) {
+      return /databases/$(database)/documents/studentProfiles/$(profileId);
     }
-
     function locationPath(locationId) {
       return /databases/$(database)/documents/locations/$(locationId);
     }
-
-    function studentProfilePath(profileId) {
-      return /databases/$(database)/documents/studentProfiles/$(profileId);
-    }
-
-    function hasUserDocument() {
+    function hasUser() {
       return signedIn() && exists(userPath(request.auth.uid));
     }
-
-    function currentUser() {
-      return get(userPath(request.auth.uid)).data;
+    function currentUser() { return get(userPath(request.auth.uid)).data; }
+    function approvedAccount() {
+      return hasUser() && currentUser().approvalStatus == 'approved';
     }
-
-    function isApproved() {
-      return hasUserDocument() && currentUser().approvalStatus == 'approved';
+    function superAdmin() {
+      return approvedAccount() && currentUser().role == 'superAdmin';
     }
-
-    function isSuperAdmin() {
-      return isApproved() && currentUser().role == 'superAdmin';
+    function locationAdmin() {
+      return approvedAccount() && currentUser().role == 'admin';
     }
-
-    function isLocationAdmin() {
-      return isApproved() && currentUser().role == 'admin';
-    }
-
     function canAdminLocation(locationId) {
-      return isSuperAdmin() ||
-          (isLocationAdmin() && currentUser().locationId == locationId);
+      return superAdmin() ||
+          (locationAdmin() && currentUser().locationId == locationId);
     }
-
-    function canAccessAcademyDocument(locationId) {
-      return isSuperAdmin() || currentUser().locationId == locationId;
+    function activeLocation(locationId) {
+      return locationId is string && exists(locationPath(locationId)) &&
+          get(locationPath(locationId)).data.isActive == true;
     }
-
-    function authEmail() {
-      return request.auth.token.email.lower();
-    }
-
+    function authEmail() { return request.auth.token.email.lower(); }
     function googleIdentities() {
       return request.auth.token.get('firebase', {})
           .get('identities', {}).get('google.com', []);
     }
-
-    function activeLocation(locationId) {
-      return exists(locationPath(locationId)) &&
-          get(locationPath(locationId)).data.isActive == true;
+    function selectedProfile() {
+      return get(profilePath(currentUser().selectedStudentProfileId)).data;
+    }
+    function approvedSelectedMembership() {
+      return hasUser() && currentUser().role in ['student', 'parent'] &&
+          currentUser().selectedStudentProfileId is string &&
+          currentUser().selectedStudentProfileId in
+            currentUser().linkedStudentProfileIds &&
+          exists(profilePath(currentUser().selectedStudentProfileId)) &&
+          selectedProfile().approvalStatus == 'approved' &&
+          activeLocation(selectedProfile().locationId);
+    }
+    function canAccessAcademyLocation(locationId) {
+      return canAdminLocation(locationId) ||
+          (approvedSelectedMembership() &&
+           selectedProfile().locationId == locationId);
+    }
+    function managesProfile(profileId) {
+      return hasUser() && currentUser().role in ['student', 'parent'] &&
+          profileId in currentUser().linkedStudentProfileIds;
     }
 
-    function validInitialUser(uid, data) {
+    function initialProfileForUser(uid, profileId, userData) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.approvalStatus == 'incomplete' &&
+          !profile.keys().hasAny([
+            'locationId', 'reviewedAt', 'reviewedBy', 'rejectionReason'
+          ]) &&
+          (userData.role == 'student'
+            ? profileId == userData.selectedStudentProfileId &&
+              profile.linkedUserId == uid &&
+              profile.guardianUserIds.size() == 0 &&
+              !profile.keys().hasAny(['familyApplicationId'])
+            : profile.familyApplicationId == userData.familyApplicationId &&
+              ((profile.keys().hasAny(['linkedUserId']) &&
+                profileId == userData.selectedStudentProfileId &&
+                profile.linkedUserId == uid &&
+                profile.guardianUserIds.size() == 0) ||
+               (!profile.keys().hasAny(['linkedUserId']) &&
+                profile.guardianUserIds == [uid])));
+    }
+
+    function allInitialProfilesExist(ids) {
+      return ids is list && ids.size() >= 1 && ids.size() <= 11 &&
+          ids.toSet().size() == ids.size() &&
+          existsAfter(profilePath(ids[0])) &&
+          (ids.size() < 2 || existsAfter(profilePath(ids[1]))) &&
+          (ids.size() < 3 || existsAfter(profilePath(ids[2]))) &&
+          (ids.size() < 4 || existsAfter(profilePath(ids[3]))) &&
+          (ids.size() < 5 || existsAfter(profilePath(ids[4]))) &&
+          (ids.size() < 6 || existsAfter(profilePath(ids[5]))) &&
+          (ids.size() < 7 || existsAfter(profilePath(ids[6]))) &&
+          (ids.size() < 8 || existsAfter(profilePath(ids[7]))) &&
+          (ids.size() < 9 || existsAfter(profilePath(ids[8]))) &&
+          (ids.size() < 10 || existsAfter(profilePath(ids[9]))) &&
+          (ids.size() < 11 || existsAfter(profilePath(ids[10])));
+    }
+
+    function validInitialUser(data) {
       return data.keys().hasOnly([
             'firstName', 'lastName', 'email', 'role', 'approvalStatus',
-            'locationId', 'linkedStudentProfileIds', 'phoneNumber',
-            'googleAccountId', 'createdAt', 'updatedAt'
-          ]) &&
-          data.keys().hasAll([
+            'linkedStudentProfileIds', 'selectedStudentProfileId',
+            'phoneNumber', 'googleAccountId', 'familyApplicationId',
+            'createdAt', 'updatedAt'
+          ]) && data.keys().hasAll([
             'firstName', 'lastName', 'email', 'role', 'approvalStatus',
-            'locationId', 'linkedStudentProfileIds', 'createdAt', 'updatedAt'
+            'linkedStudentProfileIds', 'selectedStudentProfileId',
+            'createdAt', 'updatedAt'
           ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
-          data.email is string && data.email == authEmail() &&
-          data.role in ['student', 'parent'] &&
-          data.approvalStatus == 'pending' &&
-          data.locationId is string && activeLocation(data.locationId) &&
-          data.linkedStudentProfileIds is list &&
-          data.linkedStudentProfileIds.size() == 0 &&
+          request.auth.token.email_verified == true &&
+          data.email == authEmail() && data.role in ['student', 'parent'] &&
+          data.approvalStatus == 'incomplete' &&
+          data.selectedStudentProfileId == data.linkedStudentProfileIds[0] &&
           (!data.keys().hasAny(['phoneNumber']) ||
             (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
           (!data.keys().hasAny(['googleAccountId']) ||
-            (data.googleAccountId is string &&
-             data.googleAccountId in googleIdentities())) &&
-          data.createdAt == request.time && data.updatedAt == request.time &&
-          getAfter(applicationPath(uid)).data.applicantUid == uid &&
-          getAfter(applicationPath(uid)).data.email == data.email &&
-          getAfter(applicationPath(uid)).data.role == data.role &&
-          getAfter(applicationPath(uid)).data.locationId == data.locationId;
-    }
-
-    function validAdditionalStudentFields(student) {
-      return student is map && student.keys().hasOnly([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'guardianEmail'
-          ]) && student.keys().hasAll([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'guardianEmail'
-          ]);
-    }
-
-    function validAdditionalStudents(students) {
-      // Keep nested validation within the Rules expression budget: Rules
-      // reject unknown/missing child fields, while the submission and approval
-      // services strictly validate each value and type.
-      return students is list && students.size() <= 10 &&
-          (students.size() < 1 || validAdditionalStudentFields(students[0])) &&
-          (students.size() < 2 || validAdditionalStudentFields(students[1])) &&
-          (students.size() < 3 || validAdditionalStudentFields(students[2])) &&
-          (students.size() < 4 || validAdditionalStudentFields(students[3])) &&
-          (students.size() < 5 || validAdditionalStudentFields(students[4])) &&
-          (students.size() < 6 || validAdditionalStudentFields(students[5])) &&
-          (students.size() < 7 || validAdditionalStudentFields(students[6])) &&
-          (students.size() < 8 || validAdditionalStudentFields(students[7])) &&
-          (students.size() < 9 || validAdditionalStudentFields(students[8])) &&
-          (students.size() < 10 || validAdditionalStudentFields(students[9]));
-    }
-
-    function validInitialApplication(uid, data) {
-      return data.keys().hasOnly([
-            'applicantUid', 'firstName', 'lastName', 'email', 'phoneNumber',
-            'dateOfBirth', 'role', 'locationId', 'status', 'parentIsStudent',
-            'applicantBeltRank', 'guardianEmail', 'additionalStudents',
-            'createdAt', 'updatedAt'
-          ]) && data.keys().hasAll([
-            'applicantUid', 'firstName', 'lastName', 'email', 'dateOfBirth',
-            'role', 'locationId', 'status', 'parentIsStudent',
-            'additionalStudents', 'createdAt', 'updatedAt'
-          ]) &&
-          data.applicantUid == uid && data.email == authEmail() &&
-          data.firstName is string && data.firstName.size() > 0 &&
-          data.lastName is string && data.lastName.size() > 0 &&
-          data.dateOfBirth is timestamp &&
-          data.role in ['student', 'parent'] && data.status == 'pending' &&
-          data.locationId is string && activeLocation(data.locationId) &&
-          data.parentIsStudent is bool &&
-          validAdditionalStudents(data.additionalStudents) &&
-          (!data.keys().hasAny(['phoneNumber']) ||
-            (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
+            data.googleAccountId in googleIdentities()) &&
           (data.role == 'student'
-            ? data.parentIsStudent == false &&
-              data.additionalStudents.size() == 0 &&
-              data.applicantBeltRank is string &&
-              data.applicantBeltRank.size() > 0 &&
-              data.guardianEmail is string && data.guardianEmail.size() > 3
-            : ((!data.parentIsStudent ||
-                  (data.applicantBeltRank is string &&
-                   data.applicantBeltRank.size() > 0)) &&
-               (data.parentIsStudent || data.additionalStudents.size() > 0))) &&
+            ? data.linkedStudentProfileIds.size() == 1 &&
+              !data.keys().hasAny(['familyApplicationId'])
+            : data.familyApplicationId is string &&
+              data.familyApplicationId.size() > 0) &&
           data.createdAt == request.time && data.updatedAt == request.time &&
-          getAfter(userPath(uid)).data.email == data.email &&
-          getAfter(userPath(uid)).data.role == data.role &&
-          getAfter(userPath(uid)).data.locationId == data.locationId &&
-          getAfter(userPath(uid)).data.approvalStatus == 'pending';
+          allInitialProfilesExist(data.linkedStudentProfileIds);
     }
 
-    function validApplicantSelfUpdate() {
+    function validInitialProfile(profileId, data) {
+      let user = getAfter(userPath(request.auth.uid)).data;
+      return data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'familyApplicationId', 'approvalStatus',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) && data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
+            'guardianEmail', 'guardianUserIds', 'approvalStatus',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) && data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && data.beltRank is string &&
+          data.beltRank.size() > 0 && data.guardianEmail is string &&
+          data.guardianEmail.size() > 3 && data.guardianUserIds is list &&
+          data.approvalStatus == 'incomplete' && data.isActive == true &&
+          data.preferredClassGroupIds is list &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.stickerProgress is map &&
+          data.createdAt == request.time && data.updatedAt == request.time &&
+          profileId in user.linkedStudentProfileIds &&
+          initialProfileForUser(request.auth.uid, profileId, user);
+    }
+
+    function validProfileSelection() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['selectedStudentProfileId', 'updatedAt']) &&
+          request.resource.data.selectedStudentProfileId in
+            resource.data.linkedStudentProfileIds &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validPersonalAccountUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['firstName', 'lastName', 'phoneNumber', 'updatedAt']) &&
           request.resource.data.updatedAt == request.time;
     }
 
-    function validReviewUserUpdate(uid) {
-      return canAdminLocation(resource.data.locationId) &&
-          resource.data.approvalStatus == 'pending' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'approvalStatus', 'linkedStudentProfileIds',
-            'selectedStudentProfileId', 'familyApplicationId', 'updatedAt'
-          ]) &&
-          request.resource.data.approvalStatus in ['approved', 'rejected'] &&
-          request.resource.data.updatedAt == request.time &&
-          getAfter(applicationPath(uid)).data.status ==
-              request.resource.data.approvalStatus &&
-          getAfter(applicationPath(uid)).data.reviewedBy == request.auth.uid &&
-          (request.resource.data.approvalStatus == 'approved'
-            ? request.resource.data.linkedStudentProfileIds is list &&
-              request.resource.data.linkedStudentProfileIds.size() > 0 &&
-              request.resource.data.selectedStudentProfileId in
-                request.resource.data.linkedStudentProfileIds
-            : request.resource.data.linkedStudentProfileIds.size() == 0 &&
-              !request.resource.data.keys().hasAny([
-                'selectedStudentProfileId', 'familyApplicationId'
-              ]));
+    function validOwnLocationSync(uid) {
+      let profile = getAfter(profilePath(resource.data.selectedStudentProfileId)).data;
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['locationId', 'updatedAt']) &&
+          profile.linkedUserId == uid &&
+          ((request.resource.data.keys().hasAny(['locationId']) &&
+            profile.approvalStatus == 'pending' &&
+            profile.locationId == request.resource.data.locationId) ||
+           (!request.resource.data.keys().hasAny(['locationId']) &&
+            profile.approvalStatus == 'incomplete' &&
+            !profile.keys().hasAny(['locationId']))) &&
+          request.resource.data.updatedAt == request.time;
     }
 
     function validRoutineAdminUserUpdate() {
@@ -198,115 +192,103 @@ service cloud.firestore {
           ]);
     }
 
-    function validApplicationReview(uid) {
-      return canAdminLocation(resource.data.locationId) &&
-          resource.data.status == 'pending' &&
+    function validApplyTransition(profileId) {
+      let ownProfile = resource.data.get('linkedUserId', '') == request.auth.uid;
+      return managesProfile(profileId) &&
+          resource.data.approvalStatus in ['incomplete', 'rejected'] &&
+          request.resource.data.approvalStatus == 'pending' &&
+          activeLocation(request.resource.data.locationId) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status', 'reviewedAt', 'reviewedBy', 'rejectionReason', 'updatedAt'
+            'locationId', 'approvalStatus', 'reviewedAt', 'reviewedBy',
+            'rejectionReason', 'updatedAt'
           ]) &&
-          request.resource.data.status in ['approved', 'rejected'] &&
-          request.resource.data.reviewedAt == request.time &&
-          request.resource.data.updatedAt == request.time &&
-          request.resource.data.reviewedBy == request.auth.uid &&
-          (!request.resource.data.keys().hasAny(['rejectionReason']) ||
-            (request.resource.data.status == 'rejected' &&
-             request.resource.data.rejectionReason is string &&
-             request.resource.data.rejectionReason.size() <= 500)) &&
-          getAfter(userPath(uid)).data.approvalStatus ==
-              request.resource.data.status;
+          !request.resource.data.keys().hasAny([
+            'reviewedAt', 'reviewedBy', 'rejectionReason'
+          ]) && request.resource.data.updatedAt == request.time &&
+          (!ownProfile ||
+            getAfter(userPath(request.auth.uid)).data.locationId ==
+              request.resource.data.locationId);
     }
 
-    function validApprovedProfile(profileId, data) {
-      return data.keys().hasOnly([
-            'applicationUid', 'firstName', 'lastName', 'dateOfBirth',
-            'beltRank', 'locationId', 'guardianEmail', 'guardianUserIds',
-            'linkedUserId', 'familyApplicationId', 'approvalStatus',
-            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
-            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
-          ]) && data.keys().hasAll([
-            'applicationUid', 'firstName', 'lastName', 'dateOfBirth',
-            'beltRank', 'locationId', 'guardianEmail', 'guardianUserIds',
-            'approvalStatus', 'preferredClassGroupIds', 'stickerProgress',
-            'promotionHistory', 'testingNotes', 'isActive', 'createdAt',
-            'updatedAt'
-          ]) && canAdminLocation(data.locationId) &&
-          data.applicationUid is string &&
-          getAfter(applicationPath(data.applicationUid)).data.status ==
-            'approved' &&
-          getAfter(applicationPath(data.applicationUid)).data.reviewedBy ==
-            request.auth.uid &&
-          getAfter(applicationPath(data.applicationUid)).data.locationId ==
-            data.locationId &&
-          profileId in getAfter(userPath(data.applicationUid)).data
-            .linkedStudentProfileIds &&
-          data.approvalStatus == 'approved' && data.isActive == true &&
-          data.firstName is string && data.firstName.size() > 0 &&
-          data.lastName is string && data.lastName.size() > 0 &&
-          data.dateOfBirth is timestamp &&
-          data.beltRank is string && data.beltRank.size() > 0 &&
-          data.guardianEmail is string && data.guardianEmail.size() > 3 &&
-          data.guardianUserIds is list &&
-          data.preferredClassGroupIds is list &&
-          data.promotionHistory is list && data.testingNotes is list &&
-          data.stickerProgress is map &&
-          data.createdAt == request.time && data.updatedAt == request.time;
+    function validLeaveTransition(profileId) {
+      let ownProfile = resource.data.get('linkedUserId', '') == request.auth.uid;
+      return managesProfile(profileId) &&
+          resource.data.keys().hasAny(['locationId']) &&
+          resource.data.approvalStatus in ['approved', 'pending', 'rejected'] &&
+          request.resource.data.approvalStatus == 'incomplete' &&
+          !request.resource.data.keys().hasAny([
+            'locationId', 'reviewedAt', 'reviewedBy', 'rejectionReason'
+          ]) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'locationId', 'approvalStatus', 'reviewedAt', 'reviewedBy',
+            'rejectionReason', 'updatedAt'
+          ]) && request.resource.data.updatedAt == request.time &&
+          (!ownProfile ||
+            !getAfter(userPath(request.auth.uid)).data.keys()
+              .hasAny(['locationId']));
+    }
+
+    function validAdminReview() {
+      return canAdminLocation(resource.data.locationId) &&
+          resource.data.approvalStatus == 'pending' &&
+          request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.approvalStatus in ['approved', 'rejected'] &&
+          request.resource.data.reviewedBy == request.auth.uid &&
+          request.resource.data.reviewedAt == request.time &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'approvalStatus', 'reviewedAt', 'reviewedBy',
+            'rejectionReason', 'updatedAt'
+          ]) &&
+          (request.resource.data.approvalStatus == 'approved'
+            ? !request.resource.data.keys().hasAny(['rejectionReason'])
+            : (!request.resource.data.keys().hasAny(['rejectionReason']) ||
+               (request.resource.data.rejectionReason is string &&
+                request.resource.data.rejectionReason.size() <= 500)));
     }
 
     match /users/{uid} {
       allow create: if signedIn() && request.auth.uid == uid &&
-          !exists(userPath(uid)) && validInitialUser(uid, request.resource.data);
+          !exists(userPath(uid)) && validInitialUser(request.resource.data);
       allow read: if signedIn() &&
-          (request.auth.uid == uid || isSuperAdmin() ||
-           (isLocationAdmin() &&
-            resource.data.locationId == currentUser().locationId));
+          (request.auth.uid == uid || superAdmin() ||
+           (locationAdmin() &&
+            resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
-          ((request.auth.uid == uid && validApplicantSelfUpdate()) ||
-           validReviewUserUpdate(uid) || validRoutineAdminUserUpdate());
-      allow delete: if isSuperAdmin();
-    }
-
-    match /onboardingApplications/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid &&
-          !exists(applicationPath(uid)) &&
-          validInitialApplication(uid, request.resource.data);
-      allow read: if signedIn() &&
-          (request.auth.uid == uid || isSuperAdmin() ||
-           (isLocationAdmin() &&
-            resource.data.locationId == currentUser().locationId));
-      allow update: if signedIn() && validApplicationReview(uid);
-      allow delete: if false;
+          ((request.auth.uid == uid &&
+            (validProfileSelection() || validPersonalAccountUpdate() ||
+             validOwnLocationSync(uid))) || validRoutineAdminUserUpdate());
+      allow delete: if superAdmin();
     }
 
     match /studentProfiles/{profileId} {
-      allow read: if isApproved() && (
-          ((isLocationAdmin() || isSuperAdmin()) &&
-            !exists(studentProfilePath(profileId))) ||
-          resource.data.get('linkedUserId', '') == request.auth.uid ||
-          profileId in currentUser().linkedStudentProfileIds ||
-          request.auth.uid in resource.data.get('guardianUserIds', []) ||
-          canAdminLocation(resource.data.locationId)
-        );
-      allow create: if isApproved() &&
-          validApprovedProfile(profileId, request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'applicationUid', 'familyApplicationId', 'linkedUserId',
-            'guardianUserIds'
-          ]);
-      allow delete: if isSuperAdmin();
+      allow create: if signedIn() &&
+          validInitialProfile(profileId, request.resource.data);
+      allow read: if signedIn() &&
+          (managesProfile(profileId) || superAdmin() ||
+           (locationAdmin() &&
+            resource.data.get('locationId', '') == currentUser().locationId));
+      allow update: if signedIn() &&
+          (validApplyTransition(profileId) || validLeaveTransition(profileId) ||
+           validAdminReview() ||
+           (canAdminLocation(resource.data.locationId) &&
+            request.resource.data.locationId == resource.data.locationId &&
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+              'approvalStatus', 'locationId', 'familyApplicationId',
+              'linkedUserId', 'guardianUserIds', 'reviewedAt', 'reviewedBy'
+            ])));
+      allow delete: if superAdmin();
     }
 
     match /locations/{locationId} {
       allow read: if signedIn() && resource.data.isActive == true;
-      allow create, update, delete: if isSuperAdmin();
+      allow create, update, delete: if superAdmin();
     }
 
     match /{collectionName}/{documentId} {
       allow read: if collectionName in [
           'classSessions', 'announcements', 'events', 'resources'
-        ] && isApproved() &&
-        canAccessAcademyDocument(resource.data.locationId);
+        ] && canAccessAcademyLocation(resource.data.locationId);
       allow create: if collectionName in [
           'classSessions', 'announcements', 'events', 'resources'
         ] && canAdminLocation(request.resource.data.locationId);

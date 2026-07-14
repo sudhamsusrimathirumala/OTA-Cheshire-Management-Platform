@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/location_time_service.dart';
+import '../../services/firebase/firebase_session_controller.dart';
+import '../../services/firebase/profile_membership_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -76,6 +78,9 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             ? _beltFilter
             : 'All belts';
         final students = _filteredStudents(allStudents, effectiveBeltFilter);
+        final pendingStudents = allStudents
+            .where((student) => student.approvalStatus == 'pending')
+            .toList();
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.students,
@@ -84,6 +89,12 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _PendingMembershipPanel(
+                students: pendingStudents,
+                onApprove: (student) => _review(student, true),
+                onReject: (student) => _review(student, false),
+              ),
+              const SizedBox(height: 14),
               _StudentToolbar(
                 searchController: _searchController,
                 beltFilter: effectiveBeltFilter,
@@ -119,6 +130,88 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     );
   }
 
+  Future<void> _review(_AdminStudentRecord student, bool approve) async {
+    String? reason;
+    if (!approve) {
+      final controller = TextEditingController();
+      reason = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Reject ${student.name}?'),
+          content: TextField(
+            controller: controller,
+            maxLength: 500,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Reason (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Reject'),
+            ),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (reason == null) return;
+    } else {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Approve ${student.name}?'),
+          content: Text(
+            'Approve this profile for ${student.locationId}. Other family profiles will not be changed.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Approve'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+    try {
+      await firebaseSessionController.membership.reviewMembership(
+        MembershipReviewRequest(
+          profileId: student.id,
+          approve: approve,
+          rejectionReason: reason,
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${student.name} was ${approve ? 'approved' : 'rejected'}.',
+            ),
+          ),
+        );
+      }
+    } on MembershipServiceException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.message),
+            backgroundColor: OtaColors.actionRed,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
     // TODO: Add Firestore-backed student profile writes from this detail view.
     // TODO: Resolve guardian user IDs to display names once admin user reads
@@ -150,6 +243,63 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       },
     );
   }
+}
+
+class _PendingMembershipPanel extends StatelessWidget {
+  const _PendingMembershipPanel({
+    required this.students,
+    required this.onApprove,
+    required this.onReject,
+  });
+  final List<_AdminStudentRecord> students;
+  final ValueChanged<_AdminStudentRecord> onApprove;
+  final ValueChanged<_AdminStudentRecord> onReject;
+
+  @override
+  Widget build(BuildContext context) => _AdminPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Pending membership review',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '${students.length} profile${students.length == 1 ? '' : 's'} awaiting review',
+        ),
+        const SizedBox(height: 12),
+        if (students.isEmpty)
+          const Text('No pending membership applications for your scope.')
+        else
+          for (final student in students)
+            Card(
+              child: ListTile(
+                title: Text(student.name),
+                subtitle: Text(
+                  '${student.belt} • ${student.locationId}\nGuardian: ${student.guardianEmail ?? 'Not provided'}',
+                ),
+                isThreeLine: true,
+                trailing: Wrap(
+                  spacing: 6,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => onReject(student),
+                      child: const Text('Reject'),
+                    ),
+                    FilledButton(
+                      onPressed: () => onApprove(student),
+                      child: const Text('Approve'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+      ],
+    ),
+  );
 }
 
 class _StudentToolbar extends StatelessWidget {
@@ -413,10 +563,7 @@ class _StudentDetailSheet extends StatelessWidget {
               _DetailRow(label: 'Age', value: '${student.age}'),
               _DetailRow(label: 'Belt', value: student.belt),
               _DetailRow(label: 'Location', value: student.locationId),
-              _DetailRow(
-                label: 'Status',
-                value: student.isActive ? 'Active' : 'Inactive',
-              ),
+              _DetailRow(label: 'Status', value: student.approvalStatus),
             ],
           ),
           const SizedBox(height: 12),
@@ -424,6 +571,11 @@ class _StudentDetailSheet extends StatelessWidget {
             title: 'Parent / Guardian',
             children: [
               _DetailRow(label: 'Guardian', value: student.guardianLabel),
+              if (student.guardianEmail != null)
+                _DetailRow(
+                  label: 'Guardian email',
+                  value: student.guardianEmail!,
+                ),
               if (relatedStudents.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
@@ -485,6 +637,8 @@ class _AdminStudentRecord {
     required this.nextRank,
     required this.isActive,
     required this.guardianUserIds,
+    required this.guardianEmail,
+    required this.approvalStatus,
   });
 
   factory _AdminStudentRecord.fromProfile(StudentProfile profile) {
@@ -499,6 +653,8 @@ class _AdminStudentRecord {
       nextRank: profile.nextRank,
       isActive: profile.isActive,
       guardianUserIds: profile.guardianUserIds,
+      guardianEmail: profile.guardianEmail,
+      approvalStatus: profile.approvalStatus.name,
     );
   }
 
@@ -512,6 +668,8 @@ class _AdminStudentRecord {
   final String nextRank;
   final bool isActive;
   final List<String> guardianUserIds;
+  final String? guardianEmail;
+  final String approvalStatus;
 
   String get guardianLabel {
     if (guardianUserIds.isEmpty) {

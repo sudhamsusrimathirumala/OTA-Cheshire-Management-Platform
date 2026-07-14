@@ -2212,18 +2212,6 @@ void main() {
 
     expect(find.text('Settings & Actions'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
-    expect(find.text('Exit to Welcome'), findsOneWidget);
-
-    await tester.scrollUntilVisible(
-      find.text('Exit to Welcome'),
-      240,
-      scrollable: find.byType(Scrollable),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Exit to Welcome'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(WelcomeScreen), findsOneWidget);
   });
 
   test('event writes use only General Resource registration fields', () {

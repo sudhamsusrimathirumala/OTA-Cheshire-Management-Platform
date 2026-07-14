@@ -117,7 +117,7 @@ Student studentProfileFromCanonicalData(String id, Map<String, dynamic> data) {
     name: '$firstName $lastName'.trim(),
     canonicalFirstName: firstName,
     canonicalLastName: lastName,
-    locationId: _requiredString(data['locationId'], 'locationId'),
+    locationId: _optionalString(data['locationId']) ?? '',
     belt: _requiredString(data['beltRank'], 'beltRank'),
     canonicalBeltRank: _requiredString(data['beltRank'], 'beltRank'),
     dateOfBirth: _requiredDateTime(data['dateOfBirth'], 'dateOfBirth'),

@@ -15,11 +15,14 @@ import 'screens/events_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/membership_status_screen.dart';
 import 'screens/resources_screen.dart';
 import 'screens/schedule_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/student_dashboard_screen.dart';
 import 'screens/welcome_screen.dart';
+import 'screens/auth/auth_gate.dart';
+import 'services/firebase/firebase_session_controller.dart';
 import 'theme/ota_colors.dart';
 import 'services/location_time_service.dart';
 
@@ -27,6 +30,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LocationTimeService.initialize();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  firebaseSessionController.start();
   runApp(const OTAApp());
 }
 
@@ -45,7 +49,7 @@ class OTAApp extends StatelessWidget {
           brightness: Brightness.light,
         ),
       ),
-      initialRoute: OtaRoutes.welcome,
+      home: Firebase.apps.isNotEmpty ? const AuthGate() : const WelcomeScreen(),
       routes: {
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
         OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
@@ -56,6 +60,7 @@ class OTAApp extends StatelessWidget {
         OtaRoutes.curriculum: (_) => const CurriculumScreen(),
         OtaRoutes.notifications: (_) => const NotificationsScreen(),
         OtaRoutes.profile: (_) => const ProfileScreen(),
+        OtaRoutes.membership: (_) => const MembershipStatusScreen(),
         OtaRoutes.login: (_) => const LoginScreen(),
         OtaRoutes.signup: (_) => const SignupScreen(),
       },

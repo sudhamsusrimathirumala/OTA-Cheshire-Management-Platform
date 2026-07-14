@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
+import '../services/firebase/firebase_authentication_service.dart';
+import '../services/firebase/firebase_session_controller.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_auth_switch_link.dart';
@@ -8,45 +10,115 @@ import '../widgets/ota_auth_text_field.dart';
 import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _obscurePassword = true;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    _password.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    if (!_formKey.currentState!.validate()) return;
+    await _run(
+      () => firebaseSessionController.authentication.signInWithEmail(
+        _email.text,
+        _password.text,
+      ),
+    );
+  }
+
+  Future<void> _googleSignIn() async {
+    await _run(firebaseSessionController.authentication.signInWithGoogle);
+  }
+
+  Future<void> _run(Future<Object?> Function() action) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      await action();
+    } on AuthenticationException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _showPasswordReset() async {
+    final controller = TextEditingController(text: _email.text);
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset password'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'Email',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Send reset email'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (email == null || email.isEmpty || !mounted) return;
+    try {
+      await firebaseSessionController.authentication.sendPasswordReset(email);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'If an account is eligible, password reset instructions have been sent.',
+          ),
+        ),
+      );
+    } on AuthenticationException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return OtaBrandedScaffold(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final horizontalPadding = constraints.maxWidth >= 600 ? 48.0 : 24.0;
-          final logoSize = constraints.maxWidth >= 600 ? 150.0 : 122.0;
-
-          return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: horizontalPadding,
-              vertical: 24,
-            ),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Form(
+              key: _formKey,
+              child: AutofillGroup(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton.filledTonal(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: IconButton.styleFrom(
-                          backgroundColor: OtaColors.navy.withValues(
-                            alpha: 0.55,
-                          ),
-                          foregroundColor: OtaColors.white,
-                        ),
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        tooltip: 'Back',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Center(child: OtaLogoMark(size: logoSize, isCompact: true)),
-                    const SizedBox(height: 28),
+                    Center(child: OtaLogoMark(size: 122, isCompact: true)),
+                    const SizedBox(height: 24),
                     Text(
                       'Welcome Back',
                       textAlign: TextAlign.center,
@@ -56,70 +128,93 @@ class LoginScreen extends StatelessWidget {
                             fontWeight: FontWeight.w800,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sign in to manage your academy experience.',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: OtaColors.white.withValues(alpha: 0.86),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    const OtaAuthTextField(
+                    const SizedBox(height: 28),
+                    OtaAuthTextField(
                       label: 'Email',
+                      controller: _email,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
+                      autofillHints: const [AutofillHints.email],
+                      validator: (value) =>
+                          value != null &&
+                              RegExp(
+                                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                              ).hasMatch(value.trim())
+                          ? null
+                          : 'Enter a valid email address.',
                     ),
                     const SizedBox(height: 16),
-                    const OtaAuthTextField(
+                    OtaAuthTextField(
                       label: 'Password',
-                      obscureText: true,
+                      controller: _password,
+                      obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
+                      autofillHints: const [AutofillHints.password],
+                      validator: (value) => value == null || value.isEmpty
+                          ? 'Enter your password.'
+                          : null,
+                      onFieldSubmitted: (_) => _loading ? null : _signIn(),
+                      suffixIcon: IconButton(
+                        tooltip: _obscurePassword
+                            ? 'Show password'
+                            : 'Hide password',
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_rounded
+                              : Icons.visibility_off_rounded,
+                        ),
+                      ),
                     ),
                     Align(
                       alignment: Alignment.centerRight,
                       child: TextButton(
-                        onPressed: () {
-                          // TODO: Implement forgot password flow.
-                        },
+                        onPressed: _loading ? null : _showPasswordReset,
                         style: TextButton.styleFrom(
                           foregroundColor: OtaColors.white,
                         ),
                         child: const Text('Forgot Password?'),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    if (_error != null)
+                      Semantics(
+                        liveRegion: true,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Color(0xFFFFD8D8)),
+                          ),
+                        ),
+                      ),
                     OtaActionButton(
-                      label: 'LOGIN',
-                      onPressed: () {
-                        // TODO: Implement login action.
-                      },
+                      label: _loading ? 'SIGNING IN...' : 'LOGIN',
+                      onPressed: _loading ? null : _signIn,
                     ),
                     const SizedBox(height: 14),
                     OtaActionButton(
                       label: 'CONTINUE WITH GOOGLE',
                       variant: OtaActionButtonVariant.secondary,
                       icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
-                      onPressed: () {
-                        // TODO: Implement Google sign-in.
-                      },
+                      onPressed: _loading ? null : _googleSignIn,
                     ),
                     const SizedBox(height: 24),
                     OtaAuthSwitchLink(
                       prompt: "Don't have an account?",
                       action: 'Sign Up',
-                      onTap: () {
-                        Navigator.of(
-                          context,
-                        ).pushReplacementNamed(OtaRoutes.signup);
-                      },
+                      onTap: () => Navigator.of(
+                        context,
+                      ).pushReplacementNamed(OtaRoutes.signup),
                     ),
                   ],
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }

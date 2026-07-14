@@ -1,65 +1,62 @@
-# Spark-Compatible Onboarding
+# Authentication and Profile Membership
 
-The onboarding foundation uses Firebase Authentication and client-side
-Firestore atomic writes. It does not use Cloud Functions or another paid
-Google Cloud service.
+The OTA identity and membership flow uses Firebase Authentication and direct,
+Spark-compatible Firestore writes. It deploys no Cloud Functions and requires
+no billing account or paid Google Cloud service.
 
-## Applicant submission
+## Authentication and routing
 
-`FirestoreOnboardingService.submitApplication` requires the current Firebase
-Auth user, loads the selected active location, evaluates the age gate against
-that location's IANA time zone, and validates all application fields. It derives
-the UID and normalized account email from Auth. A Google account ID is included
-only when it appears in the authenticated user's `google.com` provider entry.
+`FirebaseAuthenticationService` supports email/password signup and login,
+Google Sign-In, neutral password reset, email verification and resend, refresh,
+sign out, and safe error mapping. Firebase UID is the permanent identity; email
+is contact data. Google provider UID is read only from the authenticated
+`google.com` provider entry.
 
-One `WriteBatch` creates exactly:
+`FirebaseSessionController` observes Auth, `users/{uid}`, linked profiles, the
+selected profile, and its location. The startup gate routes signed-out,
+unverified, profile-creation, incomplete, pending, rejected, disabled,
+approved-student, admin, loading, and recoverable-error states without restart.
 
-- `users/{firebaseUid}`
-- `onboardingApplications/{firebaseUid}`
+## Profile creation
 
-The UID is both document IDs. No student profile or permanent family
-relationship is created before review. Firestore Rules use `getAfter()` to
-require both documents in the same atomic operation. If the batch fails, the
-Auth account remains and the user can retry; the service never deletes Auth
-users and never uses email as an identity key. `loadCurrentAccountState`
-returns `needsOnboarding` when both records are absent, so a later login can
-route the authenticated user back into onboarding.
+Verified users complete a three-step flow with a 16+ account-holder gate.
+Students create one self-linked profile. Parents may create their own student
+profile and up to ten additional children, or one through ten children without
+a personal student profile. A single `WriteBatch` creates `users/{uid}` and all
+`studentProfiles` documents. Every initial profile has
+`approvalStatus: incomplete` and no `locationId`. Parent families share one
+`familyApplicationId`; the parent's own profile is selected first when present.
 
-Applications support student applicants and parent applicants with up to ten
-additional students. Every future student has a date of birth, belt rank, and
-explicit guardian email. The application contains pending data only and cannot
-include finalized IDs, guardian user relationships, or approval overrides.
+## Profile-specific membership
 
-## Admin review
+Application loads active locations from Firestore and updates one explicitly
+selected profile from `incomplete` or `rejected` to `pending`, writing that
+profile's `locationId`. Admin review changes only a pending profile to
+`approved` or `rejected`, retains its location, and records reviewer metadata.
+Leaving an approved, pending, or rejected membership removes its `locationId`
+and review fields and restores `incomplete`; other family profiles are not
+changed.
 
-Approved location admins may review pending applications for their own
-location. Super Admin may review any location. Approval runs in one Firestore
-transaction: it revalidates the reviewer, application, and active location;
-creates every approved student profile; writes reciprocal user links; and marks
-the user and application approved. Parent approvals generate one shared family
-application ID. The parent's own profile is selected first when applicable.
+Academy data is readable only when the selected profile is approved, has an
+active location, and the content document matches that location. A parent
+account by itself grants no academy content.
 
-Rejection atomically marks the user and application rejected, records reviewer
-metadata and an optional short reason, and creates no profiles. Failed or
-duplicate reviews leave no partial writes.
+## Local validation and release
 
-## Local validation
-
-Use the demo project ID so emulator tests cannot reach live Firebase:
+Use a demo emulator project; automated tests do not contact live Firestore:
 
 ```powershell
 npm --prefix tool/firebase_emulator_tests install
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 $env:Path="$env:JAVA_HOME\bin;$env:Path"
-firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix tool/firebase_emulator_tests test"
+firebase emulators:exec --only firestore --project demo-ota-membership "npm --prefix tool/firebase_emulator_tests test"
 ```
 
-## Release
-
-Only Firestore Security Rules are deployed for this architecture:
+After all tests pass, deploy only Rules:
 
 ```powershell
 firebase deploy --only firestore:rules --project ota-management-platform
 ```
 
-No database seed, migration, or data deployment is part of onboarding release.
+No seed, migration, Auth-user creation, database write, or other Firebase
+deployment is part of this release.

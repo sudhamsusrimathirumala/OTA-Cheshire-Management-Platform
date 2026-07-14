@@ -39,11 +39,11 @@ constraint.
 - Local, read-only curriculum organized by belt, including No Belt and five
   canonical sections. Each form item independently supports an optional
   embedded YouTube video; unavailable videos show a coming-soon fallback.
-- Student profile and linked account presentation.
-
-The selected user account, linked profiles, and active student profile are
-still supplied by mock data. Authentication and real profile switching are not
-implemented.
+- Firebase email/password and Google authentication, email verification,
+  password reset, profile creation, independent membership applications, and
+  persisted profile switching.
+- Student profile, linked account, membership status, and leave-location
+  management backed by the authenticated Firebase UID.
 
 ### Administrator Experience
 
@@ -58,11 +58,12 @@ implemented.
   in the existing list-management interface.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
-- Firestore-backed student directory and details. Student profile editing is
-  not implemented.
+- Firestore-backed student directory, pending membership review, approval,
+  rejection, and details. Generic student profile editing is not implemented.
 - Read-only curriculum view backed by local sample curriculum.
 
-Admin routes currently have no authentication or role guard.
+Normal startup routes approved Admin and Super Admin accounts through the
+Firebase session gate; no public role-escalation route exists.
 
 ### Data Layer
 
@@ -125,13 +126,10 @@ for the current data flow and fallback boundaries.
 
 ### Partially Implemented
 
-- Firebase UID/user-document identity, Email/Password and Google dependency
-  preparation, Spark-compatible pending onboarding writes, admin approval
-  transactions, canonical account/profile parsing, and Firestore Rules are
-  present, but Authentication is not connected to login or signup UI.
-- User roles, approval status, guardian links, family application grouping,
-  and selected-profile fields are modeled, but approval UI and role routing
-  are not implemented.
+- Firebase authentication, verified profile creation, profile-specific academy
+  applications, admin review, membership-aware routing, and security rules are
+  implemented. Provider linking and production release validation remain out
+  of scope.
 - Firestore data is location-aware, but administration is currently centered
   on OTA Cheshire rather than a complete multi-location workflow.
 - Announcements are live Firestore data, but device push notifications are not
@@ -144,11 +142,8 @@ for the current data flow and fallback boundaries.
 
 ### Planned or Remaining
 
-- Authentication, account recovery, onboarding screens, role guards, and admin
-  approval.
 - Production deployment and broader authorization testing for Firestore rules.
-- Firebase-backed user identity, profile ownership/switching, and guardian name
-  resolution.
+- Guardian display-name resolution and generic student profile editing.
 - Admin student profile editing and production curriculum data.
 - End-to-end release validation, production signing, and content review.
 

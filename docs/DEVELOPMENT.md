@@ -24,10 +24,9 @@ The normal application initializes Firebase from `lib/firebase_options.dart`.
 
 ## Firebase Authentication setup
 
-The code includes `firebase_auth`, `google_sign_in`, a Firebase UID identity
-contract, provider-data extraction, and Spark-compatible Firestore onboarding
-and approval services. Full login, signup, linking, onboarding, and approval
-screens are intentionally not implemented yet.
+The app uses `firebase_auth`, `google_sign_in`, Firebase UID identity, verified
+profile creation, profile-specific membership, and admin review. Provider
+linking is intentionally not part of this implementation.
 
 Manual Firebase/platform setup still required:
 
@@ -42,13 +41,11 @@ Manual Firebase/platform setup still required:
 6. Re-run `flutterfire configure` after Firebase app/provider configuration
    changes and review generated files before committing.
 
-Onboarding UI must use `FirestoreOnboardingService`. Applicant submission
-derives identity from `FirebaseAuth.currentUser` and atomically creates only the
-pending user and onboarding-application documents. Approved admins later
-materialize profiles and reciprocal links in one transaction. Normal academy
-data remains unavailable until approval. See
-[Spark-compatible onboarding](ONBOARDING_BACKEND.md) for the contract and
-emulator workflow.
+Profile creation derives identity from `FirebaseAuth.currentUser` and uses
+`FirestoreProfileMembershipService` to atomically create the UID user document
+and permanent unassigned profiles. Location application is a later,
+profile-specific transition. Normal academy data remains unavailable until an
+admin approves the selected profile. See [Authentication and membership](ONBOARDING_BACKEND.md).
 
 This project permanently targets the no-cost Firebase Spark plan. Do not link a
 billing account, add a paid service, deploy server functions, or add
@@ -94,7 +91,7 @@ Firestore emulator tests:
 
 ```powershell
 npm --prefix tool/firebase_emulator_tests install
-firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix tool/firebase_emulator_tests test"
+firebase emulators:exec --only firestore --project demo-ota-membership "npm --prefix tool/firebase_emulator_tests test"
 ```
 
 ## Safe Development Rules

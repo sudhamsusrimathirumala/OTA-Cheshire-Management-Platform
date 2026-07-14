@@ -24,6 +24,9 @@ class Student {
     this.isActive = true,
     this.createdAt,
     this.updatedAt,
+    this.reviewedAt,
+    this.reviewedBy,
+    this.rejectionReason,
   }) : linkedUserId = linkedUserId ?? selfUserId;
 
   final String id;
@@ -50,6 +53,9 @@ class Student {
   final bool isActive;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? reviewedAt;
+  final String? reviewedBy;
+  final String? rejectionReason;
 
   String get firstName => canonicalFirstName ?? _nameParts.$1;
   String get lastName => canonicalLastName ?? _nameParts.$2;

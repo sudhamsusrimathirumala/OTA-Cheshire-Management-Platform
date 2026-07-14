@@ -21,8 +21,10 @@ not paid overage.
   `app_data_service_provider.dart` selects its implementation.
 - **Firebase services:** `FirebaseAppDataService` owns Firestore snapshot
   listeners and parsing. `FirebaseAdminWriteService` owns implemented admin
-  writes and canonical payload construction. `FirestoreOnboardingService` owns
-  atomic applicant submission and admin application review writes.
+  writes and canonical payload construction.
+  `FirebaseAuthenticationService`, `FirebaseSessionController`, and
+  `FirestoreProfileMembershipService` own authentication, reactive routing,
+  atomic profile creation, membership application/review, and leave writes.
 - **Mock fallback:** `MockAppDataService` and `lib/data/` provide local data for
   unavailable Firebase and for features that have not moved to Firebase.
 - **Development utilities:** Separate `*_main.dart` entrypoints provide audit,
@@ -40,10 +42,11 @@ Firestore snapshots
   -> screens and widgets
 ```
 
-The active snapshot listeners cover `classSessions`, `announcements`, `events`,
-`resources`, and `studentProfiles`. Listener errors are exposed to the relevant
-screens; an unavailable Firebase instance at service construction falls back to
-`MockAppDataService`.
+The active content listeners cover `classSessions`, `announcements`, `events`,
+and `resources` for the approved selected profile's active location. Session
+listeners observe Auth, the UID user document, linked profiles, selection,
+membership status, and the selected location. Isolated tests without an
+initialized Firebase app use `MockAppDataService`.
 
 Implemented admin writes follow this path:
 
@@ -65,10 +68,9 @@ implemented.
 `useFirebase` switch. It is currently `true`, so the normal application creates
 `FirebaseAppDataService`. Setting it to `false` selects `MockAppDataService`.
 
-Even with Firebase selected, `FirebaseAppDataService` delegates the current
-user account, linked student profiles, selected profile, belt labels, and
-curriculum to its mock fallback. This boundary is intentional until
-authentication, ownership, and curriculum persistence are implemented.
+With Firebase initialized, `FirebaseAppDataService` uses the authenticated UID,
+linked profiles, and persisted selection from `FirebaseSessionController`.
+Only bundled curriculum and isolated-test fallback data remain local.
 
 ## Time Handling
 
@@ -118,23 +120,24 @@ replacement used only when a nested page was opened directly.
   guardian user IDs, an optional self user ID, and class preferences.
 - UI personalization is driven by the selected student profile.
 
-The models and Firestore integrity checks exist. Production authentication,
-account loading, guardian resolution, profile ownership, profile switching,
-approval enforcement, and role-gated navigation remain pending.
+Firebase Auth is canonical. Profile creation is separate from academy
+membership, selection is persisted on the UID user document, and academy data
+is loaded only for an approved selected profile at an active matching location.
+Each family profile can independently apply, be reviewed, switch locations, or
+leave. Guardian display-name resolution remains future work.
 
 ## Mock and Fallback Data
 
 The following areas still use local/fallback data:
 
-- Current user account.
-- Linked and selected student profiles used by student-facing screens.
 - Read-only curriculum content and belt order. Curriculum uses five canonical
   local sections per belt and is never stored as a General Resource. Form
   entries contain a title and independent optional YouTube URL or video ID, so
   a belt may render zero or multiple form cells without sharing a channel URL.
   Embedded players are keyed by parsed video ID to prevent a previous belt's
   player from being retained when curriculum content changes.
-- Full data fallback when Firebase is unavailable during service construction.
+- Full data fallback only for isolated tests without an initialized Firebase
+  app.
 
 The admin student directory is Firestore-backed, but it is read-only and shows
 guardian IDs rather than resolved user names.
