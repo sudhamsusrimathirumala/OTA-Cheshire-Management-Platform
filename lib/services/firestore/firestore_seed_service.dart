@@ -156,7 +156,6 @@ Map<String, Object?> _userAccountData(UserAccount account) {
 }
 
 Map<String, Object?> studentProfileWriteFields(Student profile) {
-  // TODO: Replace mock seed data with production student profile records.
   final now = FieldValue.serverTimestamp();
 
   return {
@@ -164,7 +163,7 @@ Map<String, Object?> studentProfileWriteFields(Student profile) {
     'lastName': profile.lastName,
     'dateOfBirth': Timestamp.fromDate(profile.dateOfBirth!),
     'beltRank': profile.beltRank,
-    'locationId': profile.locationId,
+    if (profile.locationId.trim().isNotEmpty) 'locationId': profile.locationId,
     if (profile.guardianEmail != null) 'guardianEmail': profile.guardianEmail,
     'guardianUserIds': profile.guardianUserIds,
     'approvalStatus': profile.approvalStatus.name,

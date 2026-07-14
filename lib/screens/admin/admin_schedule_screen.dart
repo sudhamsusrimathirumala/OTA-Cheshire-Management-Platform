@@ -5,6 +5,7 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/schedule_time_field.dart';
 import '../../services/location_time_service.dart';
 
@@ -35,6 +36,11 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AdminLocationSelector(
+                locationIds: appDataService.schedule.values
+                    .expand((sessions) => sessions)
+                    .map((session) => session.locationId),
+              ),
               _ScheduleToolbar(
                 onAddClass: () => _openClassSheet(),
                 onBulkAction: _openBulkActionSheet,
@@ -682,13 +688,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId
-        .trim();
-    if (accountLocationId.isNotEmpty) {
-      return accountLocationId;
-    }
-
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 }
 

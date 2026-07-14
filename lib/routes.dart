@@ -1,4 +1,5 @@
 abstract final class OtaRoutes {
+  static const gate = '/';
   static const welcome = '/welcome';
   static const dashboard = '/dashboard';
   static const schedule = '/schedule';

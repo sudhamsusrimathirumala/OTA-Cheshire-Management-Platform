@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
+import '../services/firebase/route_authorization.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_branded_scaffold.dart';
@@ -63,11 +64,16 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                     ),
                     if (kDebugMode) ...[
+                      // Development-only shortcuts for visual UI work. The
+                      // compile-time debug guard removes them from release.
                       const SizedBox(height: 24),
                       OtaActionButton(
                         label: 'Student View',
                         onPressed: () {
-                          Navigator.of(context).pushNamed(OtaRoutes.dashboard);
+                          Navigator.of(context).pushNamed(
+                            OtaRoutes.dashboard,
+                            arguments: developmentNavigationArguments(),
+                          );
                         },
                       ),
                       const SizedBox(height: 14),
@@ -75,9 +81,10 @@ class WelcomeScreen extends StatelessWidget {
                         label: 'Admin View',
                         variant: OtaActionButtonVariant.secondary,
                         onPressed: () {
-                          Navigator.of(
-                            context,
-                          ).pushNamed(OtaRoutes.adminDashboard);
+                          Navigator.of(context).pushNamed(
+                            OtaRoutes.adminDashboard,
+                            arguments: developmentNavigationArguments(),
+                          );
                         },
                       ),
                     ],

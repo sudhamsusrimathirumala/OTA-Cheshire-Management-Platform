@@ -146,6 +146,7 @@ Map<String, Object?> studentProfileWriteFields(
   final guardianEmail = profile.guardianEmail;
   final linkedUserId = _optionalString(profile.linkedUserId);
   final familyApplicationId = _optionalString(profile.familyApplicationId);
+  final locationId = _optionalString(profile.locationId);
   if (dateOfBirth == null) {
     throw ArgumentError('dateOfBirth is required for new student profiles.');
   }
@@ -157,7 +158,7 @@ Map<String, Object?> studentProfileWriteFields(
     'lastName': _requiredString(profile.lastName, 'lastName'),
     'dateOfBirth': Timestamp.fromDate(dateOfBirth),
     'beltRank': _requiredString(profile.beltRank, 'beltRank'),
-    'locationId': _requiredString(profile.locationId, 'locationId'),
+    'locationId': ?locationId,
     'guardianEmail': normalizeRequiredEmail(guardianEmail),
     'guardianUserIds': profile.guardianUserIds,
     'approvalStatus': profile.approvalStatus.name,

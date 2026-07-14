@@ -59,8 +59,22 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _isAdminStudentsLoading = true;
   String? _adminStudentsErrorMessage;
   bool _isUsingFallbackData = false;
+  bool _developmentViewActive = const bool.fromEnvironment('FLUTTER_TEST');
   String? _listeningLocationId;
   bool _listeningAsSuperAdmin = false;
+
+  void setDevelopmentViewActive(bool active) {
+    final enabled = kDebugMode && active;
+    if (_developmentViewActive == enabled) return;
+    _developmentViewActive = enabled;
+    if (enabled) {
+      _useFallbackDataForUnavailableFirebase();
+    } else if (firebaseSessionController.stage != SessionStage.approved &&
+        firebaseSessionController.stage != SessionStage.admin) {
+      _clearData();
+    }
+    notifyListeners();
+  }
 
   void _handleSessionChanged() {
     final session = firebaseSessionController;
@@ -76,6 +90,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         : null;
     if (!superAdmin && (locationId == null || locationId.isEmpty)) {
       _stopFirestoreListeners();
+      if (_developmentViewActive) {
+        _useFallbackDataForUnavailableFirebase();
+        notifyListeners();
+      }
       return;
     }
     if (_listeningLocationId == locationId &&
@@ -97,12 +115,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
       final firestore = _firestore ?? FirebaseFirestore.instance;
       _firestore = firestore;
-      unawaited(
-        const LocationTimeService().loadLocation(
-          firestore,
-          LocationTimeService.otaCheshireLocationId,
-        ),
-      );
+      if (locationId != null && locationId.isNotEmpty) {
+        unawaited(
+          const LocationTimeService().loadLocation(firestore, locationId),
+        );
+      }
       _listenToSchedule(firestore, locationId, superAdmin);
       _listenToAnnouncements(firestore, locationId, superAdmin);
       _listenToEvents(firestore, locationId, superAdmin);
@@ -128,6 +145,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminStudentsSubscription = null;
     _listeningLocationId = null;
     _listeningAsSuperAdmin = false;
+    _clearData();
+    notifyListeners();
+  }
+
+  void _clearData() {
     _schedule = const <int, List<ClassSession>>{};
     _notifications = const <NotificationItem>[];
     _adminAnnouncements = const <AcademyAnnouncement>[];
@@ -145,10 +167,23 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _eventsErrorMessage = null;
     _resourcesErrorMessage = null;
     _adminStudentsErrorMessage = null;
-    notifyListeners();
   }
 
   void _useFallbackDataForUnavailableFirebase() {
+    if (!_developmentViewActive) {
+      _clearData();
+      _isScheduleLoading = false;
+      _isAnnouncementsLoading = false;
+      _isEventsLoading = false;
+      _isResourcesLoading = false;
+      _isAdminStudentsLoading = false;
+      _scheduleErrorMessage = 'Firebase data is unavailable.';
+      _announcementsErrorMessage = 'Firebase data is unavailable.';
+      _eventsErrorMessage = 'Firebase data is unavailable.';
+      _resourcesErrorMessage = 'Firebase data is unavailable.';
+      _adminStudentsErrorMessage = 'Firebase data is unavailable.';
+      return;
+    }
     _schedule = _fallbackService.schedule;
     _notifications = _fallbackService.notifications;
     _adminAnnouncements = _fallbackService.adminAnnouncements;
@@ -245,9 +280,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _loadTimeZonesForSnapshot(snapshot);
     _schedule = _scheduleFromSnapshot(snapshot);
     _isUsingFallbackData = false;
-    if (_latestAnnouncementsSnapshot != null) {
+    if (_latestAnnouncementsSnapshot != null &&
+        firebaseSessionController.stage == SessionStage.approved) {
       _notifications = _announcementsFromSnapshot(
         _latestAnnouncementsSnapshot!,
       );
@@ -267,9 +304,14 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _handleAnnouncementsSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
+    _loadTimeZonesForSnapshot(snapshot);
     _latestAnnouncementsSnapshot = snapshot;
-    _adminAnnouncements = _adminAnnouncementsFromSnapshot(snapshot);
-    _notifications = _announcementsFromSnapshot(snapshot);
+    _adminAnnouncements = firebaseSessionController.stage == SessionStage.admin
+        ? _adminAnnouncementsFromSnapshot(snapshot)
+        : const <AcademyAnnouncement>[];
+    _notifications = firebaseSessionController.stage == SessionStage.approved
+        ? _announcementsFromSnapshot(snapshot)
+        : const <NotificationItem>[];
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
@@ -285,6 +327,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleEventsSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _loadTimeZonesForSnapshot(snapshot);
     _events = _eventsFromSnapshot(snapshot);
     _isUsingFallbackData = false;
     _isEventsLoading = false;
@@ -300,6 +343,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleResourcesSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _loadTimeZonesForSnapshot(snapshot);
     _resources = _resourcesFromSnapshot(snapshot);
     _isUsingFallbackData = false;
     _isResourcesLoading = false;
@@ -343,26 +387,31 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     super.dispose();
   }
 
-  // TODO: Replace mock delegation with Firebase Auth and Firestore-backed users.
   @override
-  UserAccount get currentUserAccount =>
-      firebaseSessionController.account ?? _fallbackService.currentUserAccount;
+  UserAccount get currentUserAccount => firebaseIdentityOrDevelopmentFallback(
+    firebaseSessionController.account,
+    developmentFallback: _fallbackService.currentUserAccount,
+    developmentViewActive: _developmentViewActive,
+    identityName: 'authenticated account',
+  );
 
-  // TODO: Replace mock delegation with Firestore-backed student profiles.
   @override
   List<StudentProfile> get linkedStudentProfiles =>
-      firebaseSessionController.profiles.isNotEmpty
-      ? firebaseSessionController.profiles
-      : _fallbackService.linkedStudentProfiles;
+      _developmentViewActive && firebaseSessionController.profiles.isEmpty
+      ? _fallbackService.linkedStudentProfiles
+      : firebaseSessionController.profiles;
 
   @override
   List<StudentProfile> get adminStudentProfiles => _adminStudentProfiles;
 
-  // TODO: Replace mock delegation with Firestore-backed selected profiles.
   @override
   StudentProfile get selectedStudentProfile =>
-      firebaseSessionController.selectedProfile ??
-      _fallbackService.selectedStudentProfile;
+      firebaseIdentityOrDevelopmentFallback(
+        firebaseSessionController.selectedProfile,
+        developmentFallback: _fallbackService.selectedStudentProfile,
+        developmentViewActive: _developmentViewActive,
+        identityName: 'selected student profile',
+      );
 
   @override
   Map<int, List<ClassSession>> get schedule => _schedule;
@@ -465,8 +514,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     for (final document in snapshot.docs) {
       final session = _classSessionFromDocument(document);
 
-      if (session == null ||
-          session.locationId != selectedStudentProfile.locationId ||
+      if (session == null || !_recordIsInSessionScope(session.locationId)) {
+        continue;
+      }
+      if (firebaseSessionController.stage == SessionStage.approved &&
           !session.isPublished) {
         continue;
       }
@@ -519,8 +570,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       bulkGroupId:
           _stringValue(data['bulkGroupId']) ??
           '${_stringValue(data['classTypeId']) ?? _classTypeIdFor(className)}-standard',
-      locationId:
-          _stringValue(data['locationId']) ?? selectedStudentProfile.locationId,
+      locationId: _stringValue(data['locationId']) ?? '',
       startTime: startTime,
       endTime: endTime,
       startMinutes: startMinutes,
@@ -632,7 +682,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     for (final document in snapshot.docs) {
       final announcement = _academyAnnouncementFromDocument(document);
-      if (announcement != null && announcement.locationId == _adminLocationId) {
+      if (announcement != null &&
+          _recordIsInSessionScope(announcement.locationId)) {
         announcements.add(announcement);
       }
     }
@@ -704,7 +755,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     for (final document in snapshot.docs) {
       final event = _eventFromDocument(document);
       if (event != null &&
-          event.locationId == _adminLocationId &&
+          _recordIsInSessionScope(event.locationId) &&
           !event.isArchived &&
           event.eventType != 'closure') {
         events.add(event);
@@ -730,7 +781,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     for (final document in snapshot.docs) {
       final resource = _resourceFromDocument(document);
-      if (resource != null && resource.locationId == _adminLocationId) {
+      if (resource != null && _recordIsInSessionScope(resource.locationId)) {
         resources.add(resource);
       }
     }
@@ -762,7 +813,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     for (final document in snapshot.docs) {
       final student = _studentProfileFromDocument(document);
-      if (student != null && student.locationId == _adminLocationId) {
+      if (student != null && _recordIsInSessionScope(student.locationId)) {
         students.add(student);
       }
     }
@@ -817,14 +868,56 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     };
   }
 
-  String get _adminLocationId {
-    final userLocationId = currentUserAccount.locationId;
-    if (userLocationId.isNotEmpty) {
-      return userLocationId;
-    }
-
-    return selectedStudentProfile.locationId;
+  bool _recordIsInSessionScope(String locationId) {
+    final session = firebaseSessionController;
+    return recordIsInDataScope(
+      stage: session.stage,
+      role: session.account?.role,
+      accountLocationId: session.account?.locationId,
+      selectedProfileLocationId: session.selectedProfile?.locationId,
+      recordLocationId: locationId,
+    );
   }
+
+  void _loadTimeZonesForSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    final firestore = _firestore;
+    if (firestore == null) return;
+    final locationIds = snapshot.docs
+        .map((document) => _stringValue(document.data()['locationId']))
+        .whereType<String>()
+        .toSet();
+    for (final locationId in locationIds) {
+      unawaited(
+        const LocationTimeService().loadLocation(firestore, locationId),
+      );
+    }
+  }
+}
+
+bool recordIsInDataScope({
+  required SessionStage stage,
+  required UserAccountRole? role,
+  required String? accountLocationId,
+  required String? selectedProfileLocationId,
+  required String recordLocationId,
+}) {
+  if (stage == SessionStage.admin) {
+    return role == UserAccountRole.superAdmin ||
+        accountLocationId == recordLocationId;
+  }
+  return stage == SessionStage.approved &&
+      selectedProfileLocationId == recordLocationId;
+}
+
+T firebaseIdentityOrDevelopmentFallback<T>(
+  T? firebaseIdentity, {
+  required T developmentFallback,
+  required bool developmentViewActive,
+  required String identityName,
+}) {
+  if (firebaseIdentity != null) return firebaseIdentity;
+  if (kDebugMode && developmentViewActive) return developmentFallback;
+  throw StateError('No $identityName is available.');
 }
 
 DateTime _dateTimeFromWeekdayAndMinutes(int weekday, int minutes) {

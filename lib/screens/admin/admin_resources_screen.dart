@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academy_resource.dart';
+import '../../models/user_account.dart';
 import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/resources/general_resources_view.dart';
 import '../../widgets/resources/resources_landing_view.dart';
 import '../resource_detail_screen.dart';
@@ -57,7 +59,17 @@ class _AdminGeneralResourcesScreenState
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
       if (resource.resourceSection != 'general') return false;
-      if (resource.locationId != _adminLocationId()) return false;
+      if (appDataService.currentUserAccount.role !=
+              UserAccountRole.superAdmin &&
+          resource.locationId != _adminLocationId()) {
+        return false;
+      }
+      if (appDataService.currentUserAccount.role ==
+              UserAccountRole.superAdmin &&
+          superAdminLocationSelection.value != null &&
+          resource.locationId != superAdminLocationSelection.value) {
+        return false;
+      }
       return switch (_selectedFilter) {
         _ResourceFilter.published =>
           resource.isPublished && !resource.isArchived,
@@ -74,9 +86,7 @@ class _AdminGeneralResourcesScreenState
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) return accountLocationId;
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 
   @override
@@ -101,6 +111,11 @@ class _AdminGeneralResourcesScreenState
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
+              AdminLocationSelector(
+                locationIds: appDataService.resources.map(
+                  (resource) => resource.locationId,
+                ),
+              ),
               _ResourcesToolbar(onCreateResource: () => _openResourceSheet()),
               const SizedBox(height: 14),
               _FilterRow(
@@ -688,12 +703,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) {
-      return accountLocationId;
-    }
-
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 }
 

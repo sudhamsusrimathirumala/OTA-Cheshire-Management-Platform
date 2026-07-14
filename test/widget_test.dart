@@ -45,6 +45,8 @@ import 'package:ota_cheshire_management_platform/widgets/resources/resources_lan
 import 'package:ota_cheshire_management_platform/widgets/schedule_time_field.dart';
 
 void main() {
+  initializeMockAppDataServiceForTests();
+
   test(
     'teen adult sparring is stored in mock data but hidden from active schedule',
     () {

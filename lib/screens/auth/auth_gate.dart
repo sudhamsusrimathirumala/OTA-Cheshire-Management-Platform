@@ -25,6 +25,11 @@ class AuthGate extends StatelessWidget {
         SessionStage.pending ||
         SessionStage.rejected ||
         SessionStage.disabled => const MembershipStatusScreen(),
+        SessionStage.adminDisabled => _SessionErrorScreen(
+          message:
+              session.errorMessage ??
+              'This administrator account is unavailable.',
+        ),
         SessionStage.approved => const StudentDashboardScreen(),
         SessionStage.admin => const AdminDashboardScreen(),
         SessionStage.error => _SessionErrorScreen(

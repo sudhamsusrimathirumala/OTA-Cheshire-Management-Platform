@@ -51,8 +51,18 @@ service cloud.firestore {
           activeLocation(selectedProfile().locationId);
     }
     function canAccessAcademyLocation(locationId) {
-      return canAdminLocation(locationId) ||
+      return activeLocation(locationId) && (canAdminLocation(locationId) ||
           (approvedSelectedMembership() &&
+           selectedProfile().locationId == locationId));
+    }
+    function canReadReferencedLocation(locationId) {
+      return superAdmin() ||
+          (locationAdmin() && currentUser().locationId == locationId) ||
+          (hasUser() && currentUser().role in ['student', 'parent'] &&
+           currentUser().selectedStudentProfileId is string &&
+           currentUser().selectedStudentProfileId in
+             currentUser().linkedStudentProfileIds &&
+           exists(profilePath(currentUser().selectedStudentProfileId)) &&
            selectedProfile().locationId == locationId);
     }
     function managesProfile(profileId) {
@@ -230,6 +240,7 @@ service cloud.firestore {
 
     function validAdminReview() {
       return canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
           resource.data.approvalStatus == 'pending' &&
           request.resource.data.locationId == resource.data.locationId &&
           request.resource.data.approvalStatus in ['approved', 'rejected'] &&
@@ -281,7 +292,9 @@ service cloud.firestore {
     }
 
     match /locations/{locationId} {
-      allow read: if signedIn() && resource.data.isActive == true;
+      allow read: if signedIn() &&
+          (resource.data.isActive == true ||
+           canReadReferencedLocation(locationId));
       allow create, update, delete: if superAdmin();
     }
 
@@ -291,14 +304,17 @@ service cloud.firestore {
         ] && canAccessAcademyLocation(resource.data.locationId);
       allow create: if collectionName in [
           'classSessions', 'announcements', 'events', 'resources'
-        ] && canAdminLocation(request.resource.data.locationId);
+        ] && canAdminLocation(request.resource.data.locationId) &&
+          activeLocation(request.resource.data.locationId);
       allow update: if collectionName in [
           'classSessions', 'announcements', 'events', 'resources'
         ] && canAdminLocation(resource.data.locationId) &&
+        activeLocation(resource.data.locationId) &&
         request.resource.data.locationId == resource.data.locationId;
       allow delete: if collectionName in [
           'classSessions', 'announcements', 'events', 'resources'
-        ] && canAdminLocation(resource.data.locationId);
+        ] && canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId);
     }
   }
 }

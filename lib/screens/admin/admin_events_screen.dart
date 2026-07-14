@@ -8,6 +8,7 @@ import '../../services/event_resource_rules.dart';
 import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/location_date_time_field.dart';
 
 enum _EventFilter { draft, published, past }
@@ -93,6 +94,14 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
+              AdminLocationSelector(
+                locationIds: [
+                  ...appDataService.events.map((event) => event.locationId),
+                  ...appDataService.resources.map(
+                    (resource) => resource.locationId,
+                  ),
+                ],
+              ),
               _EventsToolbar(onCreateEvent: () => _openEventSheet()),
               const SizedBox(height: 14),
               _FilterRow(
@@ -895,12 +904,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) {
-      return accountLocationId;
-    }
-
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 
   Widget _buildResourceLinkingSection() {

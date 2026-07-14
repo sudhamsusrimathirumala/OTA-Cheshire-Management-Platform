@@ -8,6 +8,7 @@ import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 
 enum _AnnouncementFilter { all, draft, published, archived, important }
 
@@ -81,6 +82,11 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              AdminLocationSelector(
+                locationIds: appDataService.adminAnnouncements.map(
+                  (announcement) => announcement.locationId,
+                ),
+              ),
               _AnnouncementsToolbar(
                 onCreateAnnouncement: () => _openAnnouncementSheet(),
               ),
@@ -1064,12 +1070,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) {
-      return accountLocationId;
-    }
-
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 
   void _submit(_AnnouncementSaveAction action) {

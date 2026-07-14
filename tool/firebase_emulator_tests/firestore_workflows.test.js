@@ -273,3 +273,69 @@ test('super admin can review across locations but cannot broaden user-created re
     linkedStudentProfileIds: ['profile', 'foreign'], updatedAt: serverTimestamp(),
   }));
 });
+
+test('linked member observes deactivation but loses academy content access', async () => {
+  const db = auth('inactive-member');
+  await createProfiles(db, {
+    uid: 'inactive-member', email: 'inactive-member@example.com', profileIds: ['profile'],
+  });
+  await apply(db, 'inactive-member', 'profile', 'cheshire', true);
+  await seedAdmin('admin');
+  await review(auth('admin'), 'profile', 'admin', true);
+  await env.withSecurityRulesDisabled(async (context) => {
+    const unrestricted = context.firestore();
+    await setDoc(doc(unrestricted, 'events', 'event'), {
+      title: 'Event', locationId: 'cheshire',
+    });
+    await updateDoc(doc(unrestricted, 'locations', 'cheshire'), {isActive: false});
+  });
+  const location = await assertSucceeds(getDoc(doc(db, 'locations', 'cheshire')));
+  assert.equal(location.data().isActive, false);
+  await assertFails(getDoc(doc(db, 'events', 'event')));
+});
+
+test('inactive locations cannot be listed for apply or reviewed by an admin', async () => {
+  const db = auth('pending-member');
+  const activeLocations = await assertSucceeds(getDocs(query(
+    collection(db, 'locations'), where('isActive', '==', true),
+  )));
+  assert.deepEqual(activeLocations.docs.map((item) => item.id).sort(), ['cheshire', 'other']);
+  await assertFails(getDocs(collection(db, 'locations')));
+
+  await createProfiles(db, {
+    uid: 'pending-member', email: 'pending-member@example.com', profileIds: ['profile'],
+  });
+  await apply(db, 'pending-member', 'profile', 'cheshire', true);
+  await seedAdmin('admin');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'locations', 'cheshire'), {isActive: false});
+  });
+  await assertFails(review(auth('admin'), 'profile', 'admin', true));
+});
+
+test('admins cannot write academy content at an inactive location', async () => {
+  await seedAdmin('inactive-admin', 'admin', 'inactive');
+  const db = auth('inactive-admin');
+  await assertFails(setDoc(doc(db, 'events', 'new-event'), {
+    title: 'Blocked', locationId: 'inactive',
+  }));
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'events', 'old-event'), {
+      title: 'Existing', locationId: 'inactive',
+    });
+  });
+  await assertFails(getDoc(doc(db, 'events', 'old-event')));
+  await assertFails(updateDoc(doc(db, 'events', 'old-event'), {title: 'Changed'}));
+});
+
+test('super admin reads inactive status without receiving inactive content access', async () => {
+  await seedAdmin('super-inactive', 'superAdmin');
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'events', 'inactive-event'), {
+      title: 'Inactive', locationId: 'inactive',
+    });
+  });
+  const db = auth('super-inactive');
+  await assertSucceeds(getDoc(doc(db, 'locations', 'inactive')));
+  await assertFails(getDoc(doc(db, 'events', 'inactive-event')));
+});

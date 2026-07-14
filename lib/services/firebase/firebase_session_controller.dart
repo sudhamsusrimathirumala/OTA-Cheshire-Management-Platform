@@ -23,6 +23,7 @@ enum SessionStage {
   approved,
   rejected,
   disabled,
+  adminDisabled,
   admin,
   error,
 }
@@ -55,6 +56,10 @@ class FirebaseSessionController extends ChangeNotifier {
   _profilesSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _locationSubscription;
+  int _sessionGeneration = 0;
+  int _profilesGeneration = 0;
+  int _locationGeneration = 0;
+  bool _disposed = false;
 
   bool get isApprovedMember => stage == SessionStage.approved;
   bool get isAdministrator => stage == SessionStage.admin;
@@ -63,7 +68,7 @@ class FirebaseSessionController extends ChangeNotifier {
     if (_started) return;
     _started = true;
     _authSubscription = authentication.authStateChanges().listen(
-      _handleAuthUser,
+      (user) => unawaited(_replaceAuthUser(user)),
       onError: (_) => _setError('Unable to observe authentication state.'),
     );
   }
@@ -71,19 +76,25 @@ class FirebaseSessionController extends ChangeNotifier {
   Future<void> retry() async {
     final user = authentication.currentUser;
     if (user == null) {
-      _handleAuthUser(null);
+      await _replaceAuthUser(null);
       return;
     }
     stage = SessionStage.loading;
     errorMessage = null;
     notifyListeners();
     await authentication.refreshUser();
-    _handleAuthUser(authentication.currentUser);
+    await _replaceAuthUser(authentication.currentUser);
   }
 
   Future<void> signOut() async {
     justCreatedProfiles = false;
+    ++_sessionGeneration;
+    ++_profilesGeneration;
+    ++_locationGeneration;
+    stage = SessionStage.loading;
+    notifyListeners();
     await authentication.signOut();
+    await _replaceAuthUser(null);
   }
 
   void markProfilesCreated() {
@@ -100,9 +111,13 @@ class FirebaseSessionController extends ChangeNotifier {
     await membership.selectProfile(profileId);
   }
 
-  void _handleAuthUser(User? user) {
+  Future<void> _replaceAuthUser(User? user) async {
+    final generation = ++_sessionGeneration;
+    _profilesGeneration++;
+    _locationGeneration++;
+    await _cancelFirestoreSubscriptions();
+    if (_disposed || generation != _sessionGeneration) return;
     authUser = user;
-    unawaited(_cancelFirestoreSubscriptions());
     account = null;
     profiles = const [];
     selectedProfile = null;
@@ -130,17 +145,29 @@ class FirebaseSessionController extends ChangeNotifier {
         .doc(user.uid)
         .snapshots()
         .listen(
-          _handleUserSnapshot,
-          onError: (_) => _setError('Unable to load your OTA account.'),
+          (snapshot) {
+            if (_isCurrentSession(generation, user.uid)) {
+              _handleUserSnapshot(snapshot, generation);
+            }
+          },
+          onError: (_) {
+            if (_isCurrentSession(generation, user.uid)) {
+              _setError('Unable to load your OTA account.');
+            }
+          },
         );
   }
 
-  void _handleUserSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
+  void _handleUserSnapshot(
+    DocumentSnapshot<Map<String, dynamic>> snapshot,
+    int sessionGeneration,
+  ) {
     final data = snapshot.data();
     if (data == null) {
       account = null;
       profiles = const [];
       selectedProfile = null;
+      unawaited(_replaceProfilesSubscription(null, sessionGeneration));
       stage = SessionStage.needsProfiles;
       errorMessage = null;
       notifyListeners();
@@ -155,11 +182,20 @@ class FirebaseSessionController extends ChangeNotifier {
     if (account!.role == UserAccountRole.admin ||
         account!.role == UserAccountRole.superAdmin) {
       if (account!.approvalStatus == UserAccountApprovalStatus.approved) {
-        stage = SessionStage.admin;
-        errorMessage = null;
+        if (account!.role == UserAccountRole.superAdmin) {
+          stage = SessionStage.admin;
+          errorMessage = null;
+          unawaited(_cancelLocationSubscription());
+        } else {
+          stage = SessionStage.loading;
+          unawaited(_replaceAdminLocationSubscription(sessionGeneration));
+        }
       } else {
-        stage = SessionStage.disabled;
+        stage = SessionStage.adminDisabled;
+        errorMessage = 'This administrator account is disabled.';
+        unawaited(_cancelLocationSubscription());
       }
+      unawaited(_cancelProfilesSubscription());
       notifyListeners();
       return;
     }
@@ -168,18 +204,131 @@ class FirebaseSessionController extends ChangeNotifier {
       _setError('Your account has no linked student profiles.');
       return;
     }
-    unawaited(_profilesSubscription?.cancel());
+    unawaited(_replaceProfilesSubscription(linkedIds, sessionGeneration));
+  }
+
+  Future<void> _replaceAdminLocationSubscription(int sessionGeneration) async {
+    final generation = ++_locationGeneration;
+    final previous = _locationSubscription;
+    _locationSubscription = null;
+    await previous?.cancel();
+    final locationId = account?.locationId.trim() ?? '';
+    if (!_isCurrentSession(sessionGeneration, authUser?.uid ?? '') ||
+        generation != _locationGeneration) {
+      return;
+    }
+    if (locationId.isEmpty) {
+      _setError('This administrator has no assigned academy location.');
+      return;
+    }
+    _locationSubscription = _firestore
+        .collection(FirestoreCollections.locations)
+        .doc(locationId)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!_isCurrentAdminLocation(
+              sessionGeneration,
+              generation,
+              locationId,
+            )) {
+              return;
+            }
+            final data = snapshot.data();
+            final name = data?['name'];
+            selectedLocationName = name is String && name.trim().isNotEmpty
+                ? name.trim()
+                : null;
+            if (data?['isActive'] == true) {
+              stage = SessionStage.admin;
+              errorMessage = null;
+            } else {
+              stage = SessionStage.adminDisabled;
+              errorMessage = 'This academy location is unavailable.';
+            }
+            notifyListeners();
+          },
+          onError: (_) {
+            if (_isCurrentAdminLocation(
+              sessionGeneration,
+              generation,
+              locationId,
+            )) {
+              _setError('Unable to verify academy location.');
+            }
+          },
+        );
+  }
+
+  Future<void> _cancelProfilesSubscription() async {
+    ++_profilesGeneration;
+    final previous = _profilesSubscription;
+    _profilesSubscription = null;
+    profiles = const [];
+    selectedProfile = null;
+    await previous?.cancel();
+  }
+
+  Future<void> _cancelLocationSubscription() async {
+    ++_locationGeneration;
+    final previous = _locationSubscription;
+    _locationSubscription = null;
+    selectedLocationName = null;
+    await previous?.cancel();
+  }
+
+  Future<void> _replaceProfilesSubscription(
+    List<String>? linkedIds,
+    int sessionGeneration,
+  ) async {
+    final generation = ++_profilesGeneration;
+    ++_locationGeneration;
+    final previousProfiles = _profilesSubscription;
+    final previousLocation = _locationSubscription;
+    _profilesSubscription = null;
+    _locationSubscription = null;
+    await Future.wait<void>([
+      if (previousProfiles != null) previousProfiles.cancel(),
+      if (previousLocation != null) previousLocation.cancel(),
+    ]);
+    if (_disposed ||
+        sessionGeneration != _sessionGeneration ||
+        generation != _profilesGeneration ||
+        linkedIds == null) {
+      return;
+    }
+    final linkedFingerprint = linkedIds.join('\u0000');
     _profilesSubscription = _firestore
         .collection(FirestoreCollections.studentProfiles)
         .where(FieldPath.documentId, whereIn: linkedIds)
         .snapshots()
         .listen(
-          _handleProfilesSnapshot,
-          onError: (_) => _setError('Unable to load linked student profiles.'),
+          (snapshot) {
+            if (_isCurrentProfiles(
+              sessionGeneration,
+              generation,
+              linkedFingerprint,
+            )) {
+              _handleProfilesSnapshot(snapshot, sessionGeneration, generation);
+            }
+          },
+          onError: (_) {
+            if (_isCurrentProfiles(
+              sessionGeneration,
+              generation,
+              linkedFingerprint,
+            )) {
+              _setError('Unable to load linked student profiles.');
+            }
+          },
         );
   }
 
-  void _handleProfilesSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+  void _handleProfilesSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    int sessionGeneration,
+    int profilesGeneration,
+  ) {
     try {
       final loaded = snapshot.docs
           .map(
@@ -205,15 +354,31 @@ class FirebaseSessionController extends ChangeNotifier {
         unawaited(membership.selectProfile(loaded.first.id));
         selectedProfile = loaded.first;
       }
-      _evaluateSelectedProfile();
+      unawaited(
+        _evaluateSelectedProfile(sessionGeneration, profilesGeneration),
+      );
     } catch (_) {
       _setError('A linked student profile is incomplete or invalid.');
     }
   }
 
-  void _evaluateSelectedProfile() {
+  Future<void> _evaluateSelectedProfile(
+    int sessionGeneration,
+    int profilesGeneration,
+  ) async {
     final profile = selectedProfile!;
-    unawaited(_locationSubscription?.cancel());
+    final generation = ++_locationGeneration;
+    final previous = _locationSubscription;
+    _locationSubscription = null;
+    await previous?.cancel();
+    if (!_isCurrentProfiles(
+          sessionGeneration,
+          profilesGeneration,
+          account!.linkedStudentProfileIds.join('\u0000'),
+        ) ||
+        generation != _locationGeneration) {
+      return;
+    }
     selectedLocationName = null;
     final locationId = profile.locationId.trim();
     switch (profile.approvalStatus) {
@@ -237,47 +402,138 @@ class FirebaseSessionController extends ChangeNotifier {
           .collection(FirestoreCollections.locations)
           .doc(locationId)
           .snapshots()
-          .listen((snapshot) {
-            final data = snapshot.data();
-            final name = data?['name'];
-            selectedLocationName = name is String && name.trim().isNotEmpty
-                ? name.trim()
-                : null;
-            if (profile.approvalStatus == StudentApprovalStatus.approved) {
-              if (data?['isActive'] == true) {
-                stage = SessionStage.approved;
-                errorMessage = null;
-              } else {
-                stage = SessionStage.disabled;
-                errorMessage = 'This academy location is unavailable.';
+          .listen(
+            (snapshot) {
+              if (!_isCurrentLocation(
+                sessionGeneration,
+                profilesGeneration,
+                generation,
+                profile.id,
+                locationId,
+              )) {
+                return;
               }
-            }
-            notifyListeners();
-          }, onError: (_) => _setError('Unable to verify academy location.'));
+              final data = snapshot.data();
+              final name = data?['name'];
+              selectedLocationName = name is String && name.trim().isNotEmpty
+                  ? name.trim()
+                  : null;
+              if (profile.approvalStatus == StudentApprovalStatus.approved) {
+                if (data?['isActive'] == true) {
+                  stage = SessionStage.approved;
+                  errorMessage = null;
+                } else {
+                  stage = SessionStage.disabled;
+                  errorMessage = 'This academy location is unavailable.';
+                }
+              }
+              notifyListeners();
+            },
+            onError: (_) {
+              if (_isCurrentLocation(
+                sessionGeneration,
+                profilesGeneration,
+                generation,
+                profile.id,
+                locationId,
+              )) {
+                _setError('Unable to verify academy location.');
+              }
+            },
+          );
     }
     errorMessage = null;
     notifyListeners();
   }
 
   void _setError(String message) {
+    if (_disposed) return;
+    ++_profilesGeneration;
+    ++_locationGeneration;
+    final profiles = _profilesSubscription;
+    final location = _locationSubscription;
+    _profilesSubscription = null;
+    _locationSubscription = null;
+    unawaited(
+      Future.wait<void>([
+        if (profiles != null) profiles.cancel(),
+        if (location != null) location.cancel(),
+      ]),
+    );
     errorMessage = message;
     stage = SessionStage.error;
     notifyListeners();
   }
 
   Future<void> _cancelFirestoreSubscriptions() async {
-    await _userSubscription?.cancel();
-    await _profilesSubscription?.cancel();
-    await _locationSubscription?.cancel();
+    final user = _userSubscription;
+    final profiles = _profilesSubscription;
+    final location = _locationSubscription;
     _userSubscription = null;
     _profilesSubscription = null;
     _locationSubscription = null;
     selectedLocationName = null;
+    await Future.wait<void>([
+      if (user != null) user.cancel(),
+      if (profiles != null) profiles.cancel(),
+      if (location != null) location.cancel(),
+    ]);
   }
+
+  bool _isCurrentSession(int generation, String uid) =>
+      listenerCallbackIsCurrent(
+        disposed: _disposed,
+        callbackGeneration: generation,
+        currentGeneration: _sessionGeneration,
+        callbackIdentity: uid,
+        currentIdentity: authUser?.uid,
+      );
+
+  bool _isCurrentProfiles(
+    int sessionGeneration,
+    int profilesGeneration,
+    String linkedFingerprint,
+  ) =>
+      !_disposed &&
+      sessionGeneration == _sessionGeneration &&
+      profilesGeneration == _profilesGeneration &&
+      account?.linkedStudentProfileIds.join('\u0000') == linkedFingerprint;
+
+  bool _isCurrentLocation(
+    int sessionGeneration,
+    int profilesGeneration,
+    int locationGeneration,
+    String profileId,
+    String locationId,
+  ) =>
+      _isCurrentProfiles(
+        sessionGeneration,
+        profilesGeneration,
+        account?.linkedStudentProfileIds.join('\u0000') ?? '',
+      ) &&
+      locationGeneration == _locationGeneration &&
+      selectedProfile?.id == profileId &&
+      selectedProfile?.locationId == locationId;
+
+  bool _isCurrentAdminLocation(
+    int sessionGeneration,
+    int locationGeneration,
+    String locationId,
+  ) =>
+      _isCurrentSession(sessionGeneration, authUser?.uid ?? '') &&
+      locationGeneration == _locationGeneration &&
+      account?.role == UserAccountRole.admin &&
+      account?.locationId == locationId;
 
   @override
   void dispose() {
-    unawaited(_authSubscription?.cancel());
+    _disposed = true;
+    ++_sessionGeneration;
+    ++_profilesGeneration;
+    ++_locationGeneration;
+    final auth = _authSubscription;
+    _authSubscription = null;
+    unawaited(auth?.cancel());
     unawaited(_cancelFirestoreSubscriptions());
     super.dispose();
   }
@@ -285,3 +541,15 @@ class FirebaseSessionController extends ChangeNotifier {
 
 final FirebaseSessionController firebaseSessionController =
     FirebaseSessionController();
+
+bool listenerCallbackIsCurrent({
+  required bool disposed,
+  required int callbackGeneration,
+  required int currentGeneration,
+  required String? callbackIdentity,
+  required String? currentIdentity,
+}) {
+  return !disposed &&
+      callbackGeneration == currentGeneration &&
+      callbackIdentity == currentIdentity;
+}

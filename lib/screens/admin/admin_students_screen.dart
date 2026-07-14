@@ -79,7 +79,11 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             : 'All belts';
         final students = _filteredStudents(allStudents, effectiveBeltFilter);
         final pendingStudents = allStudents
-            .where((student) => student.approvalStatus == 'pending')
+            .where(
+              (student) =>
+                  student.approvalStatus == 'pending' &&
+                  student.matchesSearch(_searchController.text),
+            )
             .toList();
 
         return AdminPageShell(
@@ -138,14 +142,24 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Reject ${student.name}?'),
-          content: TextField(
-            controller: controller,
-            maxLength: 500,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Reason (optional)',
-              border: OutlineInputBorder(),
-            ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\nOnly this profile will be rejected.',
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                maxLength: 500,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason (optional)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -167,7 +181,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         builder: (context) => AlertDialog(
           title: Text('Approve ${student.name}?'),
           content: Text(
-            'Approve this profile for ${student.locationId}. Other family profiles will not be changed.',
+            '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\n\nApprove only this profile? Other family profiles will not be changed.',
           ),
           actions: [
             TextButton(
@@ -213,9 +227,6 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   }
 
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
-    // TODO: Add Firestore-backed student profile writes from this detail view.
-    // TODO: Resolve guardian user IDs to display names once admin user reads
-    // are available.
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -279,7 +290,7 @@ class _PendingMembershipPanel extends StatelessWidget {
               child: ListTile(
                 title: Text(student.name),
                 subtitle: Text(
-                  '${student.belt} • ${student.locationId}\nGuardian: ${student.guardianEmail ?? 'Not provided'}',
+                  '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\nSubmitted: ${student.submittedLabel}',
                 ),
                 isThreeLine: true,
                 trailing: Wrap(
@@ -562,7 +573,8 @@ class _StudentDetailSheet extends StatelessWidget {
               _DetailRow(label: 'Name', value: student.name),
               _DetailRow(label: 'Age', value: '${student.age}'),
               _DetailRow(label: 'Belt', value: student.belt),
-              _DetailRow(label: 'Location', value: student.locationId),
+              _DetailRow(label: 'Academy', value: student.academyLabel),
+              _DetailRow(label: 'Submitted', value: student.submittedLabel),
               _DetailRow(label: 'Status', value: student.approvalStatus),
             ],
           ),
@@ -639,6 +651,7 @@ class _AdminStudentRecord {
     required this.guardianUserIds,
     required this.guardianEmail,
     required this.approvalStatus,
+    required this.updatedAt,
   });
 
   factory _AdminStudentRecord.fromProfile(StudentProfile profile) {
@@ -655,6 +668,7 @@ class _AdminStudentRecord {
       guardianUserIds: profile.guardianUserIds,
       guardianEmail: profile.guardianEmail,
       approvalStatus: profile.approvalStatus.name,
+      updatedAt: profile.updatedAt ?? profile.createdAt,
     );
   }
 
@@ -670,13 +684,37 @@ class _AdminStudentRecord {
   final List<String> guardianUserIds;
   final String? guardianEmail;
   final String approvalStatus;
+  final DateTime? updatedAt;
+
+  String get academyLabel {
+    final session = firebaseSessionController;
+    if (session.selectedProfile?.locationId == locationId &&
+        session.selectedLocationName?.trim().isNotEmpty == true) {
+      return session.selectedLocationName!;
+    }
+    return locationId.isEmpty ? 'No academy selected' : locationId;
+  }
+
+  String get submittedLabel {
+    final value = updatedAt?.toLocal();
+    if (value == null) return 'Date unavailable';
+    return '${value.month}/${value.day}/${value.year}';
+  }
+
+  bool matchesSearch(String rawQuery) {
+    final query = rawQuery.trim().toLowerCase();
+    if (query.isEmpty) return true;
+    return name.toLowerCase().contains(query) ||
+        locationId.toLowerCase().contains(query) ||
+        (guardianEmail?.toLowerCase().contains(query) ?? false);
+  }
 
   String get guardianLabel {
     if (guardianUserIds.isEmpty) {
       return 'No parent/guardian linked.';
     }
 
-    return 'Guardian linked; account details coming later.';
+    return 'Linked account IDs: ${guardianUserIds.join(', ')}';
   }
 
   bool hasSharedGuardianWith(_AdminStudentRecord other) {
