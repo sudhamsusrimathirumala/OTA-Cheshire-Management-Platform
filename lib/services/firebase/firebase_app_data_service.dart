@@ -10,7 +10,6 @@ import '../../models/academy_resource.dart';
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
 import '../../models/notification_item.dart';
-import '../../models/membership_application.dart';
 import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
@@ -29,7 +28,7 @@ const _debugAdminAccount = UserAccount(
   lastName: 'Admin',
   email: 'debug-admin@example.invalid',
   role: UserAccountRole.admin,
-  approvalStatus: UserAccountApprovalStatus.approved,
+  isActive: true,
   linkedStudentProfileIds: [],
   locationId: LocationTimeService.otaCheshireLocationId,
 );
@@ -55,8 +54,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   List<AcademyEvent> _events = const <AcademyEvent>[];
   List<AcademyResource> _resources = const <AcademyResource>[];
   List<StudentProfile> _adminStudentProfiles = const <StudentProfile>[];
-  List<MembershipApplication> _membershipApplications =
-      const <MembershipApplication>[];
+  List<UserAccount> _adminUserAccounts = const <UserAccount>[];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _scheduleSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -67,7 +65,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _adminStudentsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-  _membershipApplicationsSubscription;
+  _adminUsersSubscription;
   final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
   _superAdminContentSubscriptions = [];
   final Map<String, Map<int, List<ClassSession>>> _superAdminSchedules = {};
@@ -88,8 +86,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String? _resourcesErrorMessage;
   bool _isAdminStudentsLoading = true;
   String? _adminStudentsErrorMessage;
-  bool _isMembershipApplicationsLoading = true;
-  String? _membershipApplicationsErrorMessage;
+  bool _isAdminUsersLoading = true;
+  String? _adminUsersErrorMessage;
   bool _isUsingFallbackData = false;
   DebugViewMode _developmentViewMode = DebugViewMode.none;
   String? _listeningLocationId;
@@ -105,7 +103,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     if (_developmentViewActive) {
       _stopFirestoreListeners();
       _useFallbackDataForUnavailableFirebase();
-    } else if (firebaseSessionController.stage != SessionStage.approved &&
+    } else if (firebaseSessionController.stage != SessionStage.member &&
         firebaseSessionController.stage != SessionStage.admin) {
       _clearData();
     }
@@ -121,7 +119,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         account?.role == UserAccountRole.superAdmin;
     final locationId = session.stage == SessionStage.admin
         ? account?.locationId
-        : session.stage == SessionStage.approved
+        : session.stage == SessionStage.member
         ? profile?.locationId
         : null;
     if (!superAdmin && (locationId == null || locationId.isEmpty)) {
@@ -159,14 +157,16 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       if (superAdmin) {
         _listenToSuperAdminContent(firestore);
       } else {
-        _listenToSchedule(firestore, locationId, false);
-        _listenToAnnouncements(firestore, locationId, false);
-        _listenToEvents(firestore, locationId, false);
-        _listenToResources(firestore, locationId, false);
+        final studentView =
+            firebaseSessionController.stage == SessionStage.member;
+        _listenToSchedule(firestore, locationId, studentView);
+        _listenToAnnouncements(firestore, locationId, studentView);
+        _listenToEvents(firestore, locationId, studentView);
+        _listenToResources(firestore, locationId, studentView);
       }
       if (firebaseSessionController.stage == SessionStage.admin) {
         _listenToAdminStudents(firestore, locationId, superAdmin);
-        _listenToMembershipApplications(firestore, locationId, superAdmin);
+        _listenToAdminUsers(firestore, locationId, superAdmin);
       }
     } catch (error) {
       _debugFirebaseError('startup', error);
@@ -180,14 +180,14 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
-    unawaited(_membershipApplicationsSubscription?.cancel());
+    unawaited(_adminUsersSubscription?.cancel());
     _cancelSuperAdminContentListeners();
     _scheduleSubscription = null;
     _announcementsSubscription = null;
     _eventsSubscription = null;
     _resourcesSubscription = null;
     _adminStudentsSubscription = null;
-    _membershipApplicationsSubscription = null;
+    _adminUsersSubscription = null;
     _listeningLocationId = null;
     _listeningAsSuperAdmin = false;
     _clearData();
@@ -201,7 +201,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _events = const <AcademyEvent>[];
     _resources = const <AcademyResource>[];
     _adminStudentProfiles = const <StudentProfile>[];
-    _membershipApplications = const <MembershipApplication>[];
+    _adminUserAccounts = const <UserAccount>[];
     _superAdminSchedules.clear();
     _superAdminAnnouncements.clear();
     _superAdminEvents.clear();
@@ -214,13 +214,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isEventsLoading = true;
     _isResourcesLoading = true;
     _isAdminStudentsLoading = true;
-    _isMembershipApplicationsLoading = true;
+    _isAdminUsersLoading = true;
     _scheduleErrorMessage = null;
     _announcementsErrorMessage = null;
     _eventsErrorMessage = null;
     _resourcesErrorMessage = null;
     _adminStudentsErrorMessage = null;
-    _membershipApplicationsErrorMessage = null;
+    _adminUsersErrorMessage = null;
   }
 
   void _useFallbackDataForUnavailableFirebase() {
@@ -231,13 +231,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _isEventsLoading = false;
       _isResourcesLoading = false;
       _isAdminStudentsLoading = false;
-      _isMembershipApplicationsLoading = false;
+      _isAdminUsersLoading = false;
       _scheduleErrorMessage = 'Firebase data is unavailable.';
       _announcementsErrorMessage = 'Firebase data is unavailable.';
       _eventsErrorMessage = 'Firebase data is unavailable.';
       _resourcesErrorMessage = 'Firebase data is unavailable.';
       _adminStudentsErrorMessage = 'Firebase data is unavailable.';
-      _membershipApplicationsErrorMessage = 'Firebase data is unavailable.';
+      _adminUsersErrorMessage = 'Firebase data is unavailable.';
       return;
     }
     _schedule = _fallbackService.schedule;
@@ -246,31 +246,32 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _events = _fallbackService.events;
     _resources = _fallbackService.resources;
     _adminStudentProfiles = _fallbackService.adminStudentProfiles;
-    _membershipApplications = _fallbackService.adminMembershipApplications;
+    _adminUserAccounts = _fallbackService.adminUserAccounts;
     _isUsingFallbackData = true;
     _isScheduleLoading = false;
     _isAnnouncementsLoading = false;
     _isEventsLoading = false;
     _isResourcesLoading = false;
     _isAdminStudentsLoading = false;
-    _isMembershipApplicationsLoading = false;
+    _isAdminUsersLoading = false;
     _scheduleErrorMessage = null;
     _announcementsErrorMessage = null;
     _eventsErrorMessage = null;
     _resourcesErrorMessage = null;
     _adminStudentsErrorMessage = null;
-    _membershipApplicationsErrorMessage = null;
+    _adminUsersErrorMessage = null;
   }
 
   void _listenToSchedule(
     FirebaseFirestore firestore,
     String? locationId,
-    bool superAdmin,
+    bool publishedOnly,
   ) {
     Query<Map<String, dynamic>> query = firestore.collection(
       FirestoreCollections.classSessions,
     );
-    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    query = query.where('locationId', isEqualTo: locationId);
+    if (publishedOnly) query = query.where('isActive', isEqualTo: true);
     _scheduleSubscription = query.snapshots().listen(
       _handleScheduleSnapshot,
       onError: _handleScheduleError,
@@ -280,12 +281,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _listenToAnnouncements(
     FirebaseFirestore firestore,
     String? locationId,
-    bool superAdmin,
+    bool publishedOnly,
   ) {
     Query<Map<String, dynamic>> query = firestore.collection(
       FirestoreCollections.announcements,
     );
-    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    query = query.where('locationId', isEqualTo: locationId);
+    if (publishedOnly) query = query.where('status', isEqualTo: 'published');
     _announcementsSubscription = query.snapshots().listen(
       _handleAnnouncementsSnapshot,
       onError: _handleAnnouncementsError,
@@ -295,12 +297,17 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _listenToEvents(
     FirebaseFirestore firestore,
     String? locationId,
-    bool superAdmin,
+    bool publishedOnly,
   ) {
     Query<Map<String, dynamic>> query = firestore.collection(
       FirestoreCollections.events,
     );
-    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    query = query.where('locationId', isEqualTo: locationId);
+    if (publishedOnly) {
+      query = query
+          .where('isPublished', isEqualTo: true)
+          .where('isArchived', isEqualTo: false);
+    }
     _eventsSubscription = query.snapshots().listen(
       _handleEventsSnapshot,
       onError: _handleEventsError,
@@ -310,12 +317,17 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _listenToResources(
     FirebaseFirestore firestore,
     String? locationId,
-    bool superAdmin,
+    bool publishedOnly,
   ) {
     Query<Map<String, dynamic>> query = firestore.collection(
       FirestoreCollections.resources,
     );
-    if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    query = query.where('locationId', isEqualTo: locationId);
+    if (publishedOnly) {
+      query = query
+          .where('isPublished', isEqualTo: true)
+          .where('isArchived', isEqualTo: false);
+    }
     _resourcesSubscription = query.snapshots().listen(
       _handleResourcesSnapshot,
       onError: _handleResourcesError,
@@ -337,45 +349,18 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
   }
 
-  void _listenToMembershipApplications(
+  void _listenToAdminUsers(
     FirebaseFirestore firestore,
     String? locationId,
     bool superAdmin,
   ) {
     Query<Map<String, dynamic>> query = firestore.collection(
-      FirestoreCollections.membershipApplications,
+      FirestoreCollections.users,
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
-    _membershipApplicationsSubscription = query.snapshots().listen(
-      (snapshot) {
-        final activeIds = _adminLocations.activeLocationIds;
-        _membershipApplications =
-            snapshot.docs
-                .map(
-                  (document) => membershipApplicationFromFirestoreData(
-                    document.id,
-                    document.data(),
-                  ),
-                )
-                .whereType<MembershipApplication>()
-                .where(
-                  (application) =>
-                      !superAdmin || activeIds.contains(application.locationId),
-                )
-                .toList()
-              ..sort((a, b) => b.appliedAt.compareTo(a.appliedAt));
-        _isMembershipApplicationsLoading = false;
-        _membershipApplicationsErrorMessage = null;
-        notifyListeners();
-      },
-      onError: (Object error) {
-        _membershipApplications = const [];
-        _isMembershipApplicationsLoading = false;
-        _membershipApplicationsErrorMessage =
-            'Unable to load membership applications from Firestore.';
-        _debugFirebaseError('membership applications', error);
-        notifyListeners();
-      },
+    _adminUsersSubscription = query.snapshots().listen(
+      _handleAdminUsersSnapshot,
+      onError: _handleAdminUsersError,
     );
   }
 
@@ -610,7 +595,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _schedule = _scheduleFromSnapshot(snapshot);
     _isUsingFallbackData = false;
     if (_latestAnnouncementsSnapshot != null &&
-        firebaseSessionController.stage == SessionStage.approved) {
+        firebaseSessionController.stage == SessionStage.member) {
       _notifications = _announcementsFromSnapshot(
         _latestAnnouncementsSnapshot!,
       );
@@ -636,7 +621,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminAnnouncements = firebaseSessionController.stage == SessionStage.admin
         ? _adminAnnouncementsFromSnapshot(snapshot)
         : const <AcademyAnnouncement>[];
-    _notifications = firebaseSessionController.stage == SessionStage.approved
+    _notifications = firebaseSessionController.stage == SessionStage.member
         ? _announcementsFromSnapshot(snapshot)
         : const <NotificationItem>[];
     _isUsingFallbackData = false;
@@ -707,6 +692,40 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     notifyListeners();
   }
 
+  void _handleAdminUsersSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    _adminUserAccounts =
+        snapshot.docs
+            .map((document) {
+              try {
+                return userAccountFromFirestoreData(
+                  document.id,
+                  document.data(),
+                );
+              } on FormatException {
+                return null;
+              }
+            })
+            .whereType<UserAccount>()
+            .where(
+              (account) =>
+                  account.role == UserAccountRole.student ||
+                  account.role == UserAccountRole.parent,
+            )
+            .toList()
+          ..sort((a, b) => a.displayName.compareTo(b.displayName));
+    _isAdminUsersLoading = false;
+    _adminUsersErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleAdminUsersError(Object error) {
+    _adminUserAccounts = const <UserAccount>[];
+    _isAdminUsersLoading = false;
+    _adminUsersErrorMessage = 'Unable to load account holders from Firestore.';
+    _debugFirebaseError('account holders', error);
+    notifyListeners();
+  }
+
   void _debugFirebaseError(String area, Object error) {
     if (!kDebugMode) return;
     if (error is FirebaseException) {
@@ -725,7 +744,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
-    unawaited(_membershipApplicationsSubscription?.cancel());
+    unawaited(_adminUsersSubscription?.cancel());
     _cancelSuperAdminContentListeners();
     super.dispose();
   }
@@ -750,50 +769,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   List<StudentProfile> get adminStudentProfiles => _adminStudentProfiles;
 
   @override
-  List<MembershipApplication> get adminMembershipApplications {
-    final applications = <MembershipApplication>[..._membershipApplications];
-    for (final profile in _adminStudentProfiles) {
-      if (profile.approvalStatus != StudentApprovalStatus.pending ||
-          (profile.applicationId?.isNotEmpty ?? false)) {
-        continue;
-      }
-      applications.add(_legacyApplicationFor(profile));
-    }
-    applications.sort((a, b) => b.appliedAt.compareTo(a.appliedAt));
-    return List.unmodifiable(applications);
-  }
-
-  MembershipApplication _legacyApplicationFor(StudentProfile profile) {
-    final applicantUserId =
-        profile.linkedUserId ??
-        (profile.guardianUserIds.isEmpty
-            ? 'legacy-${profile.id}'
-            : profile.guardianUserIds.first);
-    return MembershipApplication(
-      id: 'legacy-${profile.id}',
-      applicantUserId: applicantUserId,
-      applicant: MembershipApplicantSnapshot(
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        email: profile.guardianEmail ?? 'Not provided',
-        role: profile.linkedUserId == null ? 'parent' : 'student',
-      ),
-      locationId: profile.locationId,
-      studentProfileIds: [profile.id],
-      status: MembershipApplicationStatus.pending,
-      appliedAt:
-          profile.appliedAt ??
-          profile.updatedAt ??
-          profile.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      updatedAt:
-          profile.updatedAt ??
-          profile.appliedAt ??
-          profile.createdAt ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      isLegacy: true,
-    );
-  }
+  List<UserAccount> get adminUserAccounts => _adminUserAccounts;
 
   @override
   StudentProfile get selectedStudentProfile =>
@@ -832,18 +808,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String? get resourcesErrorMessage => _resourcesErrorMessage;
 
   @override
-  bool get isAdminStudentsLoading => _isAdminStudentsLoading;
+  bool get isAdminStudentsLoading =>
+      _isAdminStudentsLoading || _isAdminUsersLoading;
 
   @override
-  String? get adminStudentsErrorMessage => _adminStudentsErrorMessage;
-
-  @override
-  bool get isMembershipApplicationsLoading =>
-      _isMembershipApplicationsLoading || _isAdminStudentsLoading;
-
-  @override
-  String? get membershipApplicationsErrorMessage =>
-      _membershipApplicationsErrorMessage ?? _adminStudentsErrorMessage;
+  String? get adminStudentsErrorMessage =>
+      _adminStudentsErrorMessage ?? _adminUsersErrorMessage;
 
   @override
   void retryLiveData() {
@@ -922,7 +892,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       if (session == null || !_recordIsInSessionScope(session.locationId)) {
         continue;
       }
-      if (firebaseSessionController.stage == SessionStage.approved &&
+      if (firebaseSessionController.stage == SessionStage.member &&
           !session.isPublished) {
         continue;
       }
@@ -1326,7 +1296,7 @@ bool recordIsInDataScope({
     return role == UserAccountRole.superAdmin ||
         accountLocationId == recordLocationId;
   }
-  return stage == SessionStage.approved &&
+  return stage == SessionStage.member &&
       selectedProfileLocationId == recordLocationId;
 }
 
@@ -1398,63 +1368,6 @@ AcademyEvent? academyEventFromFirestoreData(
   );
 }
 
-MembershipApplication? membershipApplicationFromFirestoreData(
-  String id,
-  Map<String, dynamic> data,
-) {
-  final applicantUserId = _stringValue(data['applicantUserId']);
-  final locationId = _stringValue(data['locationId']);
-  final profileIds = _stringListValue(data['studentProfileIds']);
-  final appliedAt = _dateTimeValue(data['appliedAt']);
-  final updatedAt = _dateTimeValue(data['updatedAt']);
-  final snapshot = data['applicantSnapshot'];
-  if (applicantUserId == null ||
-      locationId == null ||
-      profileIds.isEmpty ||
-      profileIds.toSet().length != profileIds.length ||
-      appliedAt == null ||
-      updatedAt == null ||
-      snapshot is! Map) {
-    return null;
-  }
-  final firstName = _stringValue(snapshot['firstName']);
-  final lastName = _stringValue(snapshot['lastName']);
-  final email = _stringValue(snapshot['email']);
-  final role = _stringValue(snapshot['role']);
-  final status = switch (data['status']) {
-    'pending' => MembershipApplicationStatus.pending,
-    'approved' => MembershipApplicationStatus.approved,
-    'rejected' => MembershipApplicationStatus.rejected,
-    _ => null,
-  };
-  if (firstName == null ||
-      lastName == null ||
-      email == null ||
-      role == null ||
-      status == null) {
-    return null;
-  }
-  return MembershipApplication(
-    id: id,
-    applicantUserId: applicantUserId,
-    applicant: MembershipApplicantSnapshot(
-      firstName: firstName,
-      lastName: lastName,
-      email: email,
-      role: role,
-      phoneNumber: _stringValue(snapshot['phoneNumber']),
-    ),
-    locationId: locationId,
-    studentProfileIds: profileIds,
-    status: status,
-    appliedAt: appliedAt,
-    updatedAt: updatedAt,
-    reviewedAt: _dateTimeValue(data['reviewedAt']),
-    reviewedBy: _stringValue(data['reviewedBy']),
-    rejectionReason: _stringValue(data['rejectionReason']),
-  );
-}
-
 StudentProfile? studentProfileFromFirestoreData(
   String id,
   Map<String, dynamic> data,
@@ -1464,14 +1377,15 @@ StudentProfile? studentProfileFromFirestoreData(
   final name = firstName != null && lastName != null
       ? '$firstName $lastName'
       : _stringValue(data['fullName']) ?? _stringValue(data['name']);
-  final locationId = _stringValue(data['locationId']) ?? '';
+  final locationId = _stringValue(data['locationId']);
   final belt = _stringValue(data['beltRank']) ?? _stringValue(data['belt']);
   final dateOfBirth = _dateTimeValue(data['dateOfBirth']);
-  // TODO: Remove the legacy age fallback after the approved profiles have
-  // been updated with dateOfBirth.
+  // Remove the legacy age fallback after canonical profiles have dateOfBirth.
   final legacyAge = dateOfBirth == null ? _intValue(data['age']) : null;
   if (name == null ||
+      locationId == null ||
       belt == null ||
+      data['isActive'] is! bool ||
       (dateOfBirth == null && legacyAge == null)) {
     return null;
   }
@@ -1499,36 +1413,18 @@ StudentProfile? studentProfileFromFirestoreData(
         _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
     linkedUserId:
         _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
-    approvalStatus: _studentApprovalStatus(data['approvalStatus']),
-    familyApplicationId: _stringValue(data['familyApplicationId']),
     preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
     promotionHistory: _stringListValue(data['promotionHistory']),
     testingNotes: _stringListValue(data['testingNotes']),
-    isActive: _boolValue(data['isActive']) ?? true,
+    isActive: data['isActive'] as bool,
     createdAt: _dateTimeValue(data['createdAt']),
     updatedAt: _dateTimeValue(data['updatedAt']),
-    reviewedAt: _dateTimeValue(data['reviewedAt']),
-    reviewedBy: _stringValue(data['reviewedBy']),
-    rejectionReason: _stringValue(data['rejectionReason']),
-    applicationId: _stringValue(data['applicationId']),
-    appliedAt: _dateTimeValue(data['appliedAt']),
   );
 }
 
 String? _normalizedOptionalEmail(Object? value) {
   final email = _stringValue(value);
   return email?.toLowerCase();
-}
-
-StudentApprovalStatus _studentApprovalStatus(Object? value) {
-  return switch (value) {
-    'incomplete' => StudentApprovalStatus.incomplete,
-    'pending' => StudentApprovalStatus.pending,
-    'approved' => StudentApprovalStatus.approved,
-    'rejected' => StudentApprovalStatus.rejected,
-    'disabled' => StudentApprovalStatus.disabled,
-    _ => StudentApprovalStatus.disabled,
-  };
 }
 
 bool? _boolValue(Object? value) {

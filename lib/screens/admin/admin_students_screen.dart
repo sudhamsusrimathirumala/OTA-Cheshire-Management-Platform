@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../models/membership_application.dart';
 import '../../models/student_profile.dart';
+import '../../models/user_account.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/location_time_service.dart';
-import '../../services/firebase/firebase_session_controller.dart';
-import '../../services/firebase/profile_membership_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -24,42 +22,6 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   var _activeOnly = true;
   var _ageFilter = _AgeFilter.all;
 
-  List<_AdminStudentRecord> _studentsFromProfiles(
-    List<StudentProfile> profiles,
-  ) {
-    return [
-      for (final profile in profiles) _AdminStudentRecord.fromProfile(profile),
-    ]..sort((a, b) => a.name.compareTo(b.name));
-  }
-
-  List<_AdminStudentRecord> _filteredStudents(
-    List<_AdminStudentRecord> students,
-    String beltFilter,
-  ) {
-    final query = _searchController.text.trim().toLowerCase();
-
-    return students.where((student) {
-      final matchesSearch =
-          query.isEmpty || student.name.toLowerCase().contains(query);
-      final matchesBelt =
-          beltFilter == 'All belts' || student.belt == beltFilter;
-      final matchesActive = !_activeOnly || student.isActive;
-      final matchesAge = switch (_ageFilter) {
-        _AgeFilter.all => true,
-        _AgeFilter.minor => student.age < 18,
-        _AgeFilter.adult => student.age >= 18,
-      };
-
-      return matchesSearch && matchesBelt && matchesActive && matchesAge;
-    }).toList();
-  }
-
-  List<String> _beltOptions(List<_AdminStudentRecord> students) {
-    final belts = {for (final student in students) student.belt}.toList()
-      ..sort();
-    return ['All belts', ...belts];
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -70,63 +32,42 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: appDataService,
-      builder: (context, child) {
-        final allStudents = _studentsFromProfiles(
+      builder: (context, _) {
+        final allStudents = _records(
           appDataService.adminStudentProfiles,
+          appDataService.adminUserAccounts,
         );
-        final beltOptions = _beltOptions(allStudents);
-        final effectiveBeltFilter = beltOptions.contains(_beltFilter)
+        final belts = {
+          for (final student in allStudents) student.profile.belt,
+        }.toList()..sort();
+        final beltOptions = ['All belts', ...belts];
+        final effectiveBelt = beltOptions.contains(_beltFilter)
             ? _beltFilter
             : 'All belts';
-        final students = _filteredStudents(allStudents, effectiveBeltFilter);
-        final pendingApplications = appDataService.adminMembershipApplications
-            .where(
-              (application) =>
-                  application.status == MembershipApplicationStatus.pending &&
-                  (!adminLocationController.isSuperAdmin ||
-                      adminLocationController.activeLocationIds.contains(
-                        application.locationId,
-                      )),
-            )
-            .toList();
-        final isDebugAdmin = adminLocationController.isDebugAdmin;
+        final students = _filtered(allStudents, effectiveBelt);
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.students,
           title: 'Students',
-          subtitle: 'Search and view student profiles.',
+          subtitle: 'Search and view student profiles for your academy.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _PendingMembershipPanel(
-                applications: pendingApplications,
-                profiles: appDataService.adminStudentProfiles,
-                isLoading: appDataService.isMembershipApplicationsLoading,
-                errorMessage: appDataService.membershipApplicationsErrorMessage,
-                locationName: _currentAdminLocationName(),
-                isDevelopmentMockData: isDebugAdmin,
-                onOpenApplication: _openApplicationDetail,
-              ),
-              const SizedBox(height: 14),
               _StudentToolbar(
                 searchController: _searchController,
-                beltFilter: effectiveBeltFilter,
+                beltFilter: effectiveBelt,
                 beltOptions: beltOptions,
                 activeOnly: _activeOnly,
                 ageFilter: _ageFilter,
                 shownCount: students.length,
                 onSearchChanged: (_) => setState(() {}),
                 onBeltChanged: (value) {
-                  if (value != null) {
-                    setState(() => _beltFilter = value);
-                  }
+                  if (value != null) setState(() => _beltFilter = value);
                 },
-                onActiveOnlyChanged: (value) {
-                  setState(() => _activeOnly = value);
-                },
-                onAgeFilterChanged: (value) {
-                  setState(() => _ageFilter = value);
-                },
+                onActiveOnlyChanged: (value) =>
+                    setState(() => _activeOnly = value),
+                onAgeFilterChanged: (value) =>
+                    setState(() => _ageFilter = value),
               ),
               const SizedBox(height: 14),
               _StudentsPanel(
@@ -143,131 +84,60 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     );
   }
 
-  Future<bool> _reviewApplication(
-    MembershipApplication application,
-    bool approve,
-  ) async {
-    if (adminLocationController.isDebugAdmin) return false;
-    String? reason;
-    if (!approve) {
-      final controller = TextEditingController();
-      reason = await showDialog<String>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Reject entire application?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'All ${application.studentProfileIds.length} included student '
-                'profile${application.studentProfileIds.length == 1 ? '' : 's'} '
-                'will be rejected together.',
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                maxLength: 500,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Reason (optional)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, controller.text),
-              child: const Text('Reject'),
-            ),
-          ],
+  List<_AdminStudentRecord> _records(
+    List<StudentProfile> profiles,
+    List<UserAccount> accounts,
+  ) {
+    final records = [
+      for (final profile in profiles)
+        _AdminStudentRecord(
+          profile: profile,
+          account: accountHolderForProfile(profile, accounts),
         ),
-      );
-      controller.dispose();
-      if (reason == null) return false;
-    } else {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Approve entire application?'),
-          content: Text(
-            'All ${application.studentProfileIds.length} included student '
-            'profile${application.studentProfileIds.length == 1 ? '' : 's'} '
-            'will be approved together.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Approve'),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true) return false;
-    }
-    try {
-      if (application.isLegacy) {
-        await firebaseSessionController.membership.reviewMembership(
-          MembershipReviewRequest(
-            profileId: application.studentProfileIds.single,
-            approve: approve,
-            rejectionReason: reason,
-          ),
-        );
-      } else {
-        await firebaseSessionController.membership.reviewMembershipApplication(
-          MembershipApplicationReviewRequest(
-            applicationId: application.id,
-            approve: approve,
-            rejectionReason: reason,
-          ),
-        );
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '${application.applicant.displayName}\'s application was '
-              '${approve ? 'approved' : 'rejected'}.',
-            ),
-          ),
-        );
-      }
-      return true;
-    } on MembershipServiceException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error.message),
-            backgroundColor: OtaColors.actionRed,
-          ),
-        );
-      }
-      return false;
-    }
+    ]..sort((a, b) => a.profile.name.compareTo(b.profile.name));
+    return records;
   }
 
-  String _currentAdminLocationName() {
-    if (adminLocationController.isDebugAdmin) return 'Sample Admin View';
-    if (adminLocationController.isSuperAdmin) {
-      return adminLocationController.selectedLocation?.name ??
-          'All active academy locations';
-    }
-    return adminLocationController.assignedLocation?.name ??
-        firebaseSessionController.selectedLocationName ??
-        'Assigned academy location';
+  List<_AdminStudentRecord> _filtered(
+    List<_AdminStudentRecord> students,
+    String beltFilter,
+  ) {
+    final query = _searchController.text.trim().toLowerCase();
+    return students.where((student) {
+      final profile = student.profile;
+      final age = const LocationTimeService().ageForStudent(profile);
+      final matchesSearch =
+          query.isEmpty ||
+          profile.name.toLowerCase().contains(query) ||
+          (student.account?.displayName.toLowerCase().contains(query) ??
+              false) ||
+          (student.account?.email.toLowerCase().contains(query) ?? false) ||
+          (profile.guardianEmail?.toLowerCase().contains(query) ?? false);
+      final matchesBelt =
+          beltFilter == 'All belts' || profile.belt == beltFilter;
+      final matchesActive = !_activeOnly || profile.isActive;
+      final matchesAge = switch (_ageFilter) {
+        _AgeFilter.all => true,
+        _AgeFilter.minor => age < 18,
+        _AgeFilter.adult => age >= 18,
+      };
+      return matchesSearch && matchesBelt && matchesActive && matchesAge;
+    }).toList();
   }
 
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
+    final all = _records(
+      appDataService.adminStudentProfiles,
+      appDataService.adminUserAccounts,
+    );
+    final related = all
+        .where(
+          (candidate) =>
+              candidate.profile.id != student.profile.id &&
+              candidate.account?.id != null &&
+              candidate.account?.id == student.account?.id,
+        )
+        .toList();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -276,299 +146,22 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) {
-        final allStudents = _studentsFromProfiles(
-          appDataService.adminStudentProfiles,
-        );
-        final relatedStudents = allStudents
-            .where(
-              (candidate) =>
-                  candidate.id != student.id &&
-                  candidate.hasSharedGuardianWith(student),
-            )
-            .toList();
-
-        return _StudentDetailSheet(
-          student: student,
-          relatedStudents: relatedStudents,
-        );
-      },
-    );
-  }
-
-  Future<void> _openApplicationDetail(MembershipApplication application) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: OtaColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
-      ),
-      builder: (sheetContext) => _MembershipApplicationDetailSheet(
-        application: application,
-        profiles: application.profilesFrom(appDataService.adminStudentProfiles),
-        reviewEnabled: !adminLocationController.isDebugAdmin,
-        onApprove: () async {
-          final reviewed = await _reviewApplication(application, true);
-          if (reviewed && sheetContext.mounted) {
-            Navigator.pop(sheetContext);
-          }
-        },
-        onReject: () async {
-          final reviewed = await _reviewApplication(application, false);
-          if (reviewed && sheetContext.mounted) {
-            Navigator.pop(sheetContext);
-          }
-        },
-      ),
+      builder: (context) =>
+          _StudentDetailSheet(student: student, relatedStudents: related),
     );
   }
 }
 
-class _PendingMembershipPanel extends StatelessWidget {
-  const _PendingMembershipPanel({
-    required this.applications,
-    required this.profiles,
-    required this.isLoading,
-    required this.errorMessage,
-    required this.locationName,
-    required this.isDevelopmentMockData,
-    required this.onOpenApplication,
-  });
-  final List<MembershipApplication> applications;
-  final List<StudentProfile> profiles;
-  final bool isLoading;
-  final String? errorMessage;
-  final String locationName;
-  final bool isDevelopmentMockData;
-  final ValueChanged<MembershipApplication> onOpenApplication;
-
-  @override
-  Widget build(BuildContext context) => _AdminPanel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Pending membership review',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '$locationName • ${applications.length} application'
-          '${applications.length == 1 ? '' : 's'} awaiting review',
-        ),
-        const SizedBox(height: 12),
-        if (isDevelopmentMockData)
-          const Card(
-            color: Color(0xFFFFF4D6),
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Text(
-                'Development Mock Data: this Sample Admin View does not load real Firestore applications, and review actions are disabled.',
-              ),
-            ),
-          ),
-        if (isLoading)
-          const _LoadingState(message: 'Loading membership applications...')
-        else if (errorMessage != null)
-          Text(
-            'Unable to load applications. $errorMessage',
-            style: const TextStyle(color: OtaColors.actionRed),
-          )
-        else if (applications.isEmpty)
-          const Text('No pending applications.')
-        else
-          for (final application in applications)
-            Card(
-              child: ListTile(
-                onTap: () => onOpenApplication(application),
-                title: Text(application.applicant.displayName),
-                subtitle: Text(
-                  '${_roleLabel(application.applicant.role)} • '
-                  '${application.applicant.email}\n'
-                  '${_locationName(application.locationId)} • '
-                  '${application.studentProfileIds.length} student profile'
-                  '${application.studentProfileIds.length == 1 ? '' : 's'}\n'
-                  '${_studentNames(application, profiles)}\n'
-                  'Applied: ${const LocationTimeService().formatDateTime(application.appliedAt, application.locationId)} • '
-                  '${application.status.name}'
-                  '${application.isLegacy ? ' • Legacy' : ''}',
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-              ),
-            ),
-      ],
-    ),
-  );
-}
-
-class _MembershipApplicationDetailSheet extends StatelessWidget {
-  const _MembershipApplicationDetailSheet({
-    required this.application,
-    required this.profiles,
-    required this.reviewEnabled,
-    required this.onApprove,
-    required this.onReject,
-  });
-
-  final MembershipApplication application;
-  final List<StudentProfile> profiles;
-  final bool reviewEnabled;
-  final Future<void> Function() onApprove;
-  final Future<void> Function() onReject;
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: EdgeInsets.fromLTRB(
-      18,
-      14,
-      18,
-      18 + MediaQuery.viewInsetsOf(context).bottom,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _SheetHeader(
-          title: application.applicant.displayName,
-          subtitle:
-              '${_locationName(application.locationId)} • '
-              '${application.studentProfileIds.length} student profile'
-              '${application.studentProfileIds.length == 1 ? '' : 's'}',
-        ),
-        const SizedBox(height: 14),
-        _DetailSection(
-          title: 'Applicant',
-          children: [
-            _DetailRow(label: 'Name', value: application.applicant.displayName),
-            _DetailRow(label: 'Email', value: application.applicant.email),
-            _DetailRow(
-              label: 'Phone',
-              value: application.applicant.phoneNumber ?? 'Not provided',
-            ),
-            _DetailRow(
-              label: 'Role',
-              value: _roleLabel(application.applicant.role),
-            ),
-            _DetailRow(
-              label: 'Applied',
-              value: const LocationTimeService().formatDateTime(
-                application.appliedAt,
-                application.locationId,
-              ),
-            ),
-            _DetailRow(label: 'Status', value: application.status.name),
-          ],
-        ),
-        const SizedBox(height: 12),
-        for (final profile in profiles) ...[
-          _MembershipStudentSection(profile: profile),
-          const SizedBox(height: 12),
-        ],
-        if (profiles.length != application.studentProfileIds.length)
-          const _AdminPanel(
-            child: Text(
-              'One or more included student profiles are unavailable. Review '
-              'will remain atomic and will fail if every profile cannot be '
-              'validated.',
-              style: TextStyle(color: OtaColors.actionRed),
-            ),
-          ),
-        if (application.status == MembershipApplicationStatus.pending) ...[
-          const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed: reviewEnabled ? onReject : null,
-                child: const Text('Reject entire application'),
-              ),
-              FilledButton(
-                onPressed: reviewEnabled ? onApprove : null,
-                child: const Text('Approve entire application'),
-              ),
-            ],
-          ),
-        ],
-      ],
-    ),
-  );
-}
-
-class _MembershipStudentSection extends StatelessWidget {
-  const _MembershipStudentSection({required this.profile});
-
-  final StudentProfile profile;
-
-  @override
-  Widget build(BuildContext context) => _DetailSection(
-    title: profile.name,
-    children: [
-      _DetailRow(label: 'Name', value: profile.name),
-      _DetailRow(
-        label: 'Date of birth',
-        value: _dateLabel(profile.dateOfBirth),
-      ),
-      _DetailRow(
-        label: 'Age',
-        value: '${const LocationTimeService().ageForStudent(profile)}',
-      ),
-      _DetailRow(label: 'Belt', value: profile.belt),
-      _DetailRow(
-        label: 'Guardian email',
-        value: profile.guardianEmail ?? 'Not provided',
-      ),
-      _DetailRow(label: 'Current status', value: profile.approvalStatus.name),
-      _DetailRow(
-        label: 'Preferred class groups',
-        value: profile.preferredClassGroupIds.isEmpty
-            ? 'None selected'
-            : profile.preferredClassGroupIds.join(', '),
-      ),
-      if (profile.stickersRequired > 0)
-        _DetailRow(
-          label: 'Sticker progress',
-          value: '${profile.stickerCount} / ${profile.stickersRequired}',
-        ),
-    ],
-  );
-}
-
-String _studentNames(
-  MembershipApplication application,
-  List<StudentProfile> profiles,
+@visibleForTesting
+UserAccount? accountHolderForProfile(
+  StudentProfile profile,
+  List<UserAccount> accounts,
 ) {
-  final names = application
-      .profilesFrom(profiles)
-      .map((profile) => profile.name);
-  return names.isEmpty ? 'Student details unavailable' : names.join(', ');
-}
-
-String _locationName(String locationId) {
-  for (final location in adminLocationController.locations) {
-    if (location.id == locationId && location.name.trim().isNotEmpty) {
-      return location.name;
-    }
-  }
-  return locationId;
-}
-
-String _roleLabel(String role) => switch (role) {
-  'superAdmin' => 'Super Admin',
-  'admin' => 'Admin',
-  'parent' => 'Parent',
-  'student' => 'Student',
-  _ => role,
-};
-
-String _dateLabel(DateTime? value) {
-  if (value == null) return 'Not provided';
-  return '${value.month}/${value.day}/${value.year}';
+  final ownerIds = <String>{
+    if (profile.linkedUserId != null) profile.linkedUserId!,
+    ...profile.guardianUserIds,
+  };
+  return accounts.where((account) => ownerIds.contains(account.id)).firstOrNull;
 }
 
 class _StudentToolbar extends StatelessWidget {
@@ -597,81 +190,69 @@ class _StudentToolbar extends StatelessWidget {
   final ValueChanged<_AgeFilter> onAgeFilterChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return _AdminPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: 300,
-                child: TextField(
-                  controller: searchController,
-                  onChanged: onSearchChanged,
-                  decoration: _fieldDecoration(
-                    'Search students',
-                    prefixIcon: Icons.search_rounded,
-                  ),
+  Widget build(BuildContext context) => _AdminPanel(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            SizedBox(
+              width: 300,
+              child: TextField(
+                controller: searchController,
+                onChanged: onSearchChanged,
+                decoration: _fieldDecoration(
+                  'Search students or account holders',
+                  prefixIcon: Icons.search_rounded,
                 ),
               ),
-              SizedBox(
-                width: 190,
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: beltFilter,
-                  decoration: _fieldDecoration('Belt'),
-                  items: [
-                    for (final belt in beltOptions)
-                      DropdownMenuItem(value: belt, child: Text(belt)),
-                  ],
-                  onChanged: onBeltChanged,
-                ),
-              ),
-              FilterChip(
-                label: const Text('Active students'),
-                selected: activeOnly,
-                onSelected: onActiveOnlyChanged,
-                showCheckmark: false,
-                selectedColor: OtaColors.softRed,
-                side: const BorderSide(color: Color(0xFFD0D5DD)),
-                labelStyle: TextStyle(
-                  color: activeOnly ? OtaColors.maroon : OtaColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              _AgeFilterButton(
-                label: 'All ages',
-                selected: ageFilter == _AgeFilter.all,
-                onTap: () => onAgeFilterChanged(_AgeFilter.all),
-              ),
-              _AgeFilterButton(
-                label: 'Minor',
-                selected: ageFilter == _AgeFilter.minor,
-                onTap: () => onAgeFilterChanged(_AgeFilter.minor),
-              ),
-              _AgeFilterButton(
-                label: 'Adult',
-                selected: ageFilter == _AgeFilter.adult,
-                onTap: () => onAgeFilterChanged(_AgeFilter.adult),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Showing $shownCount students',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: OtaColors.mutedText,
-              fontWeight: FontWeight.w800,
             ),
+            SizedBox(
+              width: 190,
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue: beltFilter,
+                decoration: _fieldDecoration('Belt'),
+                items: [
+                  for (final belt in beltOptions)
+                    DropdownMenuItem(value: belt, child: Text(belt)),
+                ],
+                onChanged: onBeltChanged,
+              ),
+            ),
+            FilterChip(
+              label: const Text('Active students'),
+              selected: activeOnly,
+              onSelected: onActiveOnlyChanged,
+              showCheckmark: false,
+              selectedColor: OtaColors.softRed,
+            ),
+            for (final entry in const [
+              (_AgeFilter.all, 'All ages'),
+              (_AgeFilter.minor, 'Minor'),
+              (_AgeFilter.adult, 'Adult'),
+            ])
+              ChoiceChip(
+                label: Text(entry.$2),
+                selected: ageFilter == entry.$1,
+                onSelected: (_) => onAgeFilterChanged(entry.$1),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Showing $shownCount students',
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: OtaColors.mutedText,
+            fontWeight: FontWeight.w800,
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
 }
 
 class _StudentsPanel extends StatelessWidget {
@@ -690,38 +271,39 @@ class _StudentsPanel extends StatelessWidget {
   final ValueChanged<_AdminStudentRecord> onOpenStudent;
 
   @override
-  Widget build(BuildContext context) {
-    return _AdminPanel(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _PanelHeader(
-            icon: Icons.groups_outlined,
-            title: 'Student Directory',
-            detail: '${students.length} shown',
-          ),
-          if (isLoading)
-            const _LoadingState(message: 'Loading student profiles...')
-          else if (errorMessage != null)
-            _EmptyState(message: errorMessage!)
-          else if (!hasAnyStudents)
-            const _EmptyState(message: 'No students found.')
-          else if (students.isEmpty)
-            const _EmptyState(message: 'No students match this filter.')
-          else
-            for (final student in students) ...[
-              _StudentRow(
-                student: student,
-                onTap: () => onOpenStudent(student),
-              ),
-              if (student != students.last)
-                const Divider(height: 1, color: Color(0xFFE1E4EA)),
-            ],
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => _AdminPanel(
+    padding: EdgeInsets.zero,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PanelHeader(
+          icon: Icons.groups_outlined,
+          title: 'Student Directory',
+          detail: '${students.length} shown',
+        ),
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.all(18),
+            child: LinearProgressIndicator(),
+          )
+        else if (errorMessage != null)
+          _EmptyState(message: errorMessage!, showRetry: true)
+        else if (!hasAnyStudents)
+          const _EmptyState(message: 'No students found.')
+        else if (students.isEmpty)
+          const _EmptyState(message: 'No students match this filter.')
+        else
+          for (var index = 0; index < students.length; index++) ...[
+            _StudentRow(
+              student: students[index],
+              onTap: () => onOpenStudent(students[index]),
+            ),
+            if (index != students.length - 1)
+              const Divider(height: 1, color: Color(0xFFE1E4EA)),
+          ],
+      ],
+    ),
+  );
 }
 
 class _StudentRow extends StatelessWidget {
@@ -732,66 +314,52 @@ class _StudentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profile = student.profile;
+    final age = const LocationTimeService().ageForStudent(profile);
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isNarrow = constraints.maxWidth < 760;
-            final details = Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                _InlineMeta(
-                  icon: Icons.workspace_premium_outlined,
-                  label: student.belt,
-                ),
-                _InlineMeta(icon: Icons.cake_outlined, label: '${student.age}'),
-                _InlineMeta(
-                  icon: Icons.place_outlined,
-                  label: student.locationId,
-                ),
-                _StatusBadge(
-                  label: student.isActive ? 'Active' : 'Inactive',
-                  tone: student.isActive
-                      ? _BadgeTone.success
-                      : _BadgeTone.neutral,
-                ),
-              ],
-            );
-
-            if (isNarrow) {
-              return Column(
+        child: Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(student.name, style: _rowTitleStyle(context)),
-                  const SizedBox(height: 8),
-                  details,
-                  const SizedBox(height: 8),
-                  _StickerProgressText(student: student),
+                  Text(
+                    profile.name,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  if (student.account != null)
+                    Text(
+                      student.account!.displayName,
+                      style: const TextStyle(color: OtaColors.mutedText),
+                    ),
                 ],
-              );
-            }
-
-            return Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Text(student.name, style: _rowTitleStyle(context)),
-                ),
-                Expanded(flex: 5, child: details),
-                SizedBox(
-                  width: 180,
-                  child: _StickerProgressText(student: student),
-                ),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: OtaColors.mutedText,
-                ),
-              ],
-            );
-          },
+              ),
+            ),
+            Expanded(
+              flex: 4,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  _Meta(
+                    icon: Icons.workspace_premium_outlined,
+                    text: profile.belt,
+                  ),
+                  _Meta(icon: Icons.cake_outlined, text: '$age'),
+                  _Meta(
+                    icon: Icons.place_outlined,
+                    text: _locationLabel(profile.locationId),
+                  ),
+                  Chip(label: Text(profile.isActive ? 'Active' : 'Inactive')),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded),
+          ],
         ),
       ),
     );
@@ -809,6 +377,9 @@ class _StudentDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final profile = student.profile;
+    final account = student.account;
+    final required = profile.stickersRequired;
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         18,
@@ -818,46 +389,64 @@ class _StudentDetailSheet extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          _SheetHeader(
-            title: student.name,
-            subtitle: 'Student profile overview',
+          Text(
+            profile.name,
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
+          const Text('Student profile overview'),
           const SizedBox(height: 14),
           _DetailSection(
             title: 'Student Information',
             children: [
-              _DetailRow(label: 'Name', value: student.name),
-              _DetailRow(label: 'Age', value: '${student.age}'),
-              _DetailRow(label: 'Belt', value: student.belt),
-              _DetailRow(label: 'Academy', value: student.academyLabel),
-              _DetailRow(label: 'Submitted', value: student.submittedLabel),
-              _DetailRow(label: 'Status', value: student.approvalStatus),
+              _DetailRow(label: 'Name', value: profile.name),
+              _DetailRow(
+                label: 'Age',
+                value: '${const LocationTimeService().ageForStudent(profile)}',
+              ),
+              _DetailRow(label: 'Belt', value: profile.belt),
+              _DetailRow(
+                label: 'Academy',
+                value: _locationLabel(profile.locationId),
+              ),
+              _DetailRow(
+                label: 'State',
+                value: profile.isActive ? 'Active' : 'Inactive',
+              ),
             ],
           ),
           const SizedBox(height: 12),
           _DetailSection(
-            title: 'Parent / Guardian',
+            title: 'Account holder or parent',
             children: [
-              _DetailRow(label: 'Guardian', value: student.guardianLabel),
-              if (student.guardianEmail != null)
+              if (account != null) ...[
+                _DetailRow(label: 'Name', value: account.displayName),
+                _DetailRow(label: 'Email', value: account.email),
+                _DetailRow(
+                  label: 'Phone',
+                  value: account.phoneNumber ?? 'Not provided',
+                ),
+                _DetailRow(label: 'Role', value: account.roleLabel),
+              ] else ...[
                 _DetailRow(
                   label: 'Guardian email',
-                  value: student.guardianEmail!,
+                  value: profile.guardianEmail ?? 'Not provided',
                 ),
+              ],
               if (relatedStudents.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                Text(
-                  'Related students under this parent',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: OtaColors.mutedText,
-                    fontWeight: FontWeight.w800,
-                  ),
+                const Text(
+                  'Linked student profiles',
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-                const SizedBox(height: 6),
-                for (final relatedStudent in relatedStudents)
-                  _RelatedStudentRow(student: relatedStudent),
+                for (final related in relatedStudents)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(related.profile.name),
+                    subtitle: Text(related.profile.belt),
+                  ),
               ],
             ],
           ),
@@ -865,19 +454,13 @@ class _StudentDetailSheet extends StatelessWidget {
           _DetailSection(
             title: 'Belt / Promotion',
             children: [
-              _DetailRow(label: 'Current belt', value: student.belt),
-              _DetailRow(label: 'Next rank', value: student.nextRank),
+              _DetailRow(label: 'Current belt', value: profile.belt),
+              _DetailRow(label: 'Next rank', value: profile.nextRank),
               _DetailRow(
                 label: 'Sticker progress',
-                value: '${student.stickerCount} / ${student.stickersRequired}',
-              ),
-              const _DetailRow(
-                label: 'Testing notes',
-                value: 'No testing notes recorded yet.',
-              ),
-              const _DetailRow(
-                label: 'Promotion history',
-                value: 'Promotion history will appear here later.',
+                value: required > 0
+                    ? '${profile.stickerCount} / $required'
+                    : 'Not configured',
               ),
             ],
           ),
@@ -885,7 +468,7 @@ class _StudentDetailSheet extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Close'),
             ),
           ),
@@ -896,147 +479,29 @@ class _StudentDetailSheet extends StatelessWidget {
 }
 
 class _AdminStudentRecord {
-  const _AdminStudentRecord({
-    required this.id,
-    required this.name,
-    required this.age,
-    required this.belt,
-    required this.locationId,
-    required this.stickerCount,
-    required this.stickersRequired,
-    required this.nextRank,
-    required this.isActive,
-    required this.guardianUserIds,
-    required this.guardianEmail,
-    required this.approvalStatus,
-    required this.updatedAt,
-  });
-
-  factory _AdminStudentRecord.fromProfile(StudentProfile profile) {
-    return _AdminStudentRecord(
-      id: profile.id,
-      name: profile.name,
-      age: const LocationTimeService().ageForStudent(profile),
-      belt: profile.belt,
-      locationId: profile.locationId,
-      stickerCount: profile.stickerCount,
-      stickersRequired: profile.stickersRequired,
-      nextRank: profile.nextRank,
-      isActive: profile.isActive,
-      guardianUserIds: profile.guardianUserIds,
-      guardianEmail: profile.guardianEmail,
-      approvalStatus: profile.approvalStatus.name,
-      updatedAt: profile.updatedAt ?? profile.createdAt,
-    );
-  }
-
-  final String id;
-  final String name;
-  final int age;
-  final String belt;
-  final String locationId;
-  final int stickerCount;
-  final int stickersRequired;
-  final String nextRank;
-  final bool isActive;
-  final List<String> guardianUserIds;
-  final String? guardianEmail;
-  final String approvalStatus;
-  final DateTime? updatedAt;
-
-  String get academyLabel {
-    for (final location in adminLocationController.locations) {
-      if (location.id == locationId && location.name.trim().isNotEmpty) {
-        return location.name;
-      }
-    }
-    return locationId.isEmpty ? 'No academy selected' : locationId;
-  }
-
-  String get submittedLabel {
-    final value = updatedAt?.toLocal();
-    if (value == null) return 'Date unavailable';
-    return '${value.month}/${value.day}/${value.year}';
-  }
-
-  bool matchesSearch(String rawQuery) {
-    final query = rawQuery.trim().toLowerCase();
-    if (query.isEmpty) return true;
-    return name.toLowerCase().contains(query) ||
-        locationId.toLowerCase().contains(query) ||
-        (guardianEmail?.toLowerCase().contains(query) ?? false);
-  }
-
-  String get guardianLabel {
-    if (guardianUserIds.isEmpty) {
-      return 'No parent/guardian linked.';
-    }
-
-    return 'Linked account IDs: ${guardianUserIds.join(', ')}';
-  }
-
-  bool hasSharedGuardianWith(_AdminStudentRecord other) {
-    return guardianUserIds.any(other.guardianUserIds.contains);
-  }
-}
-
-class _AgeFilterButton extends StatelessWidget {
-  const _AgeFilterButton({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: selected ? OtaColors.white : OtaColors.ink,
-        backgroundColor: selected ? OtaColors.navy : OtaColors.white,
-        side: BorderSide(
-          color: selected ? OtaColors.navy : const Color(0xFFD0D5DD),
-        ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-      ),
-      child: Text(label),
-    );
-  }
+  const _AdminStudentRecord({required this.profile, required this.account});
+  final StudentProfile profile;
+  final UserAccount? account;
 }
 
 class _AdminPanel extends StatelessWidget {
   const _AdminPanel({
     required this.child,
-    this.padding = const EdgeInsets.all(12),
+    this.padding = const EdgeInsets.all(14),
   });
-
   final Widget child;
-  final EdgeInsetsGeometry padding;
-
+  final EdgeInsets padding;
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFEFC),
-        border: Border.all(color: const Color(0xFFE9D2D7)),
-        borderRadius: BorderRadius.circular(4),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x168B1E2D),
-            blurRadius: 16,
-            offset: Offset(0, 5),
-          ),
-        ],
-      ),
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: padding,
+    decoration: BoxDecoration(
+      color: OtaColors.white,
+      border: Border.all(color: const Color(0xFFE9D2D7)),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: child,
+  );
 }
 
 class _PanelHeader extends StatelessWidget {
@@ -1045,337 +510,121 @@ class _PanelHeader extends StatelessWidget {
     required this.title,
     required this.detail,
   });
-
   final IconData icon;
   final String title;
   final String detail;
-
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [OtaColors.navy, OtaColors.maroon],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: OtaColors.white, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: OtaColors.white,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          Text(
-            detail,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: OtaColors.white.withValues(alpha: 0.78),
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InlineMeta extends StatelessWidget {
-  const _InlineMeta({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(14),
+    child: Row(
       children: [
-        Icon(icon, size: 15, color: OtaColors.mutedText),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: OtaColors.ink,
-            fontWeight: FontWeight.w700,
+        Icon(icon, color: OtaColors.maroon),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w900),
           ),
         ),
+        Text(detail, style: const TextStyle(color: OtaColors.mutedText)),
       ],
-    );
-  }
+    ),
+  );
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label, required this.tone});
-
-  final String label;
-  final _BadgeTone tone;
-
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.message, this.showRetry = false});
+  final String message;
+  final bool showRetry;
   @override
-  Widget build(BuildContext context) {
-    final colors = _badgeColors(tone);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border.all(color: colors.border),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: colors.foreground,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(18),
+    child: Column(
+      children: [
+        Text(message),
+        if (showRetry)
+          TextButton.icon(
+            onPressed: appDataService.retryLiveData,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+          ),
+      ],
+    ),
+  );
 }
 
-class _StickerProgressText extends StatelessWidget {
-  const _StickerProgressText({required this.student});
-
-  final _AdminStudentRecord student;
-
+class _Meta extends StatelessWidget {
+  const _Meta({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
   @override
-  Widget build(BuildContext context) {
-    return Text(
-      '${student.stickerCount} / ${student.stickersRequired} stickers',
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-        color: OtaColors.mutedText,
-        fontWeight: FontWeight.w700,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [Icon(icon, size: 16), const SizedBox(width: 3), Text(text)],
+  );
 }
 
 class _DetailSection extends StatelessWidget {
   const _DetailSection({required this.title, required this.children});
-
   final String title;
   final List<Widget> children;
-
   @override
-  Widget build(BuildContext context) {
-    return _AdminPanel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: OtaColors.ink,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ...children,
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: const Color(0xFFFFFBF7),
+      border: Border.all(color: const Color(0xFFE9D2D7)),
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+        const SizedBox(height: 8),
+        ...children,
+      ],
+    ),
+  );
 }
 
 class _DetailRow extends StatelessWidget {
   const _DetailRow({required this.label, required this.value});
-
   final String label;
   final String value;
-
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 130,
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: OtaColors.mutedText,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: OtaColors.ink,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RelatedStudentRow extends StatelessWidget {
-  const _RelatedStudentRow({required this.student});
-
-  final _AdminStudentRecord student;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          const Icon(Icons.person_outline, size: 16, color: OtaColors.maroon),
-          const SizedBox(width: 6),
-          Expanded(child: Text('${student.name} · ${student.belt}')),
-        ],
-      ),
-    );
-  }
-}
-
-class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.title, required this.subtitle});
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: OtaColors.ink,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: OtaColors.mutedText,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: OtaColors.mutedText,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _LoadingState extends StatelessWidget {
-  const _LoadingState({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(14),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            message,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        SizedBox(
+          width: 145,
+          child: Text(
+            label,
+            style: const TextStyle(
               color: OtaColors.mutedText,
               fontWeight: FontWeight.w700,
             ),
           ),
-        ],
-      ),
+        ),
+        Expanded(child: Text(value)),
+      ],
+    ),
+  );
+}
+
+InputDecoration _fieldDecoration(String label, {IconData? prefixIcon}) =>
+    InputDecoration(
+      labelText: label,
+      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+      border: const OutlineInputBorder(),
+      isDense: true,
     );
+
+String _locationLabel(String locationId) {
+  for (final location in adminLocationController.locations) {
+    if (location.id == locationId) return location.name;
   }
-}
-
-class _BadgeColors {
-  const _BadgeColors({
-    required this.background,
-    required this.border,
-    required this.foreground,
-  });
-
-  final Color background;
-  final Color border;
-  final Color foreground;
-}
-
-enum _BadgeTone { success, neutral }
-
-_BadgeColors _badgeColors(_BadgeTone tone) {
-  return switch (tone) {
-    _BadgeTone.success => const _BadgeColors(
-      background: Color(0xFFEAF7EF),
-      border: Color(0xFFB9DEC6),
-      foreground: Color(0xFF23633B),
-    ),
-    _BadgeTone.neutral => const _BadgeColors(
-      background: Color(0xFFF2F4F7),
-      border: Color(0xFFD0D5DD),
-      foreground: OtaColors.ink,
-    ),
-  };
-}
-
-InputDecoration _fieldDecoration(String label, {IconData? prefixIcon}) {
-  return InputDecoration(
-    labelText: label,
-    prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
-    border: const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(4)),
-    ),
-    enabledBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(4)),
-      borderSide: BorderSide(color: Color(0xFFD0D5DD)),
-    ),
-    focusedBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(4)),
-      borderSide: BorderSide(color: OtaColors.maroon, width: 1.4),
-    ),
-  );
-}
-
-TextStyle? _rowTitleStyle(BuildContext context) {
-  return Theme.of(context).textTheme.bodyLarge?.copyWith(
-    color: OtaColors.ink,
-    fontWeight: FontWeight.w900,
-  );
+  return locationId;
 }

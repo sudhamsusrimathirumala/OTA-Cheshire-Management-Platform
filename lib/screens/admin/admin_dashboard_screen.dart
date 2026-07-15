@@ -1,294 +1,220 @@
 import 'package:flutter/material.dart';
 
-import '../../models/membership_application.dart';
-import '../../routes.dart';
+import '../../models/academy_announcement.dart';
+import '../../models/academy_event.dart';
+import '../../models/class_session.dart';
 import '../../services/app_data_service_provider.dart';
-import '../../services/firebase/admin_location_controller.dart';
+import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
-class AdminDashboardScreen extends StatefulWidget {
+class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
-
-  @override
-  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
-}
-
-class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  bool _promptScheduled = false;
-
-  static const _scheduleRows = [
-    _InfoRow('4:00 PM', 'Little Tiger'),
-    _InfoRow('5:00 PM', 'Level 2'),
-    _InfoRow('6:15 PM', 'Teen & Black Belt'),
-  ];
-
-  static const _announcementRows = [
-    _InfoRow('Draft', 'Tournament registration reminder'),
-    _InfoRow('Sent', 'Summer schedule update'),
-  ];
-
-  static const _eventRows = [
-    _InfoRow('Jul 12', 'Parent Night Out', 'Registration open'),
-    _InfoRow('Aug 03', 'Summer Belt Testing', 'Link pending'),
-  ];
-
-  static const _updateRows = [
-    _InfoRow('Today', 'Summer schedule updated', 'Admin'),
-    _InfoRow('Jun 30', 'Parent Night Out event added', 'Admin'),
-  ];
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: appDataService,
       builder: (context, _) {
-        final pending = pendingApplicationsForAdmin(
-          appDataService.adminMembershipApplications,
-          adminLocationController,
+        final locationId = _dashboardLocationId();
+        final academyNow = locationId.isEmpty
+            ? DateTime.now()
+            : const LocationTimeService().toLocationTime(
+                DateTime.now(),
+                locationId,
+              );
+        final schedule =
+            appDataService
+                .scheduleForWeekday(academyNow.weekday)
+                .where((session) => session.isPublished)
+                .toList()
+              ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+        final announcements = activeDashboardAnnouncements(
+          appDataService.adminAnnouncements,
         );
-        final counts = pendingApprovalCounts(pending);
-        _schedulePendingPrompt(pending, counts);
+        final events = upcomingDashboardEvents(
+          appDataService.events,
+          now: DateTime.now(),
+        );
+
         return AdminPageShell(
           selectedDestination: AdminNavDestination.dashboard,
           title: 'Dashboard',
           subtitle:
               'Manage schedule changes, announcements, events, and student information.',
-          child: Column(
-            children: [
-              _PendingApprovalsCard(
-                counts: counts,
-                isLoading: appDataService.isMembershipApplicationsLoading,
-                errorMessage: appDataService.membershipApplicationsErrorMessage,
-                onReview: () => Navigator.of(
-                  context,
-                ).pushReplacementNamed(OtaRoutes.adminStudents),
-              ),
-              const SizedBox(height: 14),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final useTwoColumns = constraints.maxWidth >= 820;
-                  final sections = [
-                    const _SummarySection(
-                      title: "Today's Schedule",
-                      icon: Icons.today_outlined,
-                      rows: _scheduleRows,
-                    ),
-                    const _SummarySection(
-                      title: 'Active Announcements',
-                      icon: Icons.campaign_outlined,
-                      rows: _announcementRows,
-                    ),
-                    const _SummarySection(
-                      title: 'Upcoming Events',
-                      icon: Icons.event_available_outlined,
-                      rows: _eventRows,
-                    ),
-                    const _SummarySection(
-                      title: 'Recent Admin Updates',
-                      icon: Icons.history_outlined,
-                      rows: _updateRows,
-                    ),
-                  ];
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final useTwoColumns = constraints.maxWidth >= 820;
+              final sections = <Widget>[
+                _SummarySection(
+                  title: "Today's Schedule",
+                  icon: Icons.today_outlined,
+                  isLoading: appDataService.isScheduleLoading,
+                  errorMessage: appDataService.scheduleErrorMessage,
+                  emptyMessage: 'No published classes are scheduled today.',
+                  rows: [for (final session in schedule) _scheduleRow(session)],
+                ),
+                _SummarySection(
+                  title: 'Active Announcements',
+                  icon: Icons.campaign_outlined,
+                  isLoading: appDataService.isAnnouncementsLoading,
+                  errorMessage: appDataService.announcementsErrorMessage,
+                  emptyMessage: 'No published announcements are active.',
+                  rows: [
+                    for (final announcement in announcements)
+                      _announcementRow(announcement),
+                  ],
+                ),
+                _SummarySection(
+                  title: 'Upcoming Events',
+                  icon: Icons.event_available_outlined,
+                  isLoading: appDataService.isEventsLoading,
+                  errorMessage: appDataService.eventsErrorMessage,
+                  emptyMessage: 'No upcoming events are available.',
+                  rows: [for (final event in events) _eventRow(event)],
+                ),
+              ];
 
-                  if (!useTwoColumns) {
-                    return Column(
-                      children: [
-                        for (final section in sections) ...[
-                          section,
-                          if (section != sections.last)
-                            const SizedBox(height: 14),
-                        ],
-                      ],
-                    );
-                  }
+              if (!useTwoColumns) {
+                return Column(
+                  children: [
+                    for (var index = 0; index < sections.length; index++) ...[
+                      sections[index],
+                      if (index != sections.length - 1)
+                        const SizedBox(height: 14),
+                    ],
+                  ],
+                );
+              }
 
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: sections.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          mainAxisExtent: 198,
-                        ),
-                    itemBuilder: (context, index) => sections[index],
-                  );
-                },
-              ),
-            ],
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: sections.length,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  mainAxisExtent: 198,
+                ),
+                itemBuilder: (context, index) => sections[index],
+              );
+            },
           ),
         );
       },
     );
   }
 
-  void _schedulePendingPrompt(
-    List<MembershipApplication> pending,
-    PendingApprovalCounts counts,
-  ) {
-    if (_promptScheduled ||
-        pending.isEmpty ||
-        appDataService.isMembershipApplicationsLoading ||
-        appDataService.membershipApplicationsErrorMessage != null ||
-        adminLocationController.isDebugAdmin ||
-        (!adminLocationController.isLocationAdmin &&
-            !adminLocationController.isSuperAdmin) ||
-        adminLocationController.pendingApplicationsPromptShown) {
-      return;
+  String _dashboardLocationId() {
+    if (adminLocationController.isSuperAdmin) {
+      return adminLocationController.selectedLocationId ?? '';
     }
-    _promptScheduled = true;
-    adminLocationController.markPendingApplicationsPromptShown();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Membership applications need review'),
-          content: Text(pendingApprovalMessage(counts)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Later'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext);
-                Navigator.of(
-                  context,
-                ).pushReplacementNamed(OtaRoutes.adminStudents);
-              },
-              child: const Text('Review applications'),
-            ),
-          ],
-        ),
-      );
-      _promptScheduled = false;
-    });
+    return adminLocationController.assignedLocation?.id ??
+        adminLocationController.writeLocationId;
+  }
+
+  _InfoRow _scheduleRow(ClassSession session) =>
+      _InfoRow(session.startLabel, session.className);
+
+  _InfoRow _announcementRow(AcademyAnnouncement announcement) => _InfoRow(
+    announcement.priority == 'important' ? 'Important' : 'Published',
+    announcement.title,
+  );
+
+  _InfoRow _eventRow(AcademyEvent event) {
+    final locationId = event.locationId;
+    final local = const LocationTimeService().toLocationTime(
+      event.startDateTime,
+      locationId,
+    );
+    return _InfoRow(
+      '${local.month}/${local.day}',
+      event.title,
+      event.registrationLabel,
+    );
   }
 }
 
-class _PendingApprovalsCard extends StatelessWidget {
-  const _PendingApprovalsCard({
-    required this.counts,
-    required this.isLoading,
-    required this.errorMessage,
-    required this.onReview,
-  });
+@visibleForTesting
+List<AcademyAnnouncement> activeDashboardAnnouncements(
+  List<AcademyAnnouncement> announcements,
+) {
+  final active =
+      announcements.where((announcement) => announcement.isPublished).toList()
+        ..sort((a, b) => b.displayDate.compareTo(a.displayDate));
+  return active.take(3).toList(growable: false);
+}
 
-  final PendingApprovalCounts counts;
-  final bool isLoading;
-  final String? errorMessage;
-  final VoidCallback onReview;
-
-  @override
-  Widget build(BuildContext context) => _Panel(
-    title: 'Pending Membership Approvals',
-    icon: Icons.how_to_reg_outlined,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (isLoading)
-          const LinearProgressIndicator()
-        else if (errorMessage != null)
-          Text(
-            errorMessage!,
-            style: const TextStyle(color: OtaColors.actionRed),
+@visibleForTesting
+List<AcademyEvent> upcomingDashboardEvents(
+  List<AcademyEvent> events, {
+  required DateTime now,
+}) {
+  final upcoming =
+      events
+          .where(
+            (event) =>
+                !event.isArchived &&
+                event.isPublished &&
+                !event.endDateTime.isBefore(now.toUtc()),
           )
-        else ...[
-          Text(pendingApprovalMessage(counts)),
-          const SizedBox(height: 4),
-          Text(
-            '${counts.applicationCount} pending application batch'
-            '${counts.applicationCount == 1 ? '' : 'es'}.',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: OtaColors.mutedText,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        FilledButton.icon(
-          onPressed: counts.applicationCount > 0 ? onReview : null,
-          icon: const Icon(Icons.arrow_forward_rounded),
-          label: const Text('Review applications'),
-        ),
-      ],
-    ),
-  );
+          .toList()
+        ..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+  return upcoming.take(3).toList(growable: false);
 }
-
-class PendingApprovalCounts {
-  const PendingApprovalCounts({
-    required this.familyCount,
-    required this.profileCount,
-    required this.applicationCount,
-  });
-
-  final int familyCount;
-  final int profileCount;
-  final int applicationCount;
-}
-
-@visibleForTesting
-PendingApprovalCounts pendingApprovalCounts(
-  List<MembershipApplication> applications,
-) => PendingApprovalCounts(
-  familyCount: applications.map((item) => item.applicantUserId).toSet().length,
-  profileCount: applications.fold(
-    0,
-    (total, item) => total + item.studentProfileIds.length,
-  ),
-  applicationCount: applications.length,
-);
-
-@visibleForTesting
-String pendingApprovalMessage(PendingApprovalCounts counts) =>
-    '${counts.familyCount} ${counts.familyCount == 1 ? 'family' : 'families'} '
-    'and ${counts.profileCount} student profile'
-    '${counts.profileCount == 1 ? '' : 's'} are awaiting approval.';
-
-@visibleForTesting
-List<MembershipApplication> pendingApplicationsForAdmin(
-  List<MembershipApplication> applications,
-  AdminLocationController controller,
-) => [
-  for (final application in applications)
-    if (application.status == MembershipApplicationStatus.pending &&
-        (controller.isDebugAdmin ||
-            (controller.isSuperAdmin
-                ? controller.activeLocationIds.contains(application.locationId)
-                : controller.assignedLocation?.id == application.locationId)))
-      application,
-];
 
 class _SummarySection extends StatelessWidget {
   const _SummarySection({
     required this.title,
     required this.icon,
     required this.rows,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.emptyMessage,
   });
 
   final String title;
   final IconData icon;
   final List<_InfoRow> rows;
+  final bool isLoading;
+  final String? errorMessage;
+  final String emptyMessage;
 
   @override
   Widget build(BuildContext context) {
     return _Panel(
       title: title,
       icon: icon,
-      child: Column(
-        children: [
-          for (final row in rows) ...[
-            _CompactRow(row: row),
-            if (row != rows.last)
-              const Divider(height: 14, color: Color(0xFFE1E4EA)),
-          ],
-        ],
-      ),
+      child: isLoading
+          ? const LinearProgressIndicator()
+          : errorMessage != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  errorMessage!,
+                  style: const TextStyle(color: OtaColors.actionRed),
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: appDataService.retryLiveData,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
+            )
+          : rows.isEmpty
+          ? Text(emptyMessage)
+          : Column(
+              children: [
+                for (var index = 0; index < rows.length; index++) ...[
+                  _CompactRow(row: rows[index]),
+                  if (index != rows.length - 1)
+                    const Divider(height: 14, color: Color(0xFFE1E4EA)),
+                ],
+              ],
+            ),
     );
   }
 }
@@ -393,11 +319,13 @@ class _CompactRow extends StatelessWidget {
         ),
         if (row.meta != null) ...[
           const SizedBox(width: 10),
-          Text(
-            row.meta!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: metaStyle,
+          Flexible(
+            child: Text(
+              row.meta!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: metaStyle,
+            ),
           ),
         ],
       ],
