@@ -48,9 +48,22 @@ class _MembershipStatusScreenState extends State<MembershipStatusScreen> {
         builder: (context) => _LocationDialog(locations: locations),
       );
       if (location == null) return;
-      await firebaseSessionController.membership.applyToLocation(
-        profileId: firebaseSessionController.selectedProfile!.id,
-        locationId: location.id,
+      if (!mounted) return;
+      final selectedProfileIds = await showDialog<List<String>>(
+        context: context,
+        builder: (context) => _ProfileSelectionDialog(
+          location: location,
+          profiles: firebaseSessionController.profiles,
+          initiallySelectedProfileId:
+              firebaseSessionController.selectedProfile!.id,
+        ),
+      );
+      if (selectedProfileIds == null || selectedProfileIds.isEmpty) return;
+      await firebaseSessionController.membership.submitMembershipApplication(
+        MembershipApplicationRequest(
+          locationId: location.id,
+          studentProfileIds: selectedProfileIds,
+        ),
       );
       firebaseSessionController.dismissCreatedConfirmation();
     } on MembershipServiceException catch (error) {
@@ -239,6 +252,91 @@ class _MembershipStatusScreenState extends State<MembershipStatusScreen> {
   }
 }
 
+class _ProfileSelectionDialog extends StatefulWidget {
+  const _ProfileSelectionDialog({
+    required this.location,
+    required this.profiles,
+    required this.initiallySelectedProfileId,
+  });
+
+  final AcademyLocation location;
+  final List<Student> profiles;
+  final String initiallySelectedProfileId;
+
+  @override
+  State<_ProfileSelectionDialog> createState() =>
+      _ProfileSelectionDialogState();
+}
+
+class _ProfileSelectionDialogState extends State<_ProfileSelectionDialog> {
+  late final Set<String> _selectedProfileIds = {
+    if (widget.profiles.any(
+      (profile) =>
+          profile.id == widget.initiallySelectedProfileId &&
+          profileCanApply(profile),
+    ))
+      widget.initiallySelectedProfileId,
+  };
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text('Students applying to ${widget.location.name}'),
+    content: SizedBox(
+      width: 560,
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: widget.profiles.length,
+        separatorBuilder: (_, _) => const Divider(height: 1),
+        itemBuilder: (context, index) {
+          final profile = widget.profiles[index];
+          final enabled = profileCanApply(profile);
+          return CheckboxListTile(
+            value: _selectedProfileIds.contains(profile.id),
+            onChanged: enabled
+                ? (selected) => setState(() {
+                    if (selected ?? false) {
+                      _selectedProfileIds.add(profile.id);
+                    } else {
+                      _selectedProfileIds.remove(profile.id);
+                    }
+                  })
+                : null,
+            title: Text(profile.name),
+            subtitle: Text(profileApplicationAvailability(profile)),
+            secondary: Icon(
+              enabled ? Icons.person_outline_rounded : Icons.lock_outline,
+            ),
+          );
+        },
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Back'),
+      ),
+      FilledButton(
+        onPressed: _selectedProfileIds.isEmpty
+            ? null
+            : () => Navigator.pop(
+                context,
+                widget.profiles
+                    .where(
+                      (profile) => _selectedProfileIds.contains(profile.id),
+                    )
+                    .map((profile) => profile.id)
+                    .toList(growable: false),
+              ),
+        child: Text(
+          _selectedProfileIds.length == 1
+              ? 'Submit 1 student'
+              : 'Submit ${_selectedProfileIds.length} students',
+        ),
+      ),
+    ],
+  );
+}
+
 class _LocationDialog extends StatelessWidget {
   const _LocationDialog({required this.locations});
   final List<AcademyLocation> locations;
@@ -372,3 +470,18 @@ String? locationSelectionSubtitle(AcademyLocation location) {
   final address = location.formattedAddress.trim();
   return address.isEmpty ? null : address;
 }
+
+@visibleForTesting
+bool profileCanApply(Student profile) =>
+    profile.approvalStatus == StudentApprovalStatus.incomplete ||
+    profile.approvalStatus == StudentApprovalStatus.rejected;
+
+@visibleForTesting
+String profileApplicationAvailability(Student profile) =>
+    switch (profile.approvalStatus) {
+      StudentApprovalStatus.incomplete => 'Eligible to apply',
+      StudentApprovalStatus.rejected => 'Eligible to apply again',
+      StudentApprovalStatus.pending => 'Already awaiting academy review',
+      StudentApprovalStatus.approved => 'Already approved at an academy',
+      StudentApprovalStatus.disabled => 'Membership is disabled',
+    };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../routes.dart';
 import '../../models/academy_location.dart';
+import '../../models/membership_application.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/admin_location_controller.dart';
 import '../../theme/ota_colors.dart';
@@ -89,35 +90,47 @@ class _AdminNavigationBarState extends State<AdminNavigationBar> {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFFFFBF7),
-        border: Border(bottom: BorderSide(color: Color(0xFFE9D2D7))),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x1C8B1E2D),
-            blurRadius: 14,
-            offset: Offset(0, 4),
-          ),
-        ],
-      ),
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          children: [
-            for (final destination in AdminNavDestination.values)
-              _AdminNavTab(
-                destination: destination,
-                isSelected: destination == widget.selectedDestination,
-                onSelectedTap: destination == widget.selectedDestination
-                    ? widget.onSelectedDestinationTap
-                    : null,
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, _) {
+        final pendingCount = pendingApplicationBadgeCount(
+          appDataService.adminMembershipApplications,
+          adminLocationController,
+        );
+        return DecoratedBox(
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFFBF7),
+            border: Border(bottom: BorderSide(color: Color(0xFFE9D2D7))),
+            boxShadow: [
+              BoxShadow(
+                color: Color(0x1C8B1E2D),
+                blurRadius: 14,
+                offset: Offset(0, 4),
               ),
-          ],
-        ),
-      ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                for (final destination in AdminNavDestination.values)
+                  _AdminNavTab(
+                    destination: destination,
+                    isSelected: destination == widget.selectedDestination,
+                    pendingCount: destination == AdminNavDestination.students
+                        ? pendingCount
+                        : 0,
+                    onSelectedTap: destination == widget.selectedDestination
+                        ? widget.onSelectedDestinationTap
+                        : null,
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -471,11 +484,13 @@ class _AdminNavTab extends StatelessWidget {
   const _AdminNavTab({
     required this.destination,
     required this.isSelected,
+    required this.pendingCount,
     this.onSelectedTap,
   });
 
   final AdminNavDestination destination;
   final bool isSelected;
+  final int pendingCount;
   final VoidCallback? onSelectedTap;
 
   @override
@@ -503,6 +518,30 @@ class _AdminNavTab extends StatelessWidget {
               Icon(destination.icon, size: 17),
               const SizedBox(width: 6),
               Text(destination.label),
+              if (pendingCount > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  key: const ValueKey('pending-application-badge'),
+                  constraints: const BoxConstraints(minWidth: 20),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isSelected ? OtaColors.white : OtaColors.maroon,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$pendingCount',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: isSelected ? OtaColors.maroon : OtaColors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 8),
@@ -517,3 +556,16 @@ class _AdminNavTab extends StatelessWidget {
     );
   }
 }
+
+@visibleForTesting
+int pendingApplicationBadgeCount(
+  List<MembershipApplication> applications,
+  AdminLocationController controller,
+) => applications.where((application) {
+  if (application.status != MembershipApplicationStatus.pending) return false;
+  if (controller.isDebugAdmin) return true;
+  if (controller.isSuperAdmin) {
+    return controller.activeLocationIds.contains(application.locationId);
+  }
+  return controller.assignedLocation?.id == application.locationId;
+}).length;

@@ -42,6 +42,7 @@ class AdminLocationController extends ChangeNotifier {
   DebugViewMode _debugMode = DebugViewMode.none;
   int _generation = 0;
   bool _started = false;
+  bool _pendingApplicationsPromptShown = false;
   AdminLocationAccess _listeningAccess = AdminLocationAccess.none;
   String? _listeningLocationId;
 
@@ -68,6 +69,7 @@ class AdminLocationController extends ChangeNotifier {
   bool get isSuperAdmin => access == AdminLocationAccess.superAdmin;
   bool get isLocationAdmin => access == AdminLocationAccess.locationAdmin;
   bool get isDebugAdmin => access == AdminLocationAccess.debugAdmin;
+  bool get pendingApplicationsPromptShown => _pendingApplicationsPromptShown;
   List<AcademyLocation> get locations => List.unmodifiable(_locations);
   List<AcademyLocation> get activeLocations =>
       List.unmodifiable(_locations.where((location) => location.isActive));
@@ -117,6 +119,15 @@ class AdminLocationController extends ChangeNotifier {
 
   void clearSelection() => selectLocation(null);
 
+  void markPendingApplicationsPromptShown() {
+    _pendingApplicationsPromptShown = true;
+  }
+
+  @visibleForTesting
+  void resetPendingApplicationsPrompt() {
+    _pendingApplicationsPromptShown = false;
+  }
+
   void clearForSignOut() => _reset();
 
   void replaceLocationsForTesting(List<AcademyLocation> locations) {
@@ -130,6 +141,9 @@ class AdminLocationController extends ChangeNotifier {
     if (kDebugMode && _debugMode != DebugViewMode.none) return;
     final session = _session;
     if (session == null) return;
+    if (session.authUser == null) {
+      _pendingApplicationsPromptShown = false;
+    }
     if (session.stage != SessionStage.admin) {
       _reset();
       return;

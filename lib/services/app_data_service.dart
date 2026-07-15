@@ -6,6 +6,7 @@ import '../models/academy_resource.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
+import '../models/membership_application.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 
@@ -15,6 +16,8 @@ abstract class AppDataService implements Listenable {
   List<StudentProfile> get linkedStudentProfiles;
 
   List<StudentProfile> get adminStudentProfiles;
+
+  List<MembershipApplication> get adminMembershipApplications;
 
   StudentProfile get selectedStudentProfile;
 
@@ -35,6 +38,12 @@ abstract class AppDataService implements Listenable {
   bool get isAdminStudentsLoading;
 
   String? get adminStudentsErrorMessage;
+
+  bool get isMembershipApplicationsLoading;
+
+  String? get membershipApplicationsErrorMessage;
+
+  void retryLiveData();
 
   bool get isResourcesLoading;
 

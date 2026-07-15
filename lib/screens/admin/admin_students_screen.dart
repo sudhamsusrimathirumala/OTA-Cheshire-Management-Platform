@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/membership_application.dart';
 import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/location_time_service.dart';
@@ -78,15 +79,14 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             ? _beltFilter
             : 'All belts';
         final students = _filteredStudents(allStudents, effectiveBeltFilter);
-        final pendingStudents = allStudents
+        final pendingApplications = appDataService.adminMembershipApplications
             .where(
-              (student) =>
-                  student.approvalStatus == 'pending' &&
+              (application) =>
+                  application.status == MembershipApplicationStatus.pending &&
                   (!adminLocationController.isSuperAdmin ||
                       adminLocationController.activeLocationIds.contains(
-                        student.locationId,
-                      )) &&
-                  student.matchesSearch(_searchController.text),
+                        application.locationId,
+                      )),
             )
             .toList();
         final isDebugAdmin = adminLocationController.isDebugAdmin;
@@ -99,17 +99,13 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _PendingMembershipPanel(
-                students: pendingStudents,
-                isLoading: appDataService.isAdminStudentsLoading,
-                errorMessage: appDataService.adminStudentsErrorMessage,
+                applications: pendingApplications,
+                profiles: appDataService.adminStudentProfiles,
+                isLoading: appDataService.isMembershipApplicationsLoading,
+                errorMessage: appDataService.membershipApplicationsErrorMessage,
                 locationName: _currentAdminLocationName(),
                 isDevelopmentMockData: isDebugAdmin,
-                onApprove: isDebugAdmin
-                    ? null
-                    : (student) => _review(student, true),
-                onReject: isDebugAdmin
-                    ? null
-                    : (student) => _review(student, false),
+                onOpenApplication: _openApplicationDetail,
               ),
               const SizedBox(height: 14),
               _StudentToolbar(
@@ -147,21 +143,26 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     );
   }
 
-  Future<void> _review(_AdminStudentRecord student, bool approve) async {
-    if (adminLocationController.isDebugAdmin) return;
+  Future<bool> _reviewApplication(
+    MembershipApplication application,
+    bool approve,
+  ) async {
+    if (adminLocationController.isDebugAdmin) return false;
     String? reason;
     if (!approve) {
       final controller = TextEditingController();
       reason = await showDialog<String>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Reject ${student.name}?'),
+          title: const Text('Reject entire application?'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\nOnly this profile will be rejected.',
+                'All ${application.studentProfileIds.length} included student '
+                'profile${application.studentProfileIds.length == 1 ? '' : 's'} '
+                'will be rejected together.',
               ),
               const SizedBox(height: 14),
               TextField(
@@ -188,14 +189,16 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         ),
       );
       controller.dispose();
-      if (reason == null) return;
+      if (reason == null) return false;
     } else {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text('Approve ${student.name}?'),
+          title: const Text('Approve entire application?'),
           content: Text(
-            '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\n\nApprove only this profile? Other family profiles will not be changed.',
+            'All ${application.studentProfileIds.length} included student '
+            'profile${application.studentProfileIds.length == 1 ? '' : 's'} '
+            'will be approved together.',
           ),
           actions: [
             TextButton(
@@ -209,25 +212,37 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
           ],
         ),
       );
-      if (confirmed != true) return;
+      if (confirmed != true) return false;
     }
     try {
-      await firebaseSessionController.membership.reviewMembership(
-        MembershipReviewRequest(
-          profileId: student.id,
-          approve: approve,
-          rejectionReason: reason,
-        ),
-      );
+      if (application.isLegacy) {
+        await firebaseSessionController.membership.reviewMembership(
+          MembershipReviewRequest(
+            profileId: application.studentProfileIds.single,
+            approve: approve,
+            rejectionReason: reason,
+          ),
+        );
+      } else {
+        await firebaseSessionController.membership.reviewMembershipApplication(
+          MembershipApplicationReviewRequest(
+            applicationId: application.id,
+            approve: approve,
+            rejectionReason: reason,
+          ),
+        );
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '${student.name} was ${approve ? 'approved' : 'rejected'}.',
+              '${application.applicant.displayName}\'s application was '
+              '${approve ? 'approved' : 'rejected'}.',
             ),
           ),
         );
       }
+      return true;
     } on MembershipServiceException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -237,6 +252,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
           ),
         );
       }
+      return false;
     }
   }
 
@@ -279,25 +295,54 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       },
     );
   }
+
+  Future<void> _openApplicationDetail(MembershipApplication application) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: OtaColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
+      ),
+      builder: (sheetContext) => _MembershipApplicationDetailSheet(
+        application: application,
+        profiles: application.profilesFrom(appDataService.adminStudentProfiles),
+        reviewEnabled: !adminLocationController.isDebugAdmin,
+        onApprove: () async {
+          final reviewed = await _reviewApplication(application, true);
+          if (reviewed && sheetContext.mounted) {
+            Navigator.pop(sheetContext);
+          }
+        },
+        onReject: () async {
+          final reviewed = await _reviewApplication(application, false);
+          if (reviewed && sheetContext.mounted) {
+            Navigator.pop(sheetContext);
+          }
+        },
+      ),
+    );
+  }
 }
 
 class _PendingMembershipPanel extends StatelessWidget {
   const _PendingMembershipPanel({
-    required this.students,
+    required this.applications,
+    required this.profiles,
     required this.isLoading,
     required this.errorMessage,
     required this.locationName,
     required this.isDevelopmentMockData,
-    required this.onApprove,
-    required this.onReject,
+    required this.onOpenApplication,
   });
-  final List<_AdminStudentRecord> students;
+  final List<MembershipApplication> applications;
+  final List<StudentProfile> profiles;
   final bool isLoading;
   final String? errorMessage;
   final String locationName;
   final bool isDevelopmentMockData;
-  final ValueChanged<_AdminStudentRecord>? onApprove;
-  final ValueChanged<_AdminStudentRecord>? onReject;
+  final ValueChanged<MembershipApplication> onOpenApplication;
 
   @override
   Widget build(BuildContext context) => _AdminPanel(
@@ -312,7 +357,8 @@ class _PendingMembershipPanel extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '$locationName • ${students.length} profile${students.length == 1 ? '' : 's'} awaiting review',
+          '$locationName • ${applications.length} application'
+          '${applications.length == 1 ? '' : 's'} awaiting review',
         ),
         const SizedBox(height: 12),
         if (isDevelopmentMockData)
@@ -332,39 +378,197 @@ class _PendingMembershipPanel extends StatelessWidget {
             'Unable to load applications. $errorMessage',
             style: const TextStyle(color: OtaColors.actionRed),
           )
-        else if (students.isEmpty)
+        else if (applications.isEmpty)
           const Text('No pending applications.')
         else
-          for (final student in students)
+          for (final application in applications)
             Card(
               child: ListTile(
-                title: Text(student.name),
+                onTap: () => onOpenApplication(application),
+                title: Text(application.applicant.displayName),
                 subtitle: Text(
-                  '${student.belt} • ${student.academyLabel}\nGuardian: ${student.guardianEmail ?? 'Not provided'}\nSubmitted: ${student.submittedLabel}',
+                  '${_roleLabel(application.applicant.role)} • '
+                  '${application.applicant.email}\n'
+                  '${_locationName(application.locationId)} • '
+                  '${application.studentProfileIds.length} student profile'
+                  '${application.studentProfileIds.length == 1 ? '' : 's'}\n'
+                  '${_studentNames(application, profiles)}\n'
+                  'Applied: ${const LocationTimeService().formatDateTime(application.appliedAt, application.locationId)} • '
+                  '${application.status.name}'
+                  '${application.isLegacy ? ' • Legacy' : ''}',
                 ),
-                isThreeLine: true,
-                trailing: Wrap(
-                  spacing: 6,
-                  children: [
-                    OutlinedButton(
-                      onPressed: onReject == null
-                          ? null
-                          : () => onReject!(student),
-                      child: const Text('Reject'),
-                    ),
-                    FilledButton(
-                      onPressed: onApprove == null
-                          ? null
-                          : () => onApprove!(student),
-                      child: const Text('Approve'),
-                    ),
-                  ],
-                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
               ),
             ),
       ],
     ),
   );
+}
+
+class _MembershipApplicationDetailSheet extends StatelessWidget {
+  const _MembershipApplicationDetailSheet({
+    required this.application,
+    required this.profiles,
+    required this.reviewEnabled,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final MembershipApplication application;
+  final List<StudentProfile> profiles;
+  final bool reviewEnabled;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      18,
+      14,
+      18,
+      18 + MediaQuery.viewInsetsOf(context).bottom,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _SheetHeader(
+          title: application.applicant.displayName,
+          subtitle:
+              '${_locationName(application.locationId)} • '
+              '${application.studentProfileIds.length} student profile'
+              '${application.studentProfileIds.length == 1 ? '' : 's'}',
+        ),
+        const SizedBox(height: 14),
+        _DetailSection(
+          title: 'Applicant',
+          children: [
+            _DetailRow(label: 'Name', value: application.applicant.displayName),
+            _DetailRow(label: 'Email', value: application.applicant.email),
+            _DetailRow(
+              label: 'Phone',
+              value: application.applicant.phoneNumber ?? 'Not provided',
+            ),
+            _DetailRow(
+              label: 'Role',
+              value: _roleLabel(application.applicant.role),
+            ),
+            _DetailRow(
+              label: 'Applied',
+              value: const LocationTimeService().formatDateTime(
+                application.appliedAt,
+                application.locationId,
+              ),
+            ),
+            _DetailRow(label: 'Status', value: application.status.name),
+          ],
+        ),
+        const SizedBox(height: 12),
+        for (final profile in profiles) ...[
+          _MembershipStudentSection(profile: profile),
+          const SizedBox(height: 12),
+        ],
+        if (profiles.length != application.studentProfileIds.length)
+          const _AdminPanel(
+            child: Text(
+              'One or more included student profiles are unavailable. Review '
+              'will remain atomic and will fail if every profile cannot be '
+              'validated.',
+              style: TextStyle(color: OtaColors.actionRed),
+            ),
+          ),
+        if (application.status == MembershipApplicationStatus.pending) ...[
+          const SizedBox(height: 16),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              OutlinedButton(
+                onPressed: reviewEnabled ? onReject : null,
+                child: const Text('Reject entire application'),
+              ),
+              FilledButton(
+                onPressed: reviewEnabled ? onApprove : null,
+                child: const Text('Approve entire application'),
+              ),
+            ],
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
+class _MembershipStudentSection extends StatelessWidget {
+  const _MembershipStudentSection({required this.profile});
+
+  final StudentProfile profile;
+
+  @override
+  Widget build(BuildContext context) => _DetailSection(
+    title: profile.name,
+    children: [
+      _DetailRow(label: 'Name', value: profile.name),
+      _DetailRow(
+        label: 'Date of birth',
+        value: _dateLabel(profile.dateOfBirth),
+      ),
+      _DetailRow(
+        label: 'Age',
+        value: '${const LocationTimeService().ageForStudent(profile)}',
+      ),
+      _DetailRow(label: 'Belt', value: profile.belt),
+      _DetailRow(
+        label: 'Guardian email',
+        value: profile.guardianEmail ?? 'Not provided',
+      ),
+      _DetailRow(label: 'Current status', value: profile.approvalStatus.name),
+      _DetailRow(
+        label: 'Preferred class groups',
+        value: profile.preferredClassGroupIds.isEmpty
+            ? 'None selected'
+            : profile.preferredClassGroupIds.join(', '),
+      ),
+      if (profile.stickersRequired > 0)
+        _DetailRow(
+          label: 'Sticker progress',
+          value: '${profile.stickerCount} / ${profile.stickersRequired}',
+        ),
+    ],
+  );
+}
+
+String _studentNames(
+  MembershipApplication application,
+  List<StudentProfile> profiles,
+) {
+  final names = application
+      .profilesFrom(profiles)
+      .map((profile) => profile.name);
+  return names.isEmpty ? 'Student details unavailable' : names.join(', ');
+}
+
+String _locationName(String locationId) {
+  for (final location in adminLocationController.locations) {
+    if (location.id == locationId && location.name.trim().isNotEmpty) {
+      return location.name;
+    }
+  }
+  return locationId;
+}
+
+String _roleLabel(String role) => switch (role) {
+  'superAdmin' => 'Super Admin',
+  'admin' => 'Admin',
+  'parent' => 'Parent',
+  'student' => 'Student',
+  _ => role,
+};
+
+String _dateLabel(DateTime? value) {
+  if (value == null) return 'Not provided';
+  return '${value.month}/${value.day}/${value.year}';
 }
 
 class _StudentToolbar extends StatelessWidget {

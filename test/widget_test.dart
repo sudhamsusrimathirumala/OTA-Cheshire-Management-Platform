@@ -11,6 +11,7 @@ import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
+import 'package:ota_cheshire_management_platform/models/membership_application.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
@@ -129,10 +130,14 @@ void main() {
     expect(find.text('Sample Admin View'), findsWidgets);
     expect(find.textContaining('Development Mock Data:'), findsOneWidget);
     expect(find.text('Sample Pending Student'), findsWidgets);
+    await tester.tap(find.text('Sample Pending Student').first);
+    await tester.pumpAndSettle();
     final approve = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Approve'),
+      find.widgetWithText(FilledButton, 'Approve entire application'),
     );
     expect(approve.onPressed, isNull);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Admin profile'));
     await tester.pumpAndSettle();
@@ -365,12 +370,199 @@ void main() {
 
     await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
 
-    expect(find.textContaining('OTA Cheshire • 1 profile'), findsOneWidget);
+    expect(find.textContaining('OTA Cheshire • 1 application'), findsOneWidget);
     expect(find.text('Pending Applicant'), findsWidgets);
-    expect(find.textContaining('Blue'), findsWidgets);
     expect(find.textContaining('guardian@example.com'), findsOneWidget);
-    expect(find.textContaining('Submitted:'), findsOneWidget);
+    expect(find.textContaining('Applied:'), findsOneWidget);
+    expect(find.textContaining('Legacy'), findsOneWidget);
     expect(find.text('No pending applications.'), findsNothing);
+  });
+
+  testWidgets(
+    'admin application review shows applicant and every included student',
+    (tester) async {
+      const cheshire = AcademyLocation(
+        id: 'ota-cheshire',
+        name: 'OTA Cheshire',
+        timeZoneId: 'America/New_York',
+        isActive: true,
+      );
+      final students = [
+        Student(
+          id: 'child-a',
+          name: 'Child A',
+          locationId: cheshire.id,
+          belt: 'Yellow',
+          dateOfBirth: DateTime.utc(2014, 2, 3),
+          stickerCount: 2,
+          stickersRequired: 5,
+          nextRank: 'Yellow-Green',
+          guardianEmail: 'parent@example.com',
+          approvalStatus: StudentApprovalStatus.pending,
+          applicationId: 'application-1',
+        ),
+        Student(
+          id: 'child-b',
+          name: 'Child B',
+          locationId: cheshire.id,
+          belt: 'Blue',
+          dateOfBirth: DateTime.utc(2012, 4, 5),
+          stickerCount: 0,
+          stickersRequired: 0,
+          nextRank: 'Blue-Red',
+          guardianEmail: 'parent@example.com',
+          approvalStatus: StudentApprovalStatus.pending,
+          applicationId: 'application-1',
+        ),
+      ];
+      final application = MembershipApplication(
+        id: 'application-1',
+        applicantUserId: 'parent-1',
+        applicant: const MembershipApplicantSnapshot(
+          firstName: 'Alex',
+          lastName: 'Parent',
+          email: 'parent@example.com',
+          phoneNumber: '203-555-0123',
+          role: 'parent',
+        ),
+        locationId: cheshire.id,
+        studentProfileIds: const ['child-a', 'child-b'],
+        status: MembershipApplicationStatus.pending,
+        appliedAt: DateTime.utc(2026, 7, 15, 14),
+        updatedAt: DateTime.utc(2026, 7, 15, 14),
+      );
+      appDataService = _AdminStudentsTestService(
+        profiles: students,
+        applications: [application],
+      );
+      adminLocationController = AdminLocationController.forTesting(
+        role: UserAccountRole.admin,
+        locations: const [cheshire],
+        assignedLocationId: cheshire.id,
+      );
+      addTearDown(initializeMockAppDataServiceForTests);
+
+      await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+
+      expect(find.text('Alex Parent'), findsOneWidget);
+      expect(find.textContaining('Child A, Child B'), findsOneWidget);
+      await tester.tap(find.text('Alex Parent'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Applicant'), findsOneWidget);
+      expect(find.text('Child A'), findsWidgets);
+      expect(find.text('Child B'), findsWidgets);
+      expect(find.text('203-555-0123'), findsOneWidget);
+      expect(find.text('Approve entire application'), findsOneWidget);
+      expect(find.text('Reject entire application'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Approve'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, 'Reject'), findsNothing);
+      expect(find.text('0 / 0'), findsNothing);
+    },
+  );
+
+  testWidgets('admin dashboard shows live approval counts and badge', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    final service = _LiveMembershipTestService([
+      _testMembershipApplication(
+        id: 'application-1',
+        applicantUserId: 'family-1',
+        profileIds: const ['student-1', 'student-2'],
+      ),
+      _testMembershipApplication(
+        id: 'application-2',
+        applicantUserId: 'family-1',
+        profileIds: const ['student-3'],
+      ),
+    ]);
+    appDataService = service;
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    );
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const _AdminNavigationTestApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('1 family and 3 student profiles are awaiting approval.'),
+      findsOneWidget,
+    );
+    expect(find.text('2 pending application batches.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('pending-application-badge')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('pending-application-badge')),
+        matching: find.text('2'),
+      ),
+      findsOneWidget,
+    );
+
+    service.replaceApplications(const []);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('0 families and 0 student profiles are awaiting approval.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('pending-application-badge')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('admin pending prompt appears once per login session', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    final service = _LiveMembershipTestService([
+      _testMembershipApplication(
+        id: 'application-1',
+        applicantUserId: 'family-1',
+        profileIds: const ['student-1'],
+      ),
+    ]);
+    appDataService = service;
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    )..resetPendingApplicationsPrompt();
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const _AdminNavigationTestApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership applications need review'), findsOneWidget);
+    await tester.tap(find.text('Later'));
+    await tester.pumpAndSettle();
+    expect(find.text('Membership applications need review'), findsNothing);
+    expect(find.text('Pending Membership Approvals'), findsOneWidget);
+
+    service.replaceApplications([...service.adminMembershipApplications]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Membership applications need review'), findsNothing);
+    expect(find.text('Pending Membership Approvals'), findsOneWidget);
   });
 
   testWidgets('admin pending panel distinguishes listener errors from empty', (
@@ -2750,21 +2942,78 @@ class _StudentNavigationTestApp extends StatelessWidget {
 class _AdminStudentsTestService extends MockAppDataService {
   const _AdminStudentsTestService({
     this.profiles = const [],
+    this.applications,
     this.errorMessage,
   });
 
   final List<Student> profiles;
+  final List<MembershipApplication>? applications;
   final String? errorMessage;
 
   @override
   List<Student> get adminStudentProfiles => profiles;
 
   @override
+  List<MembershipApplication> get adminMembershipApplications =>
+      applications ?? super.adminMembershipApplications;
+
+  @override
   bool get isAdminStudentsLoading => false;
 
   @override
   String? get adminStudentsErrorMessage => errorMessage;
+
+  @override
+  String? get membershipApplicationsErrorMessage => errorMessage;
 }
+
+class _LiveMembershipTestService extends MockAppDataService {
+  _LiveMembershipTestService(List<MembershipApplication> applications)
+    : _applications = List.of(applications);
+
+  final Set<VoidCallback> _listeners = {};
+  List<MembershipApplication> _applications;
+
+  @override
+  List<MembershipApplication> get adminMembershipApplications =>
+      List.unmodifiable(_applications);
+
+  @override
+  bool get isMembershipApplicationsLoading => false;
+
+  @override
+  void addListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
+
+  void replaceApplications(List<MembershipApplication> applications) {
+    _applications = List.of(applications);
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
+MembershipApplication _testMembershipApplication({
+  required String id,
+  required String applicantUserId,
+  required List<String> profileIds,
+}) => MembershipApplication(
+  id: id,
+  applicantUserId: applicantUserId,
+  applicant: const MembershipApplicantSnapshot(
+    firstName: 'Alex',
+    lastName: 'Parent',
+    email: 'parent@example.com',
+    role: 'parent',
+  ),
+  locationId: 'ota-cheshire',
+  studentProfileIds: profileIds,
+  status: MembershipApplicationStatus.pending,
+  appliedAt: DateTime.utc(2026, 7, 15),
+  updatedAt: DateTime.utc(2026, 7, 15),
+);
 
 class _AdminNavigationTestApp extends StatelessWidget {
   const _AdminNavigationTestApp();

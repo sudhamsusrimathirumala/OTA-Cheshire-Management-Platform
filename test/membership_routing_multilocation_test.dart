@@ -7,6 +7,7 @@ import 'package:ota_cheshire_management_platform/firebase_options_prod.dart';
 import 'package:ota_cheshire_management_platform/main.dart' as default_entry;
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
+import 'package:ota_cheshire_management_platform/models/membership_application.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/membership_status_screen.dart';
@@ -497,6 +498,77 @@ void main() {
       contains('Cheshire, CT 06410'),
     );
     expect(locationSelectionSubtitle(nameOnly), isNull);
+  });
+
+  test('membership profile selection permits only incomplete and rejected', () {
+    final incomplete = _student(
+      '',
+      approvalStatus: StudentApprovalStatus.incomplete,
+    );
+    final rejected = _student(
+      'cheshire',
+      approvalStatus: StudentApprovalStatus.rejected,
+    );
+    final pending = _student(
+      'cheshire',
+      approvalStatus: StudentApprovalStatus.pending,
+    );
+    final approved = _student('cheshire');
+    final disabled = _student(
+      'cheshire',
+      approvalStatus: StudentApprovalStatus.disabled,
+    );
+
+    expect(profileCanApply(incomplete), isTrue);
+    expect(profileCanApply(rejected), isTrue);
+    expect(profileCanApply(pending), isFalse);
+    expect(profileCanApply(approved), isFalse);
+    expect(profileCanApply(disabled), isFalse);
+    expect(profileApplicationAvailability(pending), contains('awaiting'));
+    expect(profileApplicationAvailability(approved), contains('approved'));
+    expect(profileApplicationAvailability(disabled), contains('disabled'));
+  });
+
+  test('membership application parser accepts complete batch data', () {
+    final application = membershipApplicationFromFirestoreData('application', {
+      'applicantUserId': 'parent-1',
+      'applicantSnapshot': {
+        'firstName': 'Alex',
+        'lastName': 'Parent',
+        'email': 'parent@example.com',
+        'role': 'parent',
+      },
+      'locationId': 'cheshire',
+      'studentProfileIds': ['student-1', 'student-2'],
+      'status': 'pending',
+      'appliedAt': DateTime.utc(2026, 7, 15),
+      'updatedAt': DateTime.utc(2026, 7, 15),
+    });
+
+    expect(application, isNotNull);
+    expect(application!.applicant.displayName, 'Alex Parent');
+    expect(application.studentProfileIds, ['student-1', 'student-2']);
+    expect(application.status, MembershipApplicationStatus.pending);
+  });
+
+  test('membership application parser rejects malformed batch data', () {
+    expect(
+      membershipApplicationFromFirestoreData('application', {
+        'applicantUserId': 'parent-1',
+        'applicantSnapshot': {
+          'firstName': 'Alex',
+          'lastName': 'Parent',
+          'email': 'parent@example.com',
+          'role': 'parent',
+        },
+        'locationId': 'cheshire',
+        'studentProfileIds': ['student-1', 'student-1'],
+        'status': 'pending',
+        'appliedAt': DateTime.utc(2026, 7, 15),
+        'updatedAt': DateTime.utc(2026, 7, 15),
+      }),
+      isNull,
+    );
   });
 }
 
