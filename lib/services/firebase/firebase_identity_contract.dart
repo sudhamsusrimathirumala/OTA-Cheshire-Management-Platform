@@ -128,6 +128,8 @@ Student studentProfileFromCanonicalData(String id, Map<String, dynamic> data) {
     approvalStatus: parseStudentApprovalStatus(data['approvalStatus']),
     linkedUserId: _optionalString(data['linkedUserId']),
     familyApplicationId: _optionalString(data['familyApplicationId']),
+    applicationId: _optionalString(data['applicationId']),
+    appliedAt: _dateTime(data['appliedAt']),
     preferredClassGroupIds: _stringList(data['preferredClassGroupIds']),
     stickerCount: 0,
     stickersRequired: 0,
@@ -146,6 +148,7 @@ Map<String, Object?> studentProfileWriteFields(
   final guardianEmail = profile.guardianEmail;
   final linkedUserId = _optionalString(profile.linkedUserId);
   final familyApplicationId = _optionalString(profile.familyApplicationId);
+  final applicationId = _optionalString(profile.applicationId);
   final locationId = _optionalString(profile.locationId);
   if (dateOfBirth == null) {
     throw ArgumentError('dateOfBirth is required for new student profiles.');
@@ -164,6 +167,9 @@ Map<String, Object?> studentProfileWriteFields(
     'approvalStatus': profile.approvalStatus.name,
     'linkedUserId': ?linkedUserId,
     'familyApplicationId': ?familyApplicationId,
+    'applicationId': ?applicationId,
+    if (profile.appliedAt != null)
+      'appliedAt': Timestamp.fromDate(profile.appliedAt!),
     'preferredClassGroupIds': profile.preferredClassGroupIds,
     if (isCreate) 'createdAt': Timestamp.fromDate(profile.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),

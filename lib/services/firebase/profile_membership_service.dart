@@ -107,6 +107,28 @@ class MembershipReviewRequest {
   final String? rejectionReason;
 }
 
+class MembershipApplicationRequest {
+  const MembershipApplicationRequest({
+    required this.locationId,
+    required this.studentProfileIds,
+  });
+
+  final String locationId;
+  final List<String> studentProfileIds;
+}
+
+class MembershipApplicationReviewRequest {
+  const MembershipApplicationReviewRequest({
+    required this.applicationId,
+    required this.approve,
+    this.rejectionReason,
+  });
+
+  final String applicationId;
+  final bool approve;
+  final String? rejectionReason;
+}
+
 class FirestoreProfileMembershipService {
   FirestoreProfileMembershipService({
     FirebaseAuth? auth,
@@ -258,6 +280,210 @@ class FirestoreProfileMembershipService {
           transaction.update(userRef, {
             'locationId': locationId,
             'updatedAt': timestamp,
+          });
+        }
+      });
+    } on MembershipServiceException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw mapMembershipFirebaseException(error);
+    }
+  }
+
+  Future<String> submitMembershipApplication(
+    MembershipApplicationRequest request,
+  ) async {
+    final identity = authProfileIdentity(_auth.currentUser);
+    final profileIds = request.studentProfileIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList(growable: false);
+    if (profileIds.isEmpty ||
+        profileIds.length > 11 ||
+        profileIds.toSet().length != profileIds.length ||
+        request.locationId.trim().isEmpty) {
+      throw const MembershipServiceException(
+        MembershipServiceError.invalidData,
+        'Select at least one eligible student profile and one academy.',
+      );
+    }
+    final applicationRef = _firestore
+        .collection(FirestoreCollections.membershipApplications)
+        .doc();
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final userRef = _firestore
+            .collection(FirestoreCollections.users)
+            .doc(identity.uid);
+        final locationRef = _firestore
+            .collection(FirestoreCollections.locations)
+            .doc(request.locationId.trim());
+        final user = (await transaction.get(userRef)).data();
+        final location = (await transaction.get(locationRef)).data();
+        if (user == null || location?['isActive'] != true) {
+          throw const MembershipServiceException(
+            MembershipServiceError.invalidLocation,
+            'The selected academy location is unavailable.',
+          );
+        }
+        final linkedIds = _stringList(user['linkedStudentProfileIds']);
+        if (!profileIds.every(linkedIds.contains)) {
+          throw const MembershipServiceException(
+            MembershipServiceError.permissionDenied,
+            'One or more selected profiles are not linked to your account.',
+          );
+        }
+        final profileEntries =
+            <(DocumentReference<Map<String, dynamic>>, Map<String, dynamic>)>[];
+        var includesAccountHolder = false;
+        for (final profileId in profileIds) {
+          final reference = _firestore
+              .collection(FirestoreCollections.studentProfiles)
+              .doc(profileId);
+          final profile = (await transaction.get(reference)).data();
+          _requireManagedProfile(user, profileId, profile);
+          if (![
+            'incomplete',
+            'rejected',
+          ].contains(profile?['approvalStatus'])) {
+            throw const MembershipServiceException(
+              MembershipServiceError.invalidTransition,
+              'Only incomplete or rejected profiles may apply.',
+            );
+          }
+          includesAccountHolder =
+              includesAccountHolder || profile?['linkedUserId'] == identity.uid;
+          profileEntries.add((reference, profile!));
+        }
+        final timestamp = FieldValue.serverTimestamp();
+        final applicantSnapshot = <String, Object?>{
+          'firstName': _requiredString(user['firstName'], 'First name'),
+          'lastName': _requiredString(user['lastName'], 'Last name'),
+          'email': _normalizedEmail(identity.email, 'Account email'),
+          'role': _requiredString(user['role'], 'Account role'),
+        };
+        final phoneNumber = _optionalString(user['phoneNumber']);
+        if (phoneNumber != null) {
+          applicantSnapshot['phoneNumber'] = phoneNumber;
+        }
+        transaction.set(applicationRef, {
+          'applicantUserId': identity.uid,
+          'applicantSnapshot': applicantSnapshot,
+          'locationId': request.locationId.trim(),
+          'studentProfileIds': profileIds,
+          'status': 'pending',
+          'appliedAt': timestamp,
+          'updatedAt': timestamp,
+        });
+        for (final entry in profileEntries) {
+          transaction.update(entry.$1, {
+            'locationId': request.locationId.trim(),
+            'approvalStatus': 'pending',
+            'applicationId': applicationRef.id,
+            'appliedAt': timestamp,
+            'updatedAt': timestamp,
+            'rejectionReason': FieldValue.delete(),
+            'reviewedAt': FieldValue.delete(),
+            'reviewedBy': FieldValue.delete(),
+          });
+        }
+        if (includesAccountHolder) {
+          transaction.update(userRef, {
+            'locationId': request.locationId.trim(),
+            'updatedAt': timestamp,
+          });
+        }
+      });
+      return applicationRef.id;
+    } on MembershipServiceException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw mapMembershipFirebaseException(error);
+    }
+  }
+
+  Future<void> reviewMembershipApplication(
+    MembershipApplicationReviewRequest request,
+  ) async {
+    final reviewer = authProfileIdentity(_auth.currentUser);
+    final reason = _optionalString(request.rejectionReason);
+    if (reason != null && reason.length > 500) {
+      throw const MembershipServiceException(
+        MembershipServiceError.invalidData,
+        'The rejection reason must be 500 characters or fewer.',
+      );
+    }
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final reviewerRef = _firestore
+            .collection(FirestoreCollections.users)
+            .doc(reviewer.uid);
+        final applicationRef = _firestore
+            .collection(FirestoreCollections.membershipApplications)
+            .doc(request.applicationId);
+        final reviewerData = (await transaction.get(reviewerRef)).data();
+        final application = (await transaction.get(applicationRef)).data();
+        final locationId = _optionalString(application?['locationId']);
+        final profileIds = _stringList(application?['studentProfileIds']);
+        if (reviewerData?['approvalStatus'] != 'approved' ||
+            !['admin', 'superAdmin'].contains(reviewerData?['role']) ||
+            locationId == null ||
+            (reviewerData?['role'] == 'admin' &&
+                reviewerData?['locationId'] != locationId)) {
+          throw const MembershipServiceException(
+            MembershipServiceError.permissionDenied,
+            'You cannot review this membership application.',
+          );
+        }
+        if (application?['status'] != 'pending' || profileIds.isEmpty) {
+          throw const MembershipServiceException(
+            MembershipServiceError.invalidTransition,
+            'This membership application has already been reviewed.',
+          );
+        }
+        final location = await transaction.get(
+          _firestore.collection(FirestoreCollections.locations).doc(locationId),
+        );
+        if (location.data()?['isActive'] != true) {
+          throw const MembershipServiceException(
+            MembershipServiceError.invalidLocation,
+            'The selected location is inactive.',
+          );
+        }
+        final profileRefs = <DocumentReference<Map<String, dynamic>>>[];
+        for (final profileId in profileIds) {
+          final reference = _firestore
+              .collection(FirestoreCollections.studentProfiles)
+              .doc(profileId);
+          final profile = (await transaction.get(reference)).data();
+          if (profile?['applicationId'] != applicationRef.id ||
+              profile?['approvalStatus'] != 'pending' ||
+              profile?['locationId'] != locationId) {
+            throw const MembershipServiceException(
+              MembershipServiceError.invalidTransition,
+              'The application profiles changed and cannot be reviewed.',
+            );
+          }
+          profileRefs.add(reference);
+        }
+        final timestamp = FieldValue.serverTimestamp();
+        final status = request.approve ? 'approved' : 'rejected';
+        transaction.update(applicationRef, {
+          'status': status,
+          'reviewedAt': timestamp,
+          'reviewedBy': reviewer.uid,
+          'updatedAt': timestamp,
+          if (!request.approve && reason != null) 'rejectionReason': reason,
+          if (request.approve) 'rejectionReason': FieldValue.delete(),
+        });
+        for (final reference in profileRefs) {
+          transaction.update(reference, {
+            'approvalStatus': status,
+            'reviewedAt': timestamp,
+            'reviewedBy': reviewer.uid,
+            'updatedAt': timestamp,
+            if (!request.approve && reason != null) 'rejectionReason': reason,
+            if (request.approve) 'rejectionReason': FieldValue.delete(),
           });
         }
       });

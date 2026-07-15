@@ -27,6 +27,8 @@ class Student {
     this.reviewedAt,
     this.reviewedBy,
     this.rejectionReason,
+    this.applicationId,
+    this.appliedAt,
   }) : linkedUserId = linkedUserId ?? selfUserId;
 
   final String id;
@@ -56,6 +58,8 @@ class Student {
   final DateTime? reviewedAt;
   final String? reviewedBy;
   final String? rejectionReason;
+  final String? applicationId;
+  final DateTime? appliedAt;
 
   String get firstName => canonicalFirstName ?? _nameParts.$1;
   String get lastName => canonicalLastName ?? _nameParts.$2;
