@@ -6,7 +6,18 @@ import '../../services/firebase/profile_membership_service.dart';
 import '../../theme/ota_colors.dart';
 
 class ProfileCreationScreen extends StatefulWidget {
-  const ProfileCreationScreen({super.key});
+  const ProfileCreationScreen({
+    super.key,
+    this.accountEmail,
+    this.createProfiles,
+    this.onProfilesCreated,
+    this.onSignOut,
+  });
+
+  final String? accountEmail;
+  final Future<void> Function(ProfileCreationRequest request)? createProfiles;
+  final VoidCallback? onProfilesCreated;
+  final VoidCallback? onSignOut;
 
   @override
   State<ProfileCreationScreen> createState() => _ProfileCreationScreenState();
@@ -28,6 +39,9 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   int _step = 0;
   String? _error;
 
+  String get _accountEmail =>
+      widget.accountEmail ?? firebaseSessionController.authUser?.email ?? '';
+
   @override
   void dispose() {
     _firstName.dispose();
@@ -47,18 +61,12 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       firstDate: DateTime(1900),
       lastDate: DateTime.now(),
     );
-    if (value != null) setState(() => _dateOfBirth = value);
+    if (value != null && mounted) setState(() => _dateOfBirth = value);
   }
 
   void _addChild() {
     if (_children.length >= 10) return;
-    setState(
-      () => _children.add(
-        _ChildFields(
-          guardianEmail: firebaseSessionController.authUser?.email ?? '',
-        ),
-      ),
-    );
+    setState(() => _children.add(_ChildFields(guardianEmail: _accountEmail)));
   }
 
   void _removeChild(int index) {
@@ -66,17 +74,18 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   }
 
   bool _validateStep() {
-    if (!_formKeys[_step].currentState!.validate()) return false;
+    if (!(_formKeys[_step].currentState?.validate() ?? false)) return false;
     if (_step == 0 && _dateOfBirth == null) {
       setState(() => _error = 'Select your date of birth.');
       return false;
     }
     if (_step == 0) {
+      final birthDate = _dateOfBirth;
+      if (birthDate == null) return false;
       final today = DateTime.now();
-      var age = today.year - _dateOfBirth!.year;
-      if (today.month < _dateOfBirth!.month ||
-          (today.month == _dateOfBirth!.month &&
-              today.day < _dateOfBirth!.day)) {
+      var age = today.year - birthDate.year;
+      if (today.month < birthDate.month ||
+          (today.month == birthDate.month && today.day < birthDate.day)) {
         age--;
       }
       if (age < 16) {
@@ -116,31 +125,54 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
       _saving = true;
       _error = null;
     });
-    try {
-      await firebaseSessionController.membership.createProfiles(
-        ProfileCreationRequest(
-          firstName: _firstName.text,
-          lastName: _lastName.text,
-          dateOfBirth: _dateOfBirth!,
-          applicantBeltRank: _beltRank,
-          phoneNumber: _phone.text,
-          role: _role,
-          guardianEmail: _guardianEmail.text,
-          parentIsStudent: _parentIsStudent,
-          additionalStudents: _children
-              .map(
-                (child) => StudentProfileInput(
-                  firstName: child.firstName.text,
-                  lastName: child.lastName.text,
-                  dateOfBirth: child.dateOfBirth!,
-                  beltRank: child.beltRank,
-                  guardianEmail: child.guardianEmail.text,
-                ),
-              )
-              .toList(),
+    final applicantBirthDate = _dateOfBirth;
+    if (applicantBirthDate == null) {
+      setState(() {
+        _saving = false;
+        _error = 'Select your date of birth.';
+      });
+      return;
+    }
+    final additionalStudents = <StudentProfileInput>[];
+    for (final child in _children) {
+      final childBirthDate = child.dateOfBirth;
+      if (childBirthDate == null) {
+        setState(() {
+          _saving = false;
+          _error = 'Every student needs a date of birth.';
+        });
+        return;
+      }
+      additionalStudents.add(
+        StudentProfileInput(
+          firstName: child.firstName.text,
+          lastName: child.lastName.text,
+          dateOfBirth: childBirthDate,
+          beltRank: child.beltRank,
+          guardianEmail: child.guardianEmail.text,
         ),
       );
-      firebaseSessionController.markProfilesCreated();
+    }
+    try {
+      final request = ProfileCreationRequest(
+        firstName: _firstName.text,
+        lastName: _lastName.text,
+        dateOfBirth: applicantBirthDate,
+        applicantBeltRank: _beltRank,
+        phoneNumber: _phone.text,
+        role: _role,
+        guardianEmail: _guardianEmail.text,
+        parentIsStudent: _parentIsStudent,
+        additionalStudents: additionalStudents,
+      );
+      await (widget.createProfiles?.call(request) ??
+          firebaseSessionController.membership.createProfiles(request));
+      final onProfilesCreated = widget.onProfilesCreated;
+      if (onProfilesCreated != null) {
+        onProfilesCreated();
+      } else {
+        firebaseSessionController.markProfilesCreated();
+      }
     } on MembershipServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -156,7 +188,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         title: const Text('Create OTA profiles'),
         actions: [
           TextButton(
-            onPressed: firebaseSessionController.signOut,
+            onPressed: widget.onSignOut ?? firebaseSessionController.signOut,
             child: const Text('Sign out'),
           ),
         ],
@@ -175,12 +207,14 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                 child: Row(
                   children: [
                     FilledButton(
+                      key: ValueKey('profile-continue-${details.stepIndex}'),
                       onPressed: _saving ? null : _continue,
                       child: Text(_step == 2 ? 'Create profiles' : 'Continue'),
                     ),
                     if (_step > 0) ...[
                       const SizedBox(width: 10),
                       TextButton(
+                        key: ValueKey('profile-back-${details.stepIndex}'),
                         onPressed: _saving
                             ? null
                             : () => setState(() => _step--),
@@ -204,9 +238,10 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Date of birth'),
                           subtitle: Text(
-                            _dateOfBirth == null
-                                ? 'Required'
-                                : _formatDate(_dateOfBirth!),
+                            _formatOptionalDate(
+                              _dateOfBirth,
+                              placeholder: 'Required',
+                            ),
                           ),
                           trailing: const Icon(Icons.calendar_month_rounded),
                           onTap: _pickApplicantBirthDate,
@@ -224,8 +259,11 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                                 ),
                               )
                               .toList(),
-                          onChanged: (value) =>
-                              setState(() => _beltRank = value!),
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _beltRank = value);
+                            }
+                          },
                         ),
                         _field(
                           _phone,
@@ -258,8 +296,10 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                             ),
                           ],
                           selected: {_role},
-                          onSelectionChanged: (value) =>
-                              setState(() => _role = value.first),
+                          onSelectionChanged: (value) {
+                            final role = value.firstOrNull;
+                            if (role != null) setState(() => _role = role);
+                          },
                         ),
                         if (_role == ProfileAccountRole.student)
                           _field(_guardianEmail, 'Guardian email', email: true),
@@ -278,6 +318,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                               onRemove: () => _removeChild(i),
                             ),
                           OutlinedButton.icon(
+                            key: const ValueKey('add-student'),
                             onPressed: _children.length >= 10
                                 ? null
                                 : _addChild,
@@ -301,16 +342,11 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                           'Applicant',
                           '${_firstName.text} ${_lastName.text}',
                         ),
-                        _review(
-                          'Account email',
-                          firebaseSessionController.authUser?.email ?? '',
-                        ),
+                        _review('Account email', _accountEmail),
                         _review('Role', _role.name),
                         _review(
                           'Date of birth',
-                          _dateOfBirth == null
-                              ? ''
-                              : _formatDate(_dateOfBirth!),
+                          _formatOptionalDate(_dateOfBirth),
                         ),
                         if (_role == ProfileAccountRole.student ||
                             _parentIsStudent)
@@ -392,8 +428,14 @@ class _ChildFields {
   DateTime? dateOfBirth;
   String beltRank = curriculumBeltOrder.first;
 
-  String get summary =>
-      '${firstName.text} ${lastName.text}, ${_formatDate(dateOfBirth!)}, $beltRank, ${guardianEmail.text}';
+  String get summary {
+    final name = '${firstName.text} ${lastName.text}'.trim();
+    final birthDate = dateOfBirth;
+    final birthDateLabel = birthDate == null
+        ? 'Date of birth not selected'
+        : _formatDate(birthDate);
+    return '${name.isEmpty ? 'Name not provided' : name}, $birthDateLabel, $beltRank, ${guardianEmail.text.trim().isEmpty ? 'Guardian email not provided' : guardianEmail.text.trim()}';
+  }
 
   void dispose() {
     firstName.dispose();
@@ -456,9 +498,10 @@ class _ChildEditorState extends State<_ChildEditor> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Date of birth'),
               subtitle: Text(
-                fields.dateOfBirth == null
-                    ? 'Required'
-                    : _formatDate(fields.dateOfBirth!),
+                _formatOptionalDate(
+                  fields.dateOfBirth,
+                  placeholder: 'Required',
+                ),
               ),
               onTap: () async {
                 final date = await showDatePicker(
@@ -478,7 +521,9 @@ class _ChildEditorState extends State<_ChildEditor> {
                     (belt) => DropdownMenuItem(value: belt, child: Text(belt)),
                   )
                   .toList(),
-              onChanged: (value) => fields.beltRank = value!,
+              onChanged: (value) {
+                if (value != null) fields.beltRank = value;
+              },
             ),
             TextFormField(
               controller: fields.guardianEmail,
@@ -512,3 +557,6 @@ class _ChildEditorState extends State<_ChildEditor> {
 
 String _formatDate(DateTime value) =>
     '${value.month}/${value.day}/${value.year}';
+
+String _formatOptionalDate(DateTime? value, {String placeholder = ''}) =>
+    value == null ? placeholder : _formatDate(value);

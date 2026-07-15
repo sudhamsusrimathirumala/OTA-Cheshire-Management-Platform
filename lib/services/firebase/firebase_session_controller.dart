@@ -370,21 +370,11 @@ class FirebaseSessionController extends ChangeNotifier {
     }
     selectedLocationName = null;
     final locationId = profile.locationId.trim();
-    switch (profile.approvalStatus) {
-      case StudentApprovalStatus.incomplete:
-        stage = SessionStage.incomplete;
-      case StudentApprovalStatus.pending:
-        stage = SessionStage.pending;
-      case StudentApprovalStatus.rejected:
-        stage = SessionStage.rejected;
-      case StudentApprovalStatus.disabled:
-        stage = SessionStage.disabled;
-      case StudentApprovalStatus.approved:
-        if (locationId.isEmpty) {
-          _setError('Approved profile has no academy location.');
-          return;
-        }
-        stage = SessionStage.loading;
+    stage = membershipStageForProfileStatus(profile.approvalStatus);
+    if (profile.approvalStatus == StudentApprovalStatus.approved &&
+        locationId.isEmpty) {
+      _setError('Approved profile has no academy location.');
+      return;
     }
     if (locationId.isNotEmpty) {
       _locationSubscription = _firestore
@@ -542,3 +532,13 @@ bool listenerCallbackIsCurrent({
       callbackGeneration == currentGeneration &&
       callbackIdentity == currentIdentity;
 }
+
+@visibleForTesting
+SessionStage membershipStageForProfileStatus(StudentApprovalStatus status) =>
+    switch (status) {
+      StudentApprovalStatus.incomplete => SessionStage.incomplete,
+      StudentApprovalStatus.pending => SessionStage.pending,
+      StudentApprovalStatus.approved => SessionStage.loading,
+      StudentApprovalStatus.rejected => SessionStage.rejected,
+      StudentApprovalStatus.disabled => SessionStage.disabled,
+    };

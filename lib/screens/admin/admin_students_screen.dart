@@ -82,9 +82,14 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             .where(
               (student) =>
                   student.approvalStatus == 'pending' &&
+                  (!adminLocationController.isSuperAdmin ||
+                      adminLocationController.activeLocationIds.contains(
+                        student.locationId,
+                      )) &&
                   student.matchesSearch(_searchController.text),
             )
             .toList();
+        final isDebugAdmin = adminLocationController.isDebugAdmin;
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.students,
@@ -95,8 +100,16 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
             children: [
               _PendingMembershipPanel(
                 students: pendingStudents,
-                onApprove: (student) => _review(student, true),
-                onReject: (student) => _review(student, false),
+                isLoading: appDataService.isAdminStudentsLoading,
+                errorMessage: appDataService.adminStudentsErrorMessage,
+                locationName: _currentAdminLocationName(),
+                isDevelopmentMockData: isDebugAdmin,
+                onApprove: isDebugAdmin
+                    ? null
+                    : (student) => _review(student, true),
+                onReject: isDebugAdmin
+                    ? null
+                    : (student) => _review(student, false),
               ),
               const SizedBox(height: 14),
               _StudentToolbar(
@@ -135,6 +148,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   }
 
   Future<void> _review(_AdminStudentRecord student, bool approve) async {
+    if (adminLocationController.isDebugAdmin) return;
     String? reason;
     if (!approve) {
       final controller = TextEditingController();
@@ -226,6 +240,17 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
     }
   }
 
+  String _currentAdminLocationName() {
+    if (adminLocationController.isDebugAdmin) return 'Sample Admin View';
+    if (adminLocationController.isSuperAdmin) {
+      return adminLocationController.selectedLocation?.name ??
+          'All active academy locations';
+    }
+    return adminLocationController.assignedLocation?.name ??
+        firebaseSessionController.selectedLocationName ??
+        'Assigned academy location';
+  }
+
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -259,12 +284,20 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
 class _PendingMembershipPanel extends StatelessWidget {
   const _PendingMembershipPanel({
     required this.students,
+    required this.isLoading,
+    required this.errorMessage,
+    required this.locationName,
+    required this.isDevelopmentMockData,
     required this.onApprove,
     required this.onReject,
   });
   final List<_AdminStudentRecord> students;
-  final ValueChanged<_AdminStudentRecord> onApprove;
-  final ValueChanged<_AdminStudentRecord> onReject;
+  final bool isLoading;
+  final String? errorMessage;
+  final String locationName;
+  final bool isDevelopmentMockData;
+  final ValueChanged<_AdminStudentRecord>? onApprove;
+  final ValueChanged<_AdminStudentRecord>? onReject;
 
   @override
   Widget build(BuildContext context) => _AdminPanel(
@@ -279,11 +312,28 @@ class _PendingMembershipPanel extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          '${students.length} profile${students.length == 1 ? '' : 's'} awaiting review',
+          '$locationName • ${students.length} profile${students.length == 1 ? '' : 's'} awaiting review',
         ),
         const SizedBox(height: 12),
-        if (students.isEmpty)
-          const Text('No pending membership applications for your scope.')
+        if (isDevelopmentMockData)
+          const Card(
+            color: Color(0xFFFFF4D6),
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                'Development Mock Data: this Sample Admin View does not load real Firestore applications, and review actions are disabled.',
+              ),
+            ),
+          ),
+        if (isLoading)
+          const _LoadingState(message: 'Loading membership applications...')
+        else if (errorMessage != null)
+          Text(
+            'Unable to load applications. $errorMessage',
+            style: const TextStyle(color: OtaColors.actionRed),
+          )
+        else if (students.isEmpty)
+          const Text('No pending applications.')
         else
           for (final student in students)
             Card(
@@ -297,11 +347,15 @@ class _PendingMembershipPanel extends StatelessWidget {
                   spacing: 6,
                   children: [
                     OutlinedButton(
-                      onPressed: () => onReject(student),
+                      onPressed: onReject == null
+                          ? null
+                          : () => onReject!(student),
                       child: const Text('Reject'),
                     ),
                     FilledButton(
-                      onPressed: () => onApprove(student),
+                      onPressed: onApprove == null
+                          ? null
+                          : () => onApprove!(student),
                       child: const Text('Approve'),
                     ),
                   ],
@@ -687,10 +741,10 @@ class _AdminStudentRecord {
   final DateTime? updatedAt;
 
   String get academyLabel {
-    final session = firebaseSessionController;
-    if (session.selectedProfile?.locationId == locationId &&
-        session.selectedLocationName?.trim().isNotEmpty == true) {
-      return session.selectedLocationName!;
+    for (final location in adminLocationController.locations) {
+      if (location.id == locationId && location.name.trim().isNotEmpty) {
+        return location.name;
+      }
     }
     return locationId.isEmpty ? 'No academy selected' : locationId;
   }

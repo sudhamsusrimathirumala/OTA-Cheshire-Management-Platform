@@ -38,6 +38,8 @@ beforeEach(async () => {
     const db = context.firestore();
     await setDoc(doc(db, 'locations', 'cheshire'), {
       name: 'OTA Cheshire', isActive: true, timeZoneId: 'America/New_York',
+      addressLine1: '136 Elm St', city: 'Cheshire', state: 'CT',
+      postalCode: '06410', country: 'US',
     });
     await setDoc(doc(db, 'locations', 'other'), {
       name: 'Other', isActive: true, timeZoneId: 'America/Chicago',
@@ -220,6 +222,11 @@ test('application is profile-specific, active-location-only, and cannot self-app
   });
   await assertFails(apply(db, 'parent', 'parent-profile', 'inactive', true));
   await assertSucceeds(apply(db, 'parent', 'parent-profile', 'cheshire', true));
+  const account = (await getDoc(doc(db, 'users', 'parent'))).data();
+  assert.equal(account.locationId, 'cheshire');
+  assert.equal(account.approvalStatus, 'incomplete');
+  assert.equal((await getDoc(doc(db, 'studentProfiles', 'parent-profile'))).data()
+      .approvalStatus, 'pending');
   assert.equal((await getDoc(doc(db, 'studentProfiles', 'child-profile'))).data().approvalStatus,
       'incomplete');
   await assertFails(updateDoc(doc(db, 'studentProfiles', 'parent-profile'), {

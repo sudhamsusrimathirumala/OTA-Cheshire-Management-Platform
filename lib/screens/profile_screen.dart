@@ -248,7 +248,7 @@ class _FamilyAccountSection extends StatelessWidget {
         ),
         ProfileInfoRow(
           icon: Icons.verified_user_rounded,
-          label: 'Account Status',
+          label: 'Account approval status',
           value: account.approvalStatusLabel,
           showDivider: false,
         ),

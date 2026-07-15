@@ -404,8 +404,8 @@ AdminHeaderPresentation adminHeaderPresentation(
   if (controller.isDebugAdmin) {
     return const AdminHeaderPresentation(
       title: 'OTA Cheshire',
-      subtitle: 'Development Admin View',
-      badge: 'Debug',
+      subtitle: 'Sample Admin View',
+      badge: 'Development Mock Data',
     );
   }
   if (controller.isSuperAdmin) {

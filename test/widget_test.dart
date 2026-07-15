@@ -126,6 +126,13 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Students'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminStudentsScreen), findsOneWidget);
+    expect(find.text('Sample Admin View'), findsWidgets);
+    expect(find.textContaining('Development Mock Data:'), findsOneWidget);
+    expect(find.text('Sample Pending Student'), findsWidgets);
+    final approve = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Approve'),
+    );
+    expect(approve.onPressed, isNull);
 
     await tester.tap(find.byTooltip('Admin profile'));
     await tester.pumpAndSettle();
@@ -324,6 +331,71 @@ void main() {
     await tester.tap(find.widgetWithText(TextButton, 'Dashboard'));
     await tester.pumpAndSettle();
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
+  });
+
+  testWidgets('real admin pending panel shows scoped application details', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    final pending = Student(
+      id: 'pending-profile',
+      name: 'Pending Applicant',
+      locationId: 'ota-cheshire',
+      belt: 'Blue',
+      dateOfBirth: DateTime.utc(2010, 1, 1),
+      stickerCount: 0,
+      stickersRequired: 4,
+      nextRank: 'Blue-Red',
+      guardianEmail: 'guardian@example.com',
+      approvalStatus: StudentApprovalStatus.pending,
+      updatedAt: DateTime.utc(2026, 7, 15),
+    );
+    appDataService = _AdminStudentsTestService(profiles: [pending]);
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    );
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+
+    expect(find.textContaining('OTA Cheshire • 1 profile'), findsOneWidget);
+    expect(find.text('Pending Applicant'), findsWidgets);
+    expect(find.textContaining('Blue'), findsWidgets);
+    expect(find.textContaining('guardian@example.com'), findsOneWidget);
+    expect(find.textContaining('Submitted:'), findsOneWidget);
+    expect(find.text('No pending applications.'), findsNothing);
+  });
+
+  testWidgets('admin pending panel distinguishes listener errors from empty', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    appDataService = const _AdminStudentsTestService(
+      errorMessage: 'Unable to load student profiles from Firestore.',
+    );
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    );
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+
+    expect(find.textContaining('Unable to load applications.'), findsOneWidget);
+    expect(find.text('No pending applications.'), findsNothing);
   });
 
   testWidgets('admin profile icon opens profile and exits to welcome', (
@@ -2673,6 +2745,25 @@ class _StudentNavigationTestApp extends StatelessWidget {
       },
     );
   }
+}
+
+class _AdminStudentsTestService extends MockAppDataService {
+  const _AdminStudentsTestService({
+    this.profiles = const [],
+    this.errorMessage,
+  });
+
+  final List<Student> profiles;
+  final String? errorMessage;
+
+  @override
+  List<Student> get adminStudentProfiles => profiles;
+
+  @override
+  bool get isAdminStudentsLoading => false;
+
+  @override
+  String? get adminStudentsErrorMessage => errorMessage;
 }
 
 class _AdminNavigationTestApp extends StatelessWidget {

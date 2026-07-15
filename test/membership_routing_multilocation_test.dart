@@ -9,6 +9,7 @@ import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
+import 'package:ota_cheshire_management_platform/screens/membership_status_screen.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_identity_contract.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
@@ -446,6 +447,56 @@ void main() {
       );
       expect(fields['locationId'], 'chicago');
     });
+  });
+
+  test('student membership routing is determined by profile status', () {
+    expect(
+      membershipStageForProfileStatus(StudentApprovalStatus.incomplete),
+      SessionStage.incomplete,
+    );
+    expect(
+      membershipStageForProfileStatus(StudentApprovalStatus.pending),
+      SessionStage.pending,
+    );
+    expect(
+      membershipStageForProfileStatus(StudentApprovalStatus.rejected),
+      SessionStage.rejected,
+    );
+    expect(
+      membershipStageForProfileStatus(StudentApprovalStatus.disabled),
+      SessionStage.disabled,
+    );
+    expect(
+      membershipStageForProfileStatus(StudentApprovalStatus.approved),
+      SessionStage.loading,
+    );
+  });
+
+  test('location selection uses optional formatted address data', () {
+    const addressed = AcademyLocation(
+      id: 'cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+      addressLine1: '136 Elm St',
+      city: 'Cheshire',
+      state: 'CT',
+      postalCode: '06410',
+      country: 'US',
+    );
+    const nameOnly = AcademyLocation(
+      id: 'other',
+      name: 'Name only academy',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+
+    expect(locationSelectionSubtitle(addressed), contains('136 Elm St'));
+    expect(
+      locationSelectionSubtitle(addressed),
+      contains('Cheshire, CT 06410'),
+    );
+    expect(locationSelectionSubtitle(nameOnly), isNull);
   });
 }
 

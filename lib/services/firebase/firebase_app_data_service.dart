@@ -96,6 +96,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     if (_developmentViewMode == effective) return;
     _developmentViewMode = effective;
     if (_developmentViewActive) {
+      _stopFirestoreListeners();
       _useFallbackDataForUnavailableFirebase();
     } else if (firebaseSessionController.stage != SessionStage.approved &&
         firebaseSessionController.stage != SessionStage.admin) {

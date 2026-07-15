@@ -64,6 +64,19 @@ final sampleStudentProfiles = [
     nextRank: 'Second Dan',
     preferredClassGroupIds: ['teen-adult'],
   ),
+  Student(
+    id: 'student_sample_pending',
+    name: 'Sample Pending Student',
+    locationId: otaCheshireLocationId,
+    belt: 'White',
+    dateOfBirth: DateTime.utc(2014, 6, 15),
+    stickerCount: 0,
+    stickersRequired: 4,
+    nextRank: 'Yellow',
+    guardianEmail: 'sample.guardian@example.com',
+    approvalStatus: StudentApprovalStatus.pending,
+    updatedAt: DateTime.utc(2026, 7, 15),
+  ),
 ];
 
 const sampleUserAccount = UserAccount(

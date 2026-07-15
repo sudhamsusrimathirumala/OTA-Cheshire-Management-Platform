@@ -42,6 +42,12 @@ Academy data is readable only when the selected profile is approved, has an
 active location, and the content document matches that location. A parent
 account by itself grants no academy content.
 
+Account approval and academy membership are separate: `users/{uid}` stores the
+account-level status, while the selected `studentProfiles/{profileId}` status
+controls student and parent membership routing. See
+[`DEVELOPMENT_MEMBERSHIP_TESTING.md`](DEVELOPMENT_MEMBERSHIP_TESTING.md) for
+the development academy address fields and safe live-admin testing setup.
+
 ## Local validation and release
 
 Use a demo emulator project; automated tests do not contact live Firestore:

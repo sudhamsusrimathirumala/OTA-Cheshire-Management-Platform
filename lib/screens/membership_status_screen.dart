@@ -256,13 +256,10 @@ class _LocationDialog extends StatelessWidget {
               separatorBuilder: (_, _) => const Divider(),
               itemBuilder: (context, index) {
                 final location = locations[index];
+                final subtitle = locationSelectionSubtitle(location);
                 return ListTile(
                   title: Text(location.name),
-                  subtitle: Text(
-                    location.formattedAddress.isEmpty
-                        ? 'Address unavailable'
-                        : location.formattedAddress,
-                  ),
+                  subtitle: subtitle == null ? null : Text(subtitle),
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => Navigator.pop(context, location),
                 );
@@ -369,3 +366,9 @@ IconData _statusIcon(StudentApprovalStatus status) => switch (status) {
   StudentApprovalStatus.rejected => Icons.info_outline_rounded,
   StudentApprovalStatus.disabled => Icons.block_rounded,
 };
+
+@visibleForTesting
+String? locationSelectionSubtitle(AcademyLocation location) {
+  final address = location.formattedAddress.trim();
+  return address.isEmpty ? null : address;
+}
