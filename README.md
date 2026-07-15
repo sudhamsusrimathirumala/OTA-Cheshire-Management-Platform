@@ -40,10 +40,10 @@ constraint.
   canonical sections. Each form item independently supports an optional
   embedded YouTube video; unavailable videos show a coming-soon fallback.
 - Firebase email/password and Google authentication, password reset, profile
-  creation without mandatory email verification, independent membership applications, and
-  persisted profile switching.
-- Student profile, linked account, membership status, and leave-location
-  management backed by the authenticated Firebase UID.
+  creation without mandatory email verification, immediate academy access,
+  and persisted profile switching.
+- Student profile, linked account, academy location, and profile switching
+  backed by the authenticated Firebase UID.
 
 ### Administrator Experience
 
@@ -58,12 +58,11 @@ constraint.
   in the existing list-management interface.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
-- Firestore-backed student directory, batch membership applications, atomic
-  approval/rejection, legacy pending-profile review, and details. Generic
-  student profile editing is not implemented.
+- Firestore-backed, location-scoped student directory with account-holder and
+  linked-profile details. Generic student profile editing is not implemented.
 - Read-only curriculum view backed by local sample curriculum.
 
-Normal startup routes approved Admin and Super Admin accounts through the
+Normal startup routes active Admin and Super Admin accounts through the
 Firebase session gate; no public role-escalation route exists.
 
 ### Data Layer
@@ -72,7 +71,7 @@ Firebase session gate; no public role-escalation route exists.
 `lib/services/app_data_service_provider.dart` currently selects
 `FirebaseAppDataService`. It maintains Firestore snapshot listeners for
 `classSessions`, `announcements`, `events`, `resources`, `studentProfiles`, and
-`membershipApplications`. `MockAppDataService` is limited to isolated tests and
+same-location `users`. `MockAppDataService` is limited to isolated tests and
 the clearly labeled development-debug sample views. An authenticated Firebase
 session never falls back to sample data when a listener fails; the affected UI
 keeps its loading, empty, and error states distinct.
@@ -88,7 +87,6 @@ The application uses these top-level collections:
 - `locations`
 - `users`
 - `studentProfiles`
-- `membershipApplications`
 - `classSessions`
 - `announcements`
 - `events`
@@ -129,10 +127,9 @@ for the current data flow and fallback boundaries.
 
 ### Partially Implemented
 
-- Firebase authentication, verified profile creation, profile-specific academy
-  applications, admin review, membership-aware routing, and security rules are
-  implemented. Provider linking and production release validation remain out
-  of scope.
+- Firebase authentication, atomic profile creation, active-account/location
+  routing, and security rules are implemented. Provider linking and production
+  release validation remain out of scope.
 - Firestore data is location-aware, but administration is currently centered
   on OTA Cheshire rather than a complete multi-location workflow.
 - Announcements are live Firestore data, but device push notifications are not
@@ -195,9 +192,34 @@ to development. Native flavors and schemes pin their matching target, while
 `lib/main.dart` fails rather than selecting a default. See
 [Firebase environments](docs/FIREBASE_ENVIRONMENTS.md).
 
-`firestore.rules` protects atomic pending applications and admin review writes.
+`firestore.rules` protects atomic account/profile creation, active-account
+access, location isolation, administrator roles, and publication state.
 Firebase deployments are limited to explicit Firestore Rules releases; no
 database data or server code is deployed.
+
+## Historical Design Decision: Membership Approval (Inactive)
+
+An approval-based membership workflow was a reasonable part of the original
+architecture. Families would create permanent accounts and profiles, apply to
+an academy, and wait for an administrator to review the application. That
+design anticipated controlled enrollment and a future with independently
+managed locations.
+
+The final application intentionally uses a simpler model. There is currently
+one active academy location, and requiring a review for every family would add
+friction for families, students, and academy staff. Authentication plus linked
+account/profile records already provides the required identity and household
+structure. Young siblings are unlikely to attend unrelated OTA locations, and
+older students attending independently can manage their own account. The
+review flow also added substantial UI, routing, Firestore Rules,
+administrative, and test complexity without enough benefit for this release.
+
+The active design retains Firebase Authentication, role restrictions,
+`isActive` account/profile controls, location isolation, and Firestore Rules.
+The earlier workflow may be reconsidered if real expansion or identity-review
+needs justify it. This workflow is retained here as project design history. It
+is not part of the current runtime, Firestore schema, security rules, or user
+experience.
 
 ## Testing and Validation
 

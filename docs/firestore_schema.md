@@ -34,8 +34,8 @@ The configured location is `ota-cheshire`, named `OTA Cheshire`, with
 The document ID is always the Firebase Authentication UID. Email is mutable
 contact information and is never the identity key. Linking password and Google
 providers to one Firebase user must continue using the same document.
-The UID user and all permanent student profiles are created together by a
-verified authenticated client `WriteBatch`. Firestore Rules require canonical
+The UID user and all permanent student profiles are created together by an
+authenticated client `WriteBatch`. Firestore Rules require canonical
 relationships and verify every linked profile in the atomic post-write state.
 
 Required fields:
@@ -44,21 +44,20 @@ Required fields:
 - `lastName`: String
 - `email`: normalized lowercase String
 - `role`: `student`, `parent`, `admin`, or `superAdmin`
-- `approvalStatus`: `incomplete`, `pending`, `approved`, `rejected`, or
-  `disabled`
+- `isActive`: bool controlling account availability
+- `locationId`: String referencing `locations` (except a cross-location Super Admin)
 - `linkedStudentProfileIds`: List<String> referencing `studentProfiles`
+- `selectedStudentProfileId`: linked profile ID for student/parent accounts
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `phoneNumber`, `locationId`,
-`googleAccountId`, and `familyApplicationId`. Blank phone numbers are omitted
+Optional fields are `phoneNumber` and `googleAccountId`. Blank phone numbers are omitted
 or deleted. `googleAccountId` comes only from the `google.com` entry in Firebase
 `User.providerData`; it is never derived from email.
 
-During initial creation, `role` is only `student` or `parent`,
-`approvalStatus` is `incomplete`, `selectedStudentProfileId` is required and
-must be linked, and `locationId` is absent. `users.locationId` is added later
-only for the account holder's own student membership.
+During public initial creation, `role` is only `student` or `parent`,
+`isActive` is true, `selectedStudentProfileId` is required and linked, and
+`locationId` references an active academy. Admin roles are configured manually.
 
 ## `studentProfiles/{studentProfileId}`
 
@@ -70,59 +69,26 @@ Required fields:
 - `dateOfBirth`: Timestamp
 - `guardianEmail`: normalized lowercase String
 - `guardianUserIds`: List<String> referencing `users`
-- `approvalStatus`: `incomplete`, `pending`, `approved`, `rejected`, or
-  `disabled`
+- `locationId`: String matching the owning account location
+- `isActive`: bool controlling profile availability
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `linkedUserId`, `familyApplicationId`, `locationId`,
-`applicationId`, `appliedAt`, `preferredClassGroupIds`, `reviewedAt`,
-`reviewedBy`, and `rejectionReason`.
+Optional fields are `linkedUserId` and `preferredClassGroupIds`.
 `guardianEmail` is a contact/notification address;
 it does not create a user or replace `guardianUserIds`. Existing profiles may
 temporarily omit it. Migration derives it only from one unambiguous existing
 parent relationship and otherwise reports it missing.
 
-Initial profiles are permanent, `incomplete`, and have no `locationId`.
+Initial profiles are permanent, active, and use the account's `locationId`.
 Independent students and parents who are also students receive `linkedUserId`;
-child profiles receive the parent UID in `guardianUserIds`. Parent families
-share one generated `familyApplicationId`. Applying writes an active
-`locationId` and `pending`; review retains the location and writes
-`approved`/`rejected` plus reviewer metadata; leaving removes location and
-review fields and restores `incomplete`.
-
-New academy applications mirror one `membershipApplications` document ID and
-one application timestamp onto every selected profile. Existing pending
-profiles without an `applicationId` remain valid legacy records and are
-reviewed as one-profile applications; they are not converted automatically.
+child profiles receive the parent UID in `guardianUserIds`. Account and profile
+creation is atomic, and all profiles under one parent account share one academy
+location.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when
 `dateOfBirth` is missing. New writes never store `age`.
-
-## `membershipApplications/{applicationId}`
-
-One document represents one applicant's selected profiles for one academy.
-Creation and review update the application and every included profile in one
-atomic operation. Partial review is not supported.
-
-Required fields:
-
-- `applicantUserId`: String referencing `users`
-- `applicantSnapshot`: Map containing `firstName`, `lastName`, `email`, `role`,
-  and optional `phoneNumber`
-- `locationId`: String referencing an active `locations` document
-- `studentProfileIds`: unique List<String> containing 1 through 11 linked
-  profile IDs
-- `status`: `pending`, `approved`, or `rejected`
-- `appliedAt`: Timestamp
-- `updatedAt`: Timestamp
-
-Optional review fields are `reviewedAt`, `reviewedBy`, and `rejectionReason`.
-Applicants may create and read only their own applications. Location admins may
-read and review only their assigned active location; Super Admin review remains
-limited to active locations. Applicant identity, location, and profile IDs are
-immutable during review.
 
 ## `classSessions/{sessionId}`
 
@@ -284,6 +250,8 @@ publication history are preserved on edits.
 - `users.linkedStudentProfileIds` and student
   `guardianUserIds`/`linkedUserId`
   form bidirectional account/profile relationships.
+- A student/parent account and every linked profile use one matching
+  `locationId`.
 - Event resource IDs must resolve to same-location General Resources. The
   primary registration resource must be included in `linkedResourceIds`.
 - Every `locationId` must resolve to `locations`.
@@ -295,3 +263,6 @@ publication history are preserved on edits.
 
 The repository's historical `docs/firestore_audit_report.json` is a dated
 snapshot, not a description of current live data.
+
+The removed approval-based membership design is documented only as inactive
+project history in [Architecture](ARCHITECTURE.md#historical-design-decision-membership-approval-inactive).

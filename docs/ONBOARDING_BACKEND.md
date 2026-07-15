@@ -1,6 +1,6 @@
-# Authentication and Profile Membership
+# Authentication, Profiles, and Academy Access
 
-The OTA identity and membership flow uses Firebase Authentication and direct,
+The OTA identity flow uses Firebase Authentication and direct,
 Spark-compatible Firestore writes. It deploys no Cloud Functions and requires
 no billing account or paid Google Cloud service.
 
@@ -8,70 +8,77 @@ no billing account or paid Google Cloud service.
 
 `FirebaseAuthenticationService` supports email/password signup and login,
 Google Sign-In, neutral password reset, refresh, sign out, and safe error
-mapping. Email ownership verification is not required for profile creation or
-academy application. Firebase UID is the permanent identity; email is contact
-data. Google provider UID is read only from the authenticated
-`google.com` provider entry.
+mapping. Email verification is not required to create profiles. Firebase UID
+is the permanent identity; email is contact data. A Google provider UID comes
+only from the authenticated `google.com` provider entry.
 
 `FirebaseSessionController` observes Auth, `users/{uid}`, linked profiles, the
-selected profile, and its location. The startup gate routes signed-out,
-profile-creation, incomplete, pending, rejected, disabled,
-approved-student, admin, loading, and recoverable-error states without restart.
+selected profile, and its location. `AuthGate` is the routing authority. Its
+runtime stages are `loading`, `signedOut`, `needsProfiles`, `member`,
+`disabled`, `adminDisabled`, `admin`, and `error`.
 
-## Profile creation
+## Atomic profile creation
 
-Authenticated users complete a three-step flow with a 16+ account-holder gate.
-Students create one self-linked profile. Parents may create their own student
-profile and up to ten additional children, or one through ten children without
-a personal student profile. A single `WriteBatch` creates `users/{uid}` and all
-`studentProfiles` documents. Every initial profile has
-`approvalStatus: incomplete` and no `locationId`. Parent families share one
-`familyApplicationId`; the parent's own profile is selected first when present.
+Authenticated users complete the existing three-step flow with a 16+ account
+holder gate. Students create one self-linked profile. Parents may create their
+own student profile and up to ten additional children, or one through ten
+children without a personal student profile.
 
-## Profile-specific membership
+Profile setup reads active `locations` documents:
 
-Application loads active locations from Firestore and lets the applicant select
-one or more linked profiles that are `incomplete` or `rejected`. One atomic
-transaction creates a `membershipApplications` document and moves every
-selected profile to `pending` at one location with the same application ID and
-timestamp. Pending and approved profiles are unavailable for another batch.
+- Exactly one active location is assigned automatically.
+- More than one active location displays one account-level selector.
+- No active location blocks creation and presents Retry and Sign out.
 
-Admin review updates the pending application and every included profile to
-`approved` or `rejected` in one transaction with consistent reviewer metadata.
-Per-profile or partial batch review is not permitted. Existing pending profiles
-without an application document remain reviewable as legacy one-profile
-applications and are not rewritten automatically.
+The final review shows the academy name and available address. One Firestore
+`WriteBatch` creates `users/{uid}` and every `studentProfiles` document. The
+user and all profiles receive the same `locationId` and `isActive: true`, so
+partial or unassigned onboarding records are not created.
 
-Leaving an approved or rejected membership removes that profile's location and
-review fields and restores `incomplete`; other family profiles are not changed.
-A pending batch remains intact until the academy reviews it.
+After the batch succeeds, the app shows **Your account is ready**, the academy
+location, created profiles, **Continue to Dashboard**, and **Sign out**. The
+user then has immediate academy access.
 
-Academy data is readable only when the selected profile is approved, has an
-active location, and the content document matches that location. A parent
-account by itself grants no academy content.
+## Active-access checks
 
-Account approval and academy membership are separate: `users/{uid}` stores the
-account-level status, while the selected `studentProfiles/{profileId}` status
-controls student and parent membership routing. See
-[`DEVELOPMENT_MEMBERSHIP_TESTING.md`](DEVELOPMENT_MEMBERSHIP_TESTING.md) for
-the development academy address fields and safe live-admin testing setup.
+A student or parent may access academy data only when:
 
-## Local validation and release
+- the Firebase-authenticated UID has a valid user document;
+- the account role is `student` or `parent` and `isActive` is true;
+- the selected profile is linked to that account and exists;
+- the selected profile has `isActive` true;
+- the user and profile `locationId` values match; and
+- the referenced academy location exists and is active.
 
-Use a demo emulator project; automated tests do not contact live Firestore:
+Missing or malformed data fails closed. Profile switching updates only
+`selectedStudentProfileId`; every profile under the account remains at the
+same academy location.
 
-```powershell
-npm --prefix tool/firebase_emulator_tests install
-$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
-$env:Path="$env:JAVA_HOME\bin;$env:Path"
-firebase emulators:exec --only firestore --project demo-ota-membership "npm --prefix tool/firebase_emulator_tests test"
-```
+Admin accounts are configured manually and are never publicly selectable.
+Location Admin access requires role `admin`, `isActive: true`, and an active
+assigned location. Super Admin retains the controlled multi-location model.
 
-After all tests pass, deploy only Rules:
+## Historical Design Decision: Membership Approval (Inactive)
 
-```powershell
-firebase deploy --only firestore:rules --project ota-management-platform
-```
+An earlier, intentional design kept permanent profiles separate from academy
+membership. Families submitted profile applications to a location, and an
+administrator reviewed them before academy content became available. That
+approach anticipated controlled enrollment and multiple independently managed
+locations.
 
-No seed, migration, Auth-user creation, database write, or other Firebase
-deployment is part of this release.
+The final workflow was simplified after reviewing actual release needs. There
+is currently one active academy location. Requiring review for every household
+adds friction for parents, students, and staff, while authentication and linked
+account/profile records already provide the needed identity and household
+structure. Young siblings are unlikely to attend unrelated OTA locations, and
+older independent students can create and manage their own account. The review
+workflow also introduced substantial UI, routing, Firestore Rules,
+administrative, backend, and testing complexity.
+
+Immediate access better fits the current academy and helps the application
+reach a reliable release state without removing authentication, privacy,
+role restrictions, active-record controls, or location isolation. The idea may
+be reconsidered if actual expansion or identity-verification needs justify it.
+
+This workflow is retained here as project design history. It is not part of the
+current runtime, Firestore schema, security rules, or user experience.

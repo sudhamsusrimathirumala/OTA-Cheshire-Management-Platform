@@ -9,17 +9,18 @@ cleanup and schema-update work is not listed as active work.
 
 - [ ] Connect the login, signup, Google sign-in, and password-reset UI to
   Firebase Authentication.
-- [ ] Load the current `users` document and enforce approval status.
-- [ ] Route and guard student, parent, instructor, and administrator areas by
-  authenticated role.
-- [ ] Implement account onboarding and the no-linked-profile state.
-- [ ] Load linked/selected student profiles from Firestore and enforce
+- [x] Load the current `users` document and enforce active account/location
+  access.
+- [x] Route and guard student, parent, and administrator areas by authenticated
+  role.
+- [x] Implement atomic account/profile onboarding and the no-profile state.
+- [x] Load linked/selected student profiles from Firestore and enforce
   account/profile ownership.
 
 ### Firestore Security and Data
 
-- [ ] Add and test production Firestore security rules. No rules file is
-  present in the repository.
+- [x] Add emulator-tested Firestore security rules for ownership, roles,
+  locations, and publication state.
 - [ ] Verify authorization for every admin write and explicit document-delete
   path.
 - [ ] Resolve guardian user IDs to user display names and validate guardian/self
@@ -43,9 +44,10 @@ cleanup and schema-update work is not listed as active work.
 ### Student, Parent, and Account Experience
 
 - [ ] Implement a parent/family dashboard for multiple linked students.
-- [ ] Add profile switching for parent, student, and parent-who-trains cases.
-- [ ] Add production handling for accounts with no linked student profile.
-- [ ] Replace hardcoded/fallback current-user and selected-profile state.
+- [x] Add profile switching for parent, student, and parent-who-trains cases.
+- [x] Add handling for accounts with no linked student profile.
+- [x] Use authenticated live current-user and selected-profile state outside
+  clearly labeled development-debug sample views.
 
 ### Student Management
 
