@@ -9,7 +9,6 @@ enum ProfileAccountRole { student, parent }
 
 enum MembershipServiceError {
   unauthenticated,
-  unverifiedEmail,
   alreadyExists,
   invalidAge,
   invalidData,
@@ -74,13 +73,11 @@ class AuthProfileIdentity {
   const AuthProfileIdentity({
     required this.uid,
     required this.email,
-    required this.emailVerified,
     this.googleAccountId,
   });
 
   final String uid;
   final String email;
-  final bool emailVerified;
   final String? googleAccountId;
 }
 
@@ -124,12 +121,6 @@ class FirestoreProfileMembershipService {
 
   Future<List<String>> createProfiles(ProfileCreationRequest request) async {
     final identity = authProfileIdentity(_auth.currentUser);
-    if (!identity.emailVerified) {
-      throw const MembershipServiceException(
-        MembershipServiceError.unverifiedEmail,
-        'Verify your email before creating profiles.',
-      );
-    }
     final userRef = _firestore
         .collection(FirestoreCollections.users)
         .doc(identity.uid);
@@ -402,12 +393,6 @@ ProfileCreationPlan buildProfileCreationPlan({
   required DateTime today,
   String? familyApplicationId,
 }) {
-  if (!identity.emailVerified) {
-    throw const MembershipServiceException(
-      MembershipServiceError.unverifiedEmail,
-      'Verify your email before creating profiles.',
-    );
-  }
   final firstName = _requiredInput(request.firstName, 'First name');
   final lastName = _requiredInput(request.lastName, 'Last name');
   final email = _normalizedEmail(identity.email, 'Account email');
@@ -565,7 +550,6 @@ AuthProfileIdentity authProfileIdentity(User? user) {
   return AuthProfileIdentity(
     uid: user.uid,
     email: user.email!,
-    emailVerified: user.emailVerified,
     googleAccountId: googleId,
   );
 }

@@ -33,7 +33,6 @@ abstract interface class AuthenticationService {
   Future<UserCredential> signInWithEmail(String email, String password);
   Future<UserCredential> signInWithGoogle();
   Future<void> sendPasswordReset(String email);
-  Future<void> sendVerificationEmail();
   Future<User?> refreshUser();
   Future<void> signOut();
 }
@@ -126,22 +125,6 @@ class FirebaseAuthenticationService implements AuthenticationService {
     } on FirebaseAuthException catch (error) {
       // Keep reset responses neutral for account enumeration-sensitive cases.
       if (error.code == 'user-not-found') return;
-      throw mapFirebaseAuthException(error);
-    }
-  }
-
-  @override
-  Future<void> sendVerificationEmail() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      throw const AuthenticationException(
-        AuthenticationError.unknownFailure,
-        'Sign in again to verify your email.',
-      );
-    }
-    try {
-      await user.sendEmailVerification();
-    } on FirebaseAuthException catch (error) {
       throw mapFirebaseAuthException(error);
     }
   }

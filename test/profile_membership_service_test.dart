@@ -6,7 +6,6 @@ void main() {
   const identity = AuthProfileIdentity(
     uid: 'auth-user',
     email: ' Account@Example.com ',
-    emailVerified: true,
     googleAccountId: 'google-id',
   );
   final today = DateTime(2026, 7, 14);
@@ -173,7 +172,7 @@ void main() {
     );
   });
 
-  test('rejects invalid profile counts, belts, and unverified identities', () {
+  test('rejects invalid profile counts and belts', () {
     final request = ProfileCreationRequest(
       firstName: 'Student',
       lastName: 'Member',
@@ -183,8 +182,12 @@ void main() {
       guardianEmail: 'guardian@example.com',
     );
     expect(() => build(request), throwsA(isA<MembershipServiceException>()));
-    expect(
-      () => buildProfileCreationPlan(
+  });
+
+  test(
+    'authenticated identity can create profiles without verification data',
+    () {
+      final plan = buildProfileCreationPlan(
         request: ProfileCreationRequest(
           firstName: 'Student',
           lastName: 'Member',
@@ -196,21 +199,16 @@ void main() {
         identity: const AuthProfileIdentity(
           uid: 'auth-user',
           email: 'account@example.com',
-          emailVerified: false,
         ),
         profileIds: const ['profile-1'],
         timestamp: 'server-time',
         today: today,
-      ),
-      throwsA(
-        isA<MembershipServiceException>().having(
-          (error) => error.error,
-          'error',
-          MembershipServiceError.unverifiedEmail,
-        ),
-      ),
-    );
-  });
+      );
+
+      expect(plan.user['email'], 'account@example.com');
+      expect(plan.user['linkedStudentProfileIds'], ['profile-1']);
+    },
+  );
 
   test('Firestore failures map to safe membership messages', () {
     final error = mapMembershipFirebaseException(

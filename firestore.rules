@@ -119,7 +119,6 @@ service cloud.firestore {
           ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
-          request.auth.token.email_verified == true &&
           data.email == authEmail() && data.role in ['student', 'parent'] &&
           data.approvalStatus == 'incomplete' &&
           data.selectedStudentProfileId == data.linkedStudentProfileIds[0] &&

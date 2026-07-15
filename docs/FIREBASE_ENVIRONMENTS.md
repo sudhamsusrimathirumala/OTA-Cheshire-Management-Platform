@@ -81,9 +81,9 @@ Before those commands, the academy must provide the final production bundle
 ID, Apple Team ID, signing certificate/profile, and production plist. Register
 the iOS app in Firebase, enable Email/Password and Google providers, add the
 `REVERSED_CLIENT_ID` URL scheme from the matching plist in Xcode, and verify
-email verification and password-reset authorized domains/action settings.
-Email/password, verification, and reset code is platform-neutral Firebase Auth
-code; Google Sign-In requires this native URL-scheme setup.
+password-reset authorized domains/action settings. Email/password and reset
+code is platform-neutral Firebase Auth code; Google Sign-In requires this
+native URL-scheme setup.
 
 Never commit Apple signing certificates, `.p12` files, private keys,
 provisioning profiles, App Store Connect API private keys, or keystore

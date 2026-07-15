@@ -5,7 +5,6 @@ import '../admin/admin_dashboard_screen.dart';
 import '../membership_status_screen.dart';
 import '../student_dashboard_screen.dart';
 import '../welcome_screen.dart';
-import 'email_verification_screen.dart';
 import 'profile_creation_screen.dart';
 
 class AuthGate extends StatelessWidget {
@@ -15,30 +14,35 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: firebaseSessionController,
     builder: (context, _) {
-      final session = firebaseSessionController;
-      return switch (session.stage) {
-        SessionStage.loading => const _LoadingScreen(),
-        SessionStage.signedOut => const WelcomeScreen(),
-        SessionStage.unverified => const EmailVerificationScreen(),
-        SessionStage.needsProfiles => const ProfileCreationScreen(),
-        SessionStage.incomplete ||
-        SessionStage.pending ||
-        SessionStage.rejected ||
-        SessionStage.disabled => const MembershipStatusScreen(),
-        SessionStage.adminDisabled => _SessionErrorScreen(
-          message:
-              session.errorMessage ??
-              'This administrator account is unavailable.',
-        ),
-        SessionStage.approved => const StudentDashboardScreen(),
-        SessionStage.admin => const AdminDashboardScreen(),
-        SessionStage.error => _SessionErrorScreen(
-          message: session.errorMessage ?? 'Your account could not be loaded.',
-        ),
-      };
+      return authGateDestination(
+        stage: firebaseSessionController.stage,
+        errorMessage: firebaseSessionController.errorMessage,
+      );
     },
   );
 }
+
+@visibleForTesting
+Widget authGateDestination({
+  required SessionStage stage,
+  String? errorMessage,
+}) => switch (stage) {
+  SessionStage.loading => const _LoadingScreen(),
+  SessionStage.signedOut => const WelcomeScreen(),
+  SessionStage.needsProfiles => const ProfileCreationScreen(),
+  SessionStage.incomplete ||
+  SessionStage.pending ||
+  SessionStage.rejected ||
+  SessionStage.disabled => const MembershipStatusScreen(),
+  SessionStage.adminDisabled => _SessionErrorScreen(
+    message: errorMessage ?? 'This administrator account is unavailable.',
+  ),
+  SessionStage.approved => const StudentDashboardScreen(),
+  SessionStage.admin => const AdminDashboardScreen(),
+  SessionStage.error => _SessionErrorScreen(
+    message: errorMessage ?? 'Your account could not be loaded.',
+  ),
+};
 
 class _LoadingScreen extends StatelessWidget {
   const _LoadingScreen();

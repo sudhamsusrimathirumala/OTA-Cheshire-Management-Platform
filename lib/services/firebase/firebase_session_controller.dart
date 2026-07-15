@@ -16,7 +16,6 @@ import '../firestore/firestore_collections.dart';
 enum SessionStage {
   loading,
   signedOut,
-  unverified,
   needsProfiles,
   incomplete,
   pending,
@@ -125,16 +124,6 @@ class FirebaseSessionController extends ChangeNotifier {
     errorMessage = null;
     if (user == null) {
       stage = SessionStage.signedOut;
-      notifyListeners();
-      return;
-    }
-    final hasVerifiedGoogle =
-        user.emailVerified &&
-        user.providerData.any(
-          (provider) => provider.providerId == 'google.com',
-        );
-    if (!user.emailVerified && !hasVerifiedGoogle) {
-      stage = SessionStage.unverified;
       notifyListeners();
       return;
     }

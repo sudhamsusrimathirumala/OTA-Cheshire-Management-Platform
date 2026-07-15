@@ -174,7 +174,7 @@ class _MembershipStatusScreenState extends State<MembershipStatusScreen> {
                       FilledButton.icon(
                         onPressed: _loading ? null : _apply,
                         icon: const Icon(Icons.add_location_alt_rounded),
-                        label: const Text('Apply to a location'),
+                        label: const Text('Apply to an academy'),
                       ),
                     if (created)
                       TextButton(

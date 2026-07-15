@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../routes.dart';
 import '../services/firebase/firebase_authentication_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
+import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_auth_switch_link.dart';
@@ -11,7 +12,10 @@ import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.emailSignIn, this.googleSignIn});
+
+  final Future<Object?> Function(String email, String password)? emailSignIn;
+  final Future<Object?> Function()? googleSignIn;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -35,24 +39,36 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
     await _run(
-      () => firebaseSessionController.authentication.signInWithEmail(
-        _email.text,
-        _password.text,
-      ),
+      () =>
+          widget.emailSignIn?.call(_email.text, _password.text) ??
+          firebaseSessionController.authentication.signInWithEmail(
+            _email.text,
+            _password.text,
+          ),
     );
   }
 
   Future<void> _googleSignIn() async {
-    await _run(firebaseSessionController.authentication.signInWithGoogle);
+    await _run(
+      () =>
+          widget.googleSignIn?.call() ??
+          firebaseSessionController.authentication.signInWithGoogle(),
+    );
   }
 
   Future<void> _run(Future<Object?> Function() action) async {
+    if (_loading) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       await action();
+      if (!mounted) return;
+      debugViewController.clear();
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
     } on AuthenticationException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {

@@ -119,13 +119,34 @@ test('verified student atomically creates canonical unassigned records', async (
   assert.equal('locationId' in profile, false);
 });
 
-test('unverified users and partial or elevated initial writes fail', async () => {
+test('unverified and verified users may create canonical initial records', async () => {
   const unverified = env.authenticatedContext('unverified', {
     email: 'unverified@example.com', email_verified: false,
   }).firestore();
-  await assertFails(createProfiles(unverified, {
-    uid: 'unverified', email: 'unverified@example.com', profileIds: ['p'],
+  await assertSucceeds(createProfiles(unverified, {
+    uid: 'unverified', email: 'unverified@example.com', profileIds: ['unverified-profile'],
   }));
+  const verified = auth('verified');
+  await assertSucceeds(createProfiles(verified, {
+    uid: 'verified', email: 'verified@example.com', profileIds: ['verified-profile'],
+  }));
+});
+
+test('initial records require authentication, matching UID, and matching email', async () => {
+  const signedOut = env.unauthenticatedContext().firestore();
+  await assertFails(createProfiles(signedOut, {
+    uid: 'signed-out', email: 'signed-out@example.com', profileIds: ['signed-out-profile'],
+  }));
+  const db = auth('owner');
+  await assertFails(createProfiles(db, {
+    uid: 'other-user', email: 'owner@example.com', profileIds: ['other-profile'],
+  }));
+  await assertFails(createProfiles(db, {
+    uid: 'owner', email: 'mismatch@example.com', profileIds: ['mismatch-profile'],
+  }));
+});
+
+test('partial or elevated initial writes fail', async () => {
   const db = auth('partial');
   await assertFails(setDoc(doc(db, 'users', 'partial'), {
     firstName: 'Bad', lastName: 'Write', email: 'partial@example.com',

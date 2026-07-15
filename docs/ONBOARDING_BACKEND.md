@@ -7,19 +7,20 @@ no billing account or paid Google Cloud service.
 ## Authentication and routing
 
 `FirebaseAuthenticationService` supports email/password signup and login,
-Google Sign-In, neutral password reset, email verification and resend, refresh,
-sign out, and safe error mapping. Firebase UID is the permanent identity; email
-is contact data. Google provider UID is read only from the authenticated
+Google Sign-In, neutral password reset, refresh, sign out, and safe error
+mapping. Email ownership verification is not required for profile creation or
+academy application. Firebase UID is the permanent identity; email is contact
+data. Google provider UID is read only from the authenticated
 `google.com` provider entry.
 
 `FirebaseSessionController` observes Auth, `users/{uid}`, linked profiles, the
 selected profile, and its location. The startup gate routes signed-out,
-unverified, profile-creation, incomplete, pending, rejected, disabled,
+profile-creation, incomplete, pending, rejected, disabled,
 approved-student, admin, loading, and recoverable-error states without restart.
 
 ## Profile creation
 
-Verified users complete a three-step flow with a 16+ account-holder gate.
+Authenticated users complete a three-step flow with a 16+ account-holder gate.
 Students create one self-linked profile. Parents may create their own student
 profile and up to ten additional children, or one through ten children without
 a personal student profile. A single `WriteBatch` creates `users/{uid}` and all

@@ -39,8 +39,8 @@ constraint.
 - Local, read-only curriculum organized by belt, including No Belt and five
   canonical sections. Each form item independently supports an optional
   embedded YouTube video; unavailable videos show a coming-soon fallback.
-- Firebase email/password and Google authentication, email verification,
-  password reset, profile creation, independent membership applications, and
+- Firebase email/password and Google authentication, password reset, profile
+  creation without mandatory email verification, independent membership applications, and
   persisted profile switching.
 - Student profile, linked account, membership status, and leave-location
   management backed by the authenticated Firebase UID.

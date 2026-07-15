@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../routes.dart';
 import '../services/firebase/firebase_authentication_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
+import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_auth_switch_link.dart';
@@ -11,7 +12,10 @@ import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  const SignupScreen({super.key, this.emailSignUp, this.googleSignIn});
+
+  final Future<Object?> Function(String email, String password)? emailSignUp;
+  final Future<Object?> Function()? googleSignIn;
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -36,22 +40,29 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _createAccount() async {
     if (!_formKey.currentState!.validate()) return;
-    await _run(() async {
-      await firebaseSessionController.authentication.signUpWithEmail(
-        _email.text,
-        _password.text,
-      );
-      await firebaseSessionController.authentication.sendVerificationEmail();
-    });
+    await _run(
+      () =>
+          widget.emailSignUp?.call(_email.text, _password.text) ??
+          firebaseSessionController.authentication.signUpWithEmail(
+            _email.text,
+            _password.text,
+          ),
+    );
   }
 
-  Future<void> _run(Future<void> Function() action) async {
+  Future<void> _run(Future<Object?> Function() action) async {
+    if (_loading) return;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       await action();
+      if (!mounted) return;
+      debugViewController.clear();
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
     } on AuthenticationException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -150,9 +161,10 @@ class _SignupScreenState extends State<SignupScreen> {
                     onPressed: _loading
                         ? null
                         : () => _run(
-                            firebaseSessionController
-                                .authentication
-                                .signInWithGoogle,
+                            () =>
+                                widget.googleSignIn?.call() ??
+                                firebaseSessionController.authentication
+                                    .signInWithGoogle(),
                           ),
                   ),
                   const SizedBox(height: 24),
