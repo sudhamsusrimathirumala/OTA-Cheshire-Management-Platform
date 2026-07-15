@@ -1,3 +1,5 @@
+import com.flutter.gradle.tasks.FlutterTask
+
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
@@ -60,4 +62,16 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+// A command-line -t value must never be able to cross Firebase environments.
+// Each generated Flutter compilation task is pinned to its native flavor.
+tasks.withType<FlutterTask>().configureEach {
+    targetPath = when {
+        name.contains("Dev", ignoreCase = true) -> "lib/main_dev.dart"
+        name.contains("Prod", ignoreCase = true) -> "lib/main_prod.dart"
+        else -> throw GradleException(
+            "Flutter task '$name' is not associated with the dev or prod flavor.",
+        )
+    }
 }

@@ -14,6 +14,12 @@ imports only the production placeholder, which throws a clear configuration
 error and contains no development project identifiers. Debug Student/Admin
 shortcuts additionally require the dev environment and a debug build.
 
+`lib/main.dart` is deliberately fail-closed and never chooses an environment.
+Android pins every Flutter compilation task to the entrypoint for its selected
+flavor, even if a conflicting `-t` is supplied. Each iOS build configuration
+sets `FLUTTER_TARGET` to its matching entrypoint, so direct Xcode builds and
+archives follow the selected scheme.
+
 Supported combinations are dev debug, dev release, and prod release. Routine
 prod debug builds are intentionally not part of the workflow.
 

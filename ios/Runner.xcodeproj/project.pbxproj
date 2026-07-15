@@ -644,6 +644,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -658,6 +659,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -672,6 +674,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -686,6 +689,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -700,6 +704,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -714,6 +719,7 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
 				PRODUCT_NAME = "$(TARGET_NAME)";

@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/app_environment.dart';
 import 'package:ota_cheshire_management_platform/firebase_options_dev.dart';
 import 'package:ota_cheshire_management_platform/firebase_options_prod.dart';
+import 'package:ota_cheshire_management_platform/main.dart' as default_entry;
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
@@ -147,6 +150,25 @@ void main() {
 
       expect(debugViewController.mode, DebugViewMode.none);
     });
+
+    test('debug views require both dev environment and debug build', () {
+      expect(
+        debugViewsAllowed(environment: AppEnvironment.dev, debugBuild: true),
+        isTrue,
+      );
+      expect(
+        debugViewsAllowed(environment: AppEnvironment.dev, debugBuild: false),
+        isFalse,
+      );
+      expect(
+        debugViewsAllowed(environment: AppEnvironment.prod, debugBuild: true),
+        isFalse,
+      );
+      expect(
+        debugViewsAllowed(environment: AppEnvironment.prod, debugBuild: false),
+        isFalse,
+      );
+    });
   });
 
   group('Firebase environment isolation', () {
@@ -170,6 +192,17 @@ void main() {
         );
       },
     );
+
+    test('production entrypoint does not import development options', () {
+      final source = File('lib/main_prod.dart').readAsStringSync();
+      expect(source, isNot(contains('firebase_options_dev')));
+      expect(source, isNot(contains('ota-management-platform')));
+      expect(source, contains('firebase_options_prod.dart'));
+    });
+
+    test('default entrypoint cannot silently select development', () {
+      expect(() => default_entry.main(), throwsUnsupportedError);
+    });
   });
 
   group('admin location selection', () {

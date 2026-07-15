@@ -188,7 +188,9 @@ Firebase initialization is explicit by environment. Development uses
 `lib/main_dev.dart` and `lib/firebase_options_dev.dart` for the
 `ota-management-platform` project. Production uses `lib/main_prod.dart` and a
 deliberately unconfigured `lib/firebase_options_prod.dart`; it cannot fall back
-to development. See [Firebase environments](docs/FIREBASE_ENVIRONMENTS.md).
+to development. Native flavors and schemes pin their matching target, while
+`lib/main.dart` fails rather than selecting a default. See
+[Firebase environments](docs/FIREBASE_ENVIRONMENTS.md).
 
 `firestore.rules` protects atomic pending applications and admin review writes.
 Firebase deployments are limited to explicit Firestore Rules releases; no

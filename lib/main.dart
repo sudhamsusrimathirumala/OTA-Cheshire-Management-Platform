@@ -1,5 +1,7 @@
 export 'app.dart';
 
-import 'main_dev.dart' as development;
-
-Future<void> main() => development.main();
+Never main() => throw UnsupportedError(
+  'No default Firebase environment exists. Select the dev or prod flavor; '
+  'native build configuration will choose lib/main_dev.dart or '
+  'lib/main_prod.dart.',
+);
