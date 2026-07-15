@@ -9,7 +9,7 @@ RouteAccess accessForRoute(String? routeName) {
     OtaRoutes.welcome ||
     OtaRoutes.login ||
     OtaRoutes.signup => RouteAccess.public,
-    OtaRoutes.profile || OtaRoutes.membership => RouteAccess.authenticated,
+    OtaRoutes.profile => RouteAccess.authenticated,
     OtaRoutes.dashboard ||
     OtaRoutes.schedule ||
     OtaRoutes.events ||
@@ -46,23 +46,19 @@ bool isRouteAuthorized({
   return switch (access) {
     RouteAccess.public => true,
     RouteAccess.authenticated => switch (stage) {
-      SessionStage.incomplete ||
-      SessionStage.pending ||
-      SessionStage.approved ||
-      SessionStage.rejected ||
+      SessionStage.member ||
       SessionStage.disabled ||
       SessionStage.adminDisabled ||
       SessionStage.admin => true,
       _ => false,
     },
-    RouteAccess.student => stage == SessionStage.approved,
+    RouteAccess.student => stage == SessionStage.member,
     RouteAccess.admin => stage == SessionStage.admin,
   };
 }
 
 bool protectedAccessWasLost(SessionStage previous, SessionStage current) {
-  return (previous == SessionStage.approved &&
-          current != SessionStage.approved) ||
+  return (previous == SessionStage.member && current != SessionStage.member) ||
       (previous == SessionStage.admin && current != SessionStage.admin) ||
       current == SessionStage.signedOut;
 }

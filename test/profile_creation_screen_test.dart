@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
-import 'package:ota_cheshire_management_platform/services/firebase/profile_membership_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
 
 void main() {
+  const cheshire = AcademyLocation(
+    id: 'cheshire',
+    name: 'OTA Cheshire',
+    timeZoneId: 'America/New_York',
+    isActive: true,
+  );
   Future<void> tapInStepper(WidgetTester tester, Finder finder) async {
     await tester.ensureVisible(finder);
     await tester.pumpAndSettle();
@@ -18,12 +25,14 @@ void main() {
       MaterialApp(
         home: ProfileCreationScreen(
           accountEmail: 'parent@example.com',
+          loadLocations: () async => const [cheshire],
           createProfiles: (_) async {},
           onProfilesCreated: () {},
           onSignOut: () {},
         ),
       ),
     );
+    await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextFormField, 'First name').first,
       'Parent',
@@ -128,6 +137,7 @@ void main() {
         dateOfBirth: DateTime(1990, 1, 1),
         applicantBeltRank: 'White',
         role: ProfileAccountRole.parent,
+        locationId: 'cheshire',
         additionalStudents: [
           StudentProfileInput(
             firstName: 'Child',
@@ -145,10 +155,52 @@ void main() {
       profileIds: const ['child-profile'],
       timestamp: 'server-time',
       today: DateTime(2026, 7, 15),
-      familyApplicationId: 'family-1',
     );
 
     expect(plan.profiles['child-profile']!['firstName'], 'Child');
     expect(plan.profiles['child-profile']!['guardianUserIds'], ['parent-uid']);
+    expect(plan.user['locationId'], 'cheshire');
+    expect(plan.profiles['child-profile']!['locationId'], 'cheshire');
+    expect(plan.profiles['child-profile']!['isActive'], isTrue);
+  });
+
+  test('sole active location is selected automatically', () {
+    expect(initialLocationSelection(const [cheshire], null), 'cheshire');
+  });
+
+  test('multiple active locations require one account-level selection', () {
+    const second = AcademyLocation(
+      id: 'second',
+      name: 'Second Academy',
+      timeZoneId: 'America/Chicago',
+      isActive: true,
+    );
+    expect(initialLocationSelection(const [cheshire, second], null), isNull);
+    expect(
+      initialLocationSelection(const [cheshire, second], 'second'),
+      'second',
+    );
+  });
+
+  testWidgets('no active location blocks setup with retry and sign out', (
+    tester,
+  ) async {
+    var signedOut = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileCreationScreen(
+          loadLocations: () async => const [],
+          onSignOut: () => signedOut = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('No active academy location'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text('Sign out'), findsNWidgets(2));
+    expect(find.byType(Stepper), findsNothing);
+    await tester.tap(find.text('Sign out').last);
+    expect(signedOut, isTrue);
   });
 }

@@ -43,7 +43,7 @@ class ProfileScreen extends StatelessWidget {
                         const SizedBox(height: 22),
                         _FamilyAccountSection(account: account),
                         const SizedBox(height: 22),
-                        _MembershipSection(student: student),
+                        _AcademySection(student: student),
                         const SizedBox(height: 22),
                         _SettingsActionsSection(student: student),
                       ],
@@ -57,7 +57,7 @@ class ProfileScreen extends StatelessWidget {
       ),
       bottomNavigationBar:
           Firebase.apps.isEmpty ||
-              firebaseSessionController.stage == SessionStage.approved
+              firebaseSessionController.stage == SessionStage.member
           ? const OtaBottomNavBar(
               selectedDestination: OtaBottomNavDestination.profile,
             )
@@ -248,8 +248,8 @@ class _FamilyAccountSection extends StatelessWidget {
         ),
         ProfileInfoRow(
           icon: Icons.verified_user_rounded,
-          label: 'Account approval status',
-          value: account.approvalStatusLabel,
+          label: 'Account state',
+          value: account.isActive ? 'Active' : 'Inactive',
           showDivider: false,
         ),
       ],
@@ -257,19 +257,14 @@ class _FamilyAccountSection extends StatelessWidget {
   }
 }
 
-class _MembershipSection extends StatelessWidget {
-  const _MembershipSection({required this.student});
+class _AcademySection extends StatelessWidget {
+  const _AcademySection({required this.student});
   final StudentProfile student;
 
   @override
   Widget build(BuildContext context) => ProfileSection(
-    title: 'Academy Membership',
+    title: 'Academy Location',
     children: [
-      ProfileInfoRow(
-        icon: Icons.verified_user_outlined,
-        label: 'Status',
-        value: student.approvalStatus.name,
-      ),
       ProfileInfoRow(
         icon: Icons.place_outlined,
         label: 'Academy location',
@@ -281,16 +276,6 @@ class _MembershipSection extends StatelessWidget {
           label: 'Guardian email',
           value: student.guardianEmail!,
         ),
-      ProfileActionRow(
-        icon: student.locationId.isEmpty
-            ? Icons.add_location_alt_rounded
-            : Icons.manage_accounts_rounded,
-        label: student.locationId.isEmpty
-            ? 'Apply to a location'
-            : 'Manage academy membership',
-        showDivider: false,
-        onTap: () => Navigator.pushNamed(context, OtaRoutes.membership),
-      ),
     ],
   );
 }
@@ -369,7 +354,9 @@ class _SettingsActionsSection extends StatelessWidget {
                       : Icons.radio_button_unchecked,
                 ),
                 title: Text(profile.name),
-                subtitle: Text(profile.approvalStatus.name),
+                subtitle: Text(
+                  '${profile.beltRank} • ${_locationLabel(profile)}',
+                ),
                 onTap: () => Navigator.pop(context, profile.id),
               ),
           ],

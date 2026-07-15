@@ -4,23 +4,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
-import '../../models/student_profile.dart';
 import '../../models/student.dart';
+import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
-import 'firebase_authentication_service.dart';
-import 'firebase_app_data_service.dart';
-import 'firebase_identity_contract.dart';
-import 'profile_membership_service.dart';
 import '../firestore/firestore_collections.dart';
+import 'firebase_app_data_service.dart';
+import 'firebase_authentication_service.dart';
+import 'firebase_identity_contract.dart';
+import 'profile_service.dart';
 
 enum SessionStage {
   loading,
   signedOut,
   needsProfiles,
-  incomplete,
-  pending,
-  approved,
-  rejected,
+  member,
   disabled,
   adminDisabled,
   admin,
@@ -31,14 +28,14 @@ class FirebaseSessionController extends ChangeNotifier {
   FirebaseSessionController({
     AuthenticationService? authentication,
     FirebaseFirestore? firestore,
-    FirestoreProfileMembershipService? membership,
+    FirestoreProfileService? profileService,
   }) : authentication = authentication ?? FirebaseAuthenticationService(),
        _firestore = firestore ?? FirebaseFirestore.instance,
-       membership = membership ?? FirestoreProfileMembershipService();
+       profileService = profileService ?? FirestoreProfileService();
 
   final AuthenticationService authentication;
   final FirebaseFirestore _firestore;
-  final FirestoreProfileMembershipService membership;
+  final FirestoreProfileService profileService;
 
   SessionStage stage = SessionStage.loading;
   User? authUser;
@@ -60,7 +57,7 @@ class FirebaseSessionController extends ChangeNotifier {
   int _locationGeneration = 0;
   bool _disposed = false;
 
-  bool get isApprovedMember => stage == SessionStage.approved;
+  bool get hasActiveAcademyAccess => stage == SessionStage.member;
   bool get isAdministrator => stage == SessionStage.admin;
 
   void start() {
@@ -107,7 +104,7 @@ class FirebaseSessionController extends ChangeNotifier {
   }
 
   Future<void> selectProfile(String profileId) async {
-    await membership.selectProfile(profileId);
+    await profileService.selectProfile(profileId);
   }
 
   Future<void> _replaceAuthUser(User? user) async {
@@ -168,32 +165,42 @@ class FirebaseSessionController extends ChangeNotifier {
       _setError('Your account record is incomplete or invalid.');
       return;
     }
-    if (account!.role == UserAccountRole.admin ||
-        account!.role == UserAccountRole.superAdmin) {
-      if (account!.approvalStatus == UserAccountApprovalStatus.approved) {
-        if (account!.role == UserAccountRole.superAdmin) {
-          stage = SessionStage.admin;
-          errorMessage = null;
-          unawaited(_cancelLocationSubscription());
-        } else {
-          stage = SessionStage.loading;
-          unawaited(_replaceAdminLocationSubscription(sessionGeneration));
-        }
-      } else {
-        stage = SessionStage.adminDisabled;
+
+    final loadedAccount = account!;
+    if (loadedAccount.role == UserAccountRole.admin ||
+        loadedAccount.role == UserAccountRole.superAdmin) {
+      stage = adminAccessStageFor(account: loadedAccount);
+      if (stage == SessionStage.adminDisabled) {
         errorMessage = 'This administrator account is disabled.';
         unawaited(_cancelLocationSubscription());
+      } else if (stage == SessionStage.admin) {
+        errorMessage = null;
+        unawaited(_cancelLocationSubscription());
+      } else {
+        unawaited(_replaceAdminLocationSubscription(sessionGeneration));
       }
       unawaited(_cancelProfilesSubscription());
       notifyListeners();
       return;
     }
-    final linkedIds = account!.linkedStudentProfileIds;
-    if (linkedIds.isEmpty) {
+
+    if (!loadedAccount.isActive) {
+      stage = SessionStage.disabled;
+      errorMessage = 'This account is unavailable.';
+      unawaited(_cancelProfilesSubscription());
+      notifyListeners();
+      return;
+    }
+    if (loadedAccount.linkedStudentProfileIds.isEmpty) {
       _setError('Your account has no linked student profiles.');
       return;
     }
-    unawaited(_replaceProfilesSubscription(linkedIds, sessionGeneration));
+    unawaited(
+      _replaceProfilesSubscription(
+        loadedAccount.linkedStudentProfileIds,
+        sessionGeneration,
+      ),
+    );
   }
 
   Future<void> _replaceAdminLocationSubscription(int sessionGeneration) async {
@@ -224,15 +231,14 @@ class FirebaseSessionController extends ChangeNotifier {
               return;
             }
             final data = snapshot.data();
-            final name = data?['name'];
-            selectedLocationName = name is String && name.trim().isNotEmpty
-                ? name.trim()
-                : null;
-            if (data?['isActive'] == true) {
-              stage = SessionStage.admin;
+            selectedLocationName = _locationName(data);
+            stage = adminAccessStageFor(
+              account: account,
+              locationActive: data?['isActive'] == true,
+            );
+            if (stage == SessionStage.admin) {
               errorMessage = null;
             } else {
-              stage = SessionStage.adminDisabled;
               errorMessage = 'This academy location is unavailable.';
             }
             notifyListeners();
@@ -340,7 +346,7 @@ class FirebaseSessionController extends ChangeNotifier {
           .where((profile) => profile.id == selectedId)
           .firstOrNull;
       if (selectedProfile == null) {
-        unawaited(membership.selectProfile(loaded.first.id));
+        unawaited(profileService.selectProfile(loaded.first.id));
         selectedProfile = loaded.first;
       }
       unawaited(
@@ -356,6 +362,7 @@ class FirebaseSessionController extends ChangeNotifier {
     int profilesGeneration,
   ) async {
     final profile = selectedProfile!;
+    final loadedAccount = account!;
     final generation = ++_locationGeneration;
     final previous = _locationSubscription;
     _locationSubscription = null;
@@ -363,66 +370,76 @@ class FirebaseSessionController extends ChangeNotifier {
     if (!_isCurrentProfiles(
           sessionGeneration,
           profilesGeneration,
-          account!.linkedStudentProfileIds.join('\u0000'),
+          loadedAccount.linkedStudentProfileIds.join('\u0000'),
         ) ||
         generation != _locationGeneration) {
       return;
     }
     selectedLocationName = null;
-    final locationId = profile.locationId.trim();
-    stage = membershipStageForProfileStatus(profile.approvalStatus);
-    if (profile.approvalStatus == StudentApprovalStatus.approved &&
-        locationId.isEmpty) {
-      _setError('Approved profile has no academy location.');
+    if (!profile.isActive) {
+      stage = SessionStage.disabled;
+      errorMessage = 'This student profile is unavailable.';
+      notifyListeners();
       return;
     }
-    if (locationId.isNotEmpty) {
-      _locationSubscription = _firestore
-          .collection(FirestoreCollections.locations)
-          .doc(locationId)
-          .snapshots()
-          .listen(
-            (snapshot) {
-              if (!_isCurrentLocation(
-                sessionGeneration,
-                profilesGeneration,
-                generation,
-                profile.id,
-                locationId,
-              )) {
-                return;
-              }
-              final data = snapshot.data();
-              final name = data?['name'];
-              selectedLocationName = name is String && name.trim().isNotEmpty
-                  ? name.trim()
-                  : null;
-              if (profile.approvalStatus == StudentApprovalStatus.approved) {
-                if (data?['isActive'] == true) {
-                  stage = SessionStage.approved;
-                  errorMessage = null;
-                } else {
-                  stage = SessionStage.disabled;
-                  errorMessage = 'This academy location is unavailable.';
-                }
-              }
-              notifyListeners();
-            },
-            onError: (_) {
-              if (_isCurrentLocation(
-                sessionGeneration,
-                profilesGeneration,
-                generation,
-                profile.id,
-                locationId,
-              )) {
-                _setError('Unable to verify academy location.');
-              }
-            },
-          );
+    if (profile.locationId.isEmpty ||
+        profile.locationId != loadedAccount.locationId) {
+      _setError('The selected profile has invalid academy access data.');
+      return;
     }
+
+    final locationId = loadedAccount.locationId;
+    stage = SessionStage.loading;
+    _locationSubscription = _firestore
+        .collection(FirestoreCollections.locations)
+        .doc(locationId)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!_isCurrentLocation(
+              sessionGeneration,
+              profilesGeneration,
+              generation,
+              profile.id,
+              locationId,
+            )) {
+              return;
+            }
+            final data = snapshot.data();
+            selectedLocationName = _locationName(data);
+            final locationActive = data?['isActive'] == true;
+            if (hasActiveAcademyAccessFor(
+              account: account,
+              selectedProfile: selectedProfile,
+              locationActive: locationActive,
+            )) {
+              stage = SessionStage.member;
+              errorMessage = null;
+            } else {
+              stage = SessionStage.disabled;
+              errorMessage = 'This academy location is unavailable.';
+            }
+            notifyListeners();
+          },
+          onError: (_) {
+            if (_isCurrentLocation(
+              sessionGeneration,
+              profilesGeneration,
+              generation,
+              profile.id,
+              locationId,
+            )) {
+              _setError('Unable to verify academy location.');
+            }
+          },
+        );
     errorMessage = null;
     notifyListeners();
+  }
+
+  String? _locationName(Map<String, dynamic>? data) {
+    final name = data?['name'];
+    return name is String && name.trim().isNotEmpty ? name.trim() : null;
   }
 
   void _setError(String message) {
@@ -534,11 +551,40 @@ bool listenerCallbackIsCurrent({
 }
 
 @visibleForTesting
-SessionStage membershipStageForProfileStatus(StudentApprovalStatus status) =>
-    switch (status) {
-      StudentApprovalStatus.incomplete => SessionStage.incomplete,
-      StudentApprovalStatus.pending => SessionStage.pending,
-      StudentApprovalStatus.approved => SessionStage.loading,
-      StudentApprovalStatus.rejected => SessionStage.rejected,
-      StudentApprovalStatus.disabled => SessionStage.disabled,
-    };
+bool hasActiveAcademyAccessFor({
+  required UserAccount? account,
+  required Student? selectedProfile,
+  required bool locationActive,
+}) {
+  if (account == null || selectedProfile == null) return false;
+  return [
+        UserAccountRole.student,
+        UserAccountRole.parent,
+      ].contains(account.role) &&
+      account.isActive &&
+      selectedProfile.isActive &&
+      account.locationId.isNotEmpty &&
+      selectedProfile.locationId == account.locationId &&
+      account.selectedStudentProfileId == selectedProfile.id &&
+      account.linkedStudentProfileIds.contains(selectedProfile.id) &&
+      locationActive;
+}
+
+@visibleForTesting
+SessionStage adminAccessStageFor({
+  required UserAccount? account,
+  bool? locationActive,
+}) {
+  if (account == null ||
+      ![
+        UserAccountRole.admin,
+        UserAccountRole.superAdmin,
+      ].contains(account.role)) {
+    return SessionStage.error;
+  }
+  if (!account.isActive) return SessionStage.adminDisabled;
+  if (account.role == UserAccountRole.superAdmin) return SessionStage.admin;
+  if (account.locationId.isEmpty) return SessionStage.error;
+  if (locationActive == null) return SessionStage.loading;
+  return locationActive ? SessionStage.admin : SessionStage.adminDisabled;
+}

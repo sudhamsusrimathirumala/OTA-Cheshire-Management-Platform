@@ -9,7 +9,6 @@ abstract final class OtaRoutes {
   static const curriculum = '/curriculum';
   static const notifications = '/notifications';
   static const profile = '/profile';
-  static const membership = '/membership';
   static const login = '/login';
   static const signup = '/signup';
   static const adminDashboard = '/admin/dashboard';

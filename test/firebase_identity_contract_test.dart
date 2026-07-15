@@ -16,10 +16,10 @@ void main() {
         'lastName': ' Lovelace ',
         'email': ' ADA@Example.COM ',
         'role': 'parent',
-        'approvalStatus': 'approved',
+        'isActive': true,
+        'locationId': 'ota-cheshire',
         'linkedStudentProfileIds': <String>[],
         'googleAccountId': 'google-provider-456',
-        'familyApplicationId': 'family-1',
         'createdAt': Timestamp.fromDate(now),
         'updatedAt': Timestamp.fromDate(now),
       });
@@ -28,30 +28,31 @@ void main() {
       expect(account.id, isNot(account.email));
       expect(account.email, 'ada@example.com');
       expect(account.googleAccountId, 'google-provider-456');
-      expect(account.familyApplicationId, 'family-1');
+      expect(account.locationId, 'ota-cheshire');
+      expect(account.isActive, isTrue);
     });
 
-    test('all canonical roles and statuses parse', () {
+    test('all canonical roles parse', () {
       expect(
         ['student', 'parent', 'admin', 'superAdmin'].map(parseUserAccountRole),
         UserAccountRole.values,
       );
-      expect(
-        [
-          'incomplete',
-          'pending',
-          'approved',
-          'rejected',
-          'disabled',
-        ].map(parseUserAccountApprovalStatus),
-        UserAccountApprovalStatus.values,
-      );
     });
 
-    test('invalid roles and statuses are rejected', () {
+    test('invalid roles and malformed active access are rejected', () {
       expect(() => parseUserAccountRole('instructor'), throwsFormatException);
       expect(
-        () => parseUserAccountApprovalStatus('active'),
+        () => userAccountFromFirestoreData('uid', {
+          'firstName': 'Ada',
+          'lastName': 'Lovelace',
+          'email': 'ada@example.com',
+          'role': 'parent',
+          'isActive': 'yes',
+          'locationId': 'ota-cheshire',
+          'linkedStudentProfileIds': <String>[],
+          'createdAt': now,
+          'updatedAt': now,
+        }),
         throwsFormatException,
       );
     });
@@ -67,7 +68,8 @@ void main() {
           lastName: 'Lovelace',
           email: ' ADA@example.com ',
           role: UserAccountRole.parent,
-          approvalStatus: UserAccountApprovalStatus.incomplete,
+          isActive: true,
+          locationId: 'ota-cheshire',
           linkedStudentProfileIds: const [],
           phoneNumber: ' ',
         ),
@@ -144,20 +146,18 @@ void main() {
           'locationId': 'ota-cheshire',
           'guardianEmail': ' FAMILY@Example.com ',
           'guardianUserIds': ['parent-uid'],
-          'approvalStatus': 'pending',
-          'familyApplicationId': 'family-1',
+          'isActive': true,
           'createdAt': now,
           'updatedAt': now,
         });
         expect(profile.guardianEmail, 'family@example.com');
         expect(profile.guardianUserIds, ['parent-uid']);
-        expect(profile.familyApplicationId, 'family-1');
+        expect(profile.locationId, 'ota-cheshire');
+        expect(profile.isActive, isTrue);
       },
     );
 
-    test('unknown or missing student approval status fails closed', () {
-      expect(() => parseStudentApprovalStatus('active'), throwsFormatException);
-      expect(() => parseStudentApprovalStatus(null), throwsFormatException);
+    test('missing or malformed profile access data fails closed', () {
       expect(
         () => studentProfileFromCanonicalData('student-1', {
           'firstName': 'Grace',
@@ -166,7 +166,7 @@ void main() {
           'beltRank': 'Blue',
           'guardianEmail': 'family@example.com',
           'guardianUserIds': ['parent-uid'],
-          'approvalStatus': 'active',
+          'isActive': 'yes',
           'createdAt': now,
           'updatedAt': now,
         }),

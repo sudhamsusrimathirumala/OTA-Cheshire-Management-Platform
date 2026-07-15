@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../services/firebase/firebase_session_controller.dart';
 import '../admin/admin_dashboard_screen.dart';
-import '../membership_status_screen.dart';
 import '../student_dashboard_screen.dart';
 import '../welcome_screen.dart';
+import 'account_ready_screen.dart';
 import 'profile_creation_screen.dart';
 
 class AuthGate extends StatelessWidget {
@@ -17,6 +17,7 @@ class AuthGate extends StatelessWidget {
       return authGateDestination(
         stage: firebaseSessionController.stage,
         errorMessage: firebaseSessionController.errorMessage,
+        justCreatedProfiles: firebaseSessionController.justCreatedProfiles,
       );
     },
   );
@@ -26,18 +27,21 @@ class AuthGate extends StatelessWidget {
 Widget authGateDestination({
   required SessionStage stage,
   String? errorMessage,
+  bool justCreatedProfiles = false,
 }) => switch (stage) {
   SessionStage.loading => const _LoadingScreen(),
   SessionStage.signedOut => const WelcomeScreen(),
   SessionStage.needsProfiles => const ProfileCreationScreen(),
-  SessionStage.incomplete ||
-  SessionStage.pending ||
-  SessionStage.rejected ||
-  SessionStage.disabled => const MembershipStatusScreen(),
+  SessionStage.disabled => _SessionErrorScreen(
+    message: errorMessage ?? 'This account or academy location is unavailable.',
+  ),
   SessionStage.adminDisabled => _SessionErrorScreen(
     message: errorMessage ?? 'This administrator account is unavailable.',
   ),
-  SessionStage.approved => const StudentDashboardScreen(),
+  SessionStage.member =>
+    justCreatedProfiles
+        ? const AccountReadyScreen()
+        : const StudentDashboardScreen(),
   SessionStage.admin => const AdminDashboardScreen(),
   SessionStage.error => _SessionErrorScreen(
     message: errorMessage ?? 'Your account could not be loaded.',

@@ -7,7 +7,6 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_s
 import 'package:ota_cheshire_management_platform/screens/auth/auth_gate.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
-import 'package:ota_cheshire_management_platform/screens/membership_status_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/signup_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
@@ -155,15 +154,11 @@ void main() {
     expect(find.text('AUTH GATE'), findsOneWidget);
   });
 
-  test('AuthGate maps every session stage without a verification stage', () {
+  test('AuthGate maps the simplified session stages', () {
     final expected = <SessionStage, Type>{
       SessionStage.signedOut: WelcomeScreen,
       SessionStage.needsProfiles: ProfileCreationScreen,
-      SessionStage.incomplete: MembershipStatusScreen,
-      SessionStage.pending: MembershipStatusScreen,
-      SessionStage.rejected: MembershipStatusScreen,
-      SessionStage.disabled: MembershipStatusScreen,
-      SessionStage.approved: StudentDashboardScreen,
+      SessionStage.member: StudentDashboardScreen,
       SessionStage.admin: AdminDashboardScreen,
     };
 
@@ -172,6 +167,7 @@ void main() {
     }
     for (final stage in [
       SessionStage.loading,
+      SessionStage.disabled,
       SessionStage.adminDisabled,
       SessionStage.error,
     ]) {
