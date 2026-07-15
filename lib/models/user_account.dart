@@ -1,13 +1,5 @@
 enum UserAccountRole { student, parent, admin, superAdmin }
 
-enum UserAccountApprovalStatus {
-  incomplete,
-  pending,
-  approved,
-  rejected,
-  disabled,
-}
-
 class UserAccount {
   const UserAccount({
     required this.id,
@@ -15,7 +7,7 @@ class UserAccount {
     required this.lastName,
     required this.email,
     required this.role,
-    required this.approvalStatus,
+    this.isActive = true,
     required this.linkedStudentProfileIds,
     this.createdAt,
     this.updatedAt,
@@ -23,7 +15,6 @@ class UserAccount {
     this.locationId = '',
     this.selectedStudentProfileId,
     this.googleAccountId,
-    this.familyApplicationId,
   });
 
   final String id;
@@ -31,7 +22,7 @@ class UserAccount {
   final String lastName;
   final String email;
   final UserAccountRole role;
-  final UserAccountApprovalStatus approvalStatus;
+  final bool isActive;
   final List<String> linkedStudentProfileIds;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -39,19 +30,8 @@ class UserAccount {
   final String locationId;
   final String? selectedStudentProfileId;
   final String? googleAccountId;
-  final String? familyApplicationId;
 
   String get displayName => '$firstName $lastName'.trim();
-
-  String get approvalStatusLabel {
-    return switch (approvalStatus) {
-      UserAccountApprovalStatus.incomplete => 'Incomplete',
-      UserAccountApprovalStatus.pending => 'Pending',
-      UserAccountApprovalStatus.approved => 'Approved',
-      UserAccountApprovalStatus.rejected => 'Rejected',
-      UserAccountApprovalStatus.disabled => 'Disabled',
-    };
-  }
 
   String get roleLabel {
     return switch (role) {

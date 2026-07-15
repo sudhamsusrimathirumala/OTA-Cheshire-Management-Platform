@@ -12,8 +12,6 @@ import '../models/academy_resource.dart';
 import '../models/class_session.dart';
 import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
-import '../models/membership_application.dart';
-import '../models/student.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import 'app_data_service.dart';
@@ -50,26 +48,7 @@ class MockAppDataService implements AppDataService {
   }
 
   @override
-  List<MembershipApplication> get adminMembershipApplications => [
-    for (final profile in adminStudentProfiles)
-      if (profile.approvalStatus == StudentApprovalStatus.pending)
-        MembershipApplication(
-          id: 'sample-${profile.id}',
-          applicantUserId: profile.linkedUserId ?? 'sample-applicant',
-          applicant: MembershipApplicantSnapshot(
-            firstName: profile.firstName,
-            lastName: profile.lastName,
-            email: profile.guardianEmail ?? 'sample@example.com',
-            role: 'parent',
-          ),
-          locationId: profile.locationId,
-          studentProfileIds: [profile.id],
-          status: MembershipApplicationStatus.pending,
-          appliedAt: profile.appliedAt ?? profile.updatedAt ?? DateTime(2026),
-          updatedAt: profile.updatedAt ?? DateTime(2026),
-          isLegacy: true,
-        ),
-  ];
+  List<UserAccount> get adminUserAccounts => [currentUserAccount];
 
   @override
   StudentProfile get selectedStudentProfile {
@@ -121,11 +100,6 @@ class MockAppDataService implements AppDataService {
   String? get adminStudentsErrorMessage => null;
 
   @override
-  bool get isMembershipApplicationsLoading => false;
-
-  @override
-  String? get membershipApplicationsErrorMessage => null;
-
   @override
   void retryLiveData() {}
 

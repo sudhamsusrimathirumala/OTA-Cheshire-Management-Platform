@@ -141,15 +141,13 @@ Map<String, Object?> _userAccountData(UserAccount account) {
     'email': account.email,
     'role': account.role.name,
     if (account.locationId.isNotEmpty) 'locationId': account.locationId,
-    'approvalStatus': account.approvalStatus.name,
+    'isActive': account.isActive,
     'linkedStudentProfileIds': account.linkedStudentProfileIds,
     if (account.phoneNumber != null) 'phoneNumber': account.phoneNumber,
     if (account.selectedStudentProfileId != null)
       'selectedStudentProfileId': account.selectedStudentProfileId,
     if (account.googleAccountId != null)
       'googleAccountId': account.googleAccountId,
-    if (account.familyApplicationId != null)
-      'familyApplicationId': account.familyApplicationId,
     'createdAt': now,
     'updatedAt': now,
   };
@@ -166,10 +164,8 @@ Map<String, Object?> studentProfileWriteFields(Student profile) {
     if (profile.locationId.trim().isNotEmpty) 'locationId': profile.locationId,
     if (profile.guardianEmail != null) 'guardianEmail': profile.guardianEmail,
     'guardianUserIds': profile.guardianUserIds,
-    'approvalStatus': profile.approvalStatus.name,
+    'isActive': profile.isActive,
     if (profile.linkedUserId != null) 'linkedUserId': profile.linkedUserId,
-    if (profile.familyApplicationId != null)
-      'familyApplicationId': profile.familyApplicationId,
     'preferredClassGroupIds': profile.preferredClassGroupIds,
     'stickerProgress': {
       'current': profile.stickerCount,
@@ -178,7 +174,6 @@ Map<String, Object?> studentProfileWriteFields(Student profile) {
     },
     'promotionHistory': profile.promotionHistory,
     'testingNotes': profile.testingNotes,
-    'isActive': profile.isActive,
     'createdAt': now,
     'updatedAt': now,
   };

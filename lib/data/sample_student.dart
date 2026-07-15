@@ -65,8 +65,8 @@ final sampleStudentProfiles = [
     preferredClassGroupIds: ['teen-adult'],
   ),
   Student(
-    id: 'student_sample_pending',
-    name: 'Sample Pending Student',
+    id: 'student_sample_new',
+    name: 'Sample New Student',
     locationId: otaCheshireLocationId,
     belt: 'White',
     dateOfBirth: DateTime.utc(2014, 6, 15),
@@ -74,7 +74,6 @@ final sampleStudentProfiles = [
     stickersRequired: 4,
     nextRank: 'Yellow',
     guardianEmail: 'sample.guardian@example.com',
-    approvalStatus: StudentApprovalStatus.pending,
     updatedAt: DateTime.utc(2026, 7, 15),
   ),
 ];
@@ -86,7 +85,7 @@ const sampleUserAccount = UserAccount(
   email: 'parent@example.com',
   role: UserAccountRole.parent,
   locationId: otaCheshireLocationId,
-  approvalStatus: UserAccountApprovalStatus.approved,
+  isActive: true,
   linkedStudentProfileIds: ['student_sudhamsu'],
   selectedStudentProfileId: 'student_sudhamsu',
 );
