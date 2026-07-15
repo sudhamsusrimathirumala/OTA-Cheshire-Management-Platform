@@ -76,7 +76,8 @@ Required fields:
 - `updatedAt`: Timestamp
 
 Optional fields are `linkedUserId`, `familyApplicationId`, `locationId`,
-`preferredClassGroupIds`, `reviewedAt`, `reviewedBy`, and `rejectionReason`.
+`applicationId`, `appliedAt`, `preferredClassGroupIds`, `reviewedAt`,
+`reviewedBy`, and `rejectionReason`.
 `guardianEmail` is a contact/notification address;
 it does not create a user or replace `guardianUserIds`. Existing profiles may
 temporarily omit it. Migration derives it only from one unambiguous existing
@@ -90,9 +91,38 @@ share one generated `familyApplicationId`. Applying writes an active
 `approved`/`rejected` plus reviewer metadata; leaving removes location and
 review fields and restores `incomplete`.
 
+New academy applications mirror one `membershipApplications` document ID and
+one application timestamp onto every selected profile. Existing pending
+profiles without an `applicationId` remain valid legacy records and are
+reviewed as one-profile applications; they are not converted automatically.
+
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when
 `dateOfBirth` is missing. New writes never store `age`.
+
+## `membershipApplications/{applicationId}`
+
+One document represents one applicant's selected profiles for one academy.
+Creation and review update the application and every included profile in one
+atomic operation. Partial review is not supported.
+
+Required fields:
+
+- `applicantUserId`: String referencing `users`
+- `applicantSnapshot`: Map containing `firstName`, `lastName`, `email`, `role`,
+  and optional `phoneNumber`
+- `locationId`: String referencing an active `locations` document
+- `studentProfileIds`: unique List<String> containing 1 through 11 linked
+  profile IDs
+- `status`: `pending`, `approved`, or `rejected`
+- `appliedAt`: Timestamp
+- `updatedAt`: Timestamp
+
+Optional review fields are `reviewedAt`, `reviewedBy`, and `rejectionReason`.
+Applicants may create and read only their own applications. Location admins may
+read and review only their assigned active location; Super Admin review remains
+limited to active locations. Applicant identity, location, and profile IDs are
+immutable during review.
 
 ## `classSessions/{sessionId}`
 

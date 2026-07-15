@@ -61,6 +61,11 @@ Development application:
 flutter run --flavor dev -t lib/main_dev.dart
 ```
 
+The Debug Student View and Sample Admin View are development-debug mock views.
+Their labels remain visible, their review/write actions cannot reach Firestore,
+and they are unavailable in release builds. Real authenticated sessions always
+use Firebase and show listener failures instead of substituting sample data.
+
 Development-only, read-only utilities:
 
 ```powershell
@@ -83,7 +88,7 @@ been reviewed. Details are in [Firestore operations](FIRESTORE_OPERATIONS.md).
 ## Quality Checks
 
 ```powershell
-dart format lib test
+dart format lib test tool
 flutter analyze
 flutter test
 git diff --check

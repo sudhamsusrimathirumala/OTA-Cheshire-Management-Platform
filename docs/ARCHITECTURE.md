@@ -25,8 +25,9 @@ not paid overage.
   `FirebaseAuthenticationService`, `FirebaseSessionController`, and
   `FirestoreProfileMembershipService` own authentication, reactive routing,
   atomic profile creation, membership application/review, and leave writes.
-- **Mock fallback:** `MockAppDataService` and `lib/data/` provide local data for
-  unavailable Firebase and for features that have not moved to Firebase.
+- **Mock data:** `MockAppDataService` and `lib/data/` provide local data only for
+  isolated tests and clearly labeled development-debug sample views. They are
+  not a fallback for an authenticated Firebase session.
 - **Development utilities:** Separate `*_main.dart` entrypoints provide audit,
   export, cleanup, migration, seed, and one-time schema-update workflows. They
   are not normal application routes.
@@ -44,9 +45,10 @@ Firestore snapshots
 
 The active content listeners cover `classSessions`, `announcements`, `events`,
 and `resources` for the approved selected profile's active location. Session
-listeners observe Auth, the UID user document, linked profiles, selection,
-membership status, and the selected location. Isolated tests without an
-initialized Firebase app use `MockAppDataService`.
+and membership listeners observe Auth, the UID user document, linked profiles,
+selection, membership applications, membership status, and the selected
+location. Listener failures remain visible as real error states. Isolated tests
+without an initialized Firebase app use `MockAppDataService`.
 
 Implemented admin writes follow this path:
 
@@ -66,7 +68,9 @@ implemented.
 
 `lib/services/app_data_service_provider.dart` contains the compile-time
 `useFirebase` switch. It is currently `true`, so the normal application creates
-`FirebaseAppDataService`. Setting it to `false` selects `MockAppDataService`.
+`FirebaseAppDataService`. The mock implementation is reserved for controlled
+tests and development-debug sample views; real authenticated flows do not
+switch to it after a Firebase error.
 
 With Firebase initialized, `FirebaseAppDataService` uses the authenticated UID,
 linked profiles, and persisted selection from `FirebaseSessionController`.

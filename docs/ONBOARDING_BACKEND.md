@@ -30,13 +30,21 @@ a personal student profile. A single `WriteBatch` creates `users/{uid}` and all
 
 ## Profile-specific membership
 
-Application loads active locations from Firestore and updates one explicitly
-selected profile from `incomplete` or `rejected` to `pending`, writing that
-profile's `locationId`. Admin review changes only a pending profile to
-`approved` or `rejected`, retains its location, and records reviewer metadata.
-Leaving an approved, pending, or rejected membership removes its `locationId`
-and review fields and restores `incomplete`; other family profiles are not
-changed.
+Application loads active locations from Firestore and lets the applicant select
+one or more linked profiles that are `incomplete` or `rejected`. One atomic
+transaction creates a `membershipApplications` document and moves every
+selected profile to `pending` at one location with the same application ID and
+timestamp. Pending and approved profiles are unavailable for another batch.
+
+Admin review updates the pending application and every included profile to
+`approved` or `rejected` in one transaction with consistent reviewer metadata.
+Per-profile or partial batch review is not permitted. Existing pending profiles
+without an application document remain reviewable as legacy one-profile
+applications and are not rewritten automatically.
+
+Leaving an approved or rejected membership removes that profile's location and
+review fields and restores `incomplete`; other family profiles are not changed.
+A pending batch remains intact until the academy reviews it.
 
 Academy data is readable only when the selected profile is approved, has an
 active location, and the content document matches that location. A parent

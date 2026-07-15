@@ -58,8 +58,9 @@ constraint.
   in the existing list-management interface.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
-- Firestore-backed student directory, pending membership review, approval,
-  rejection, and details. Generic student profile editing is not implemented.
+- Firestore-backed student directory, batch membership applications, atomic
+  approval/rejection, legacy pending-profile review, and details. Generic
+  student profile editing is not implemented.
 - Read-only curriculum view backed by local sample curriculum.
 
 Normal startup routes approved Admin and Super Admin accounts through the
@@ -70,10 +71,11 @@ Firebase session gate; no public role-escalation route exists.
 `AppDataService` defines the data consumed by screens. The provider switch in
 `lib/services/app_data_service_provider.dart` currently selects
 `FirebaseAppDataService`. It maintains Firestore snapshot listeners for
-`classSessions`, `announcements`, `events`, `resources`, and
-`studentProfiles`. `MockAppDataService` supplies local data when Firebase is
-unavailable and continues to supply the current user, linked/selected profiles,
-and curriculum.
+`classSessions`, `announcements`, `events`, `resources`, `studentProfiles`, and
+`membershipApplications`. `MockAppDataService` is limited to isolated tests and
+the clearly labeled development-debug sample views. An authenticated Firebase
+session never falls back to sample data when a listener fails; the affected UI
+keeps its loading, empty, and error states distinct.
 
 `FirebaseAdminWriteService` performs the implemented admin writes. Existing
 documents are written with merge semantics, and cleared canonical optional
@@ -86,6 +88,7 @@ The application uses these top-level collections:
 - `locations`
 - `users`
 - `studentProfiles`
+- `membershipApplications`
 - `classSessions`
 - `announcements`
 - `events`
@@ -199,7 +202,7 @@ database data or server code is deployed.
 ## Testing and Validation
 
 ```powershell
-dart format lib test
+dart format lib test tool
 flutter analyze
 flutter test
 git diff --check
