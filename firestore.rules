@@ -12,6 +12,9 @@ service cloud.firestore {
     function locationPath(locationId) {
       return /databases/$(database)/documents/locations/$(locationId);
     }
+    function applicationPath(applicationId) {
+      return /databases/$(database)/documents/membershipApplications/$(applicationId);
+    }
     function hasUser() {
       return signedIn() && exists(userPath(request.auth.uid));
     }
@@ -219,11 +222,161 @@ service cloud.firestore {
               request.resource.data.locationId);
     }
 
+    function validApplicationApplicantSnapshot(snapshot) {
+      let user = currentUser();
+      return snapshot is map && snapshot.keys().hasOnly([
+            'firstName', 'lastName', 'email', 'phoneNumber', 'role'
+          ]) && snapshot.keys().hasAll([
+            'firstName', 'lastName', 'email', 'role'
+          ]) && snapshot.firstName == user.firstName &&
+          snapshot.lastName == user.lastName && snapshot.email == user.email &&
+          snapshot.role == user.role &&
+          (user.keys().hasAny(['phoneNumber'])
+            ? snapshot.phoneNumber == user.phoneNumber
+            : !snapshot.keys().hasAny(['phoneNumber']));
+    }
+
+    function applicationProfileMatches(applicationId, profileId, data) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.applicationId == applicationId &&
+          profileId in data.studentProfileIds &&
+          profile.locationId == data.locationId &&
+          profile.approvalStatus == 'pending' &&
+          profile.appliedAt == request.time &&
+          profile.updatedAt == request.time;
+    }
+
+    function allApplicationProfilesMatch(applicationId, data) {
+      let ids = data.studentProfileIds;
+      return applicationProfileMatches(applicationId, ids[0], data) &&
+          (ids.size() < 2 || applicationProfileMatches(applicationId, ids[1], data)) &&
+          (ids.size() < 3 || applicationProfileMatches(applicationId, ids[2], data)) &&
+          (ids.size() < 4 || applicationProfileMatches(applicationId, ids[3], data)) &&
+          (ids.size() < 5 || applicationProfileMatches(applicationId, ids[4], data)) &&
+          (ids.size() < 6 || applicationProfileMatches(applicationId, ids[5], data)) &&
+          (ids.size() < 7 || applicationProfileMatches(applicationId, ids[6], data)) &&
+          (ids.size() < 8 || applicationProfileMatches(applicationId, ids[7], data)) &&
+          (ids.size() < 9 || applicationProfileMatches(applicationId, ids[8], data)) &&
+          (ids.size() < 10 || applicationProfileMatches(applicationId, ids[9], data)) &&
+          (ids.size() < 11 || applicationProfileMatches(applicationId, ids[10], data));
+    }
+
+    function validMembershipApplicationCreate(applicationId, data) {
+      return hasUser() && currentUser().role in ['student', 'parent'] &&
+          data.keys().hasOnly([
+            'applicantUserId', 'applicantSnapshot', 'locationId',
+            'studentProfileIds', 'status', 'appliedAt', 'updatedAt'
+          ]) && data.keys().hasAll([
+            'applicantUserId', 'applicantSnapshot', 'locationId',
+            'studentProfileIds', 'status', 'appliedAt', 'updatedAt'
+          ]) && data.applicantUserId == request.auth.uid &&
+          validApplicationApplicantSnapshot(data.applicantSnapshot) &&
+          data.studentProfileIds is list &&
+          data.studentProfileIds.size() >= 1 &&
+          data.studentProfileIds.size() <= 11 &&
+          data.studentProfileIds.toSet().size() == data.studentProfileIds.size() &&
+          data.studentProfileIds.toSet().hasOnly(
+            currentUser().linkedStudentProfileIds
+          ) && data.status == 'pending' && activeLocation(data.locationId) &&
+          data.appliedAt == request.time && data.updatedAt == request.time &&
+          allApplicationProfilesMatch(applicationId, data);
+    }
+
+    function validBatchApplyTransition(profileId) {
+      let applicationId = request.resource.data.get('applicationId', '');
+      let application = getAfter(applicationPath(applicationId)).data;
+      return managesProfile(profileId) && applicationId is string &&
+          applicationId.size() > 0 &&
+          resource.data.approvalStatus in ['incomplete', 'rejected'] &&
+          request.resource.data.approvalStatus == 'pending' &&
+          application.applicantUserId == request.auth.uid &&
+          application.status == 'pending' &&
+          application.locationId == request.resource.data.locationId &&
+          profileId in application.studentProfileIds &&
+          activeLocation(request.resource.data.locationId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'locationId', 'approvalStatus', 'applicationId', 'appliedAt',
+            'reviewedAt', 'reviewedBy', 'rejectionReason', 'updatedAt'
+          ]) && !request.resource.data.keys().hasAny([
+            'reviewedAt', 'reviewedBy', 'rejectionReason'
+          ]) && request.resource.data.appliedAt == request.time &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function reviewedApplicationProfileMatches(applicationId, profileId, data) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.applicationId == applicationId &&
+          profile.approvalStatus == data.status;
+    }
+
+    function allReviewedApplicationProfilesMatch(applicationId, data) {
+      let ids = data.studentProfileIds;
+      return reviewedApplicationProfileMatches(applicationId, ids[0], data) &&
+          (ids.size() < 2 || reviewedApplicationProfileMatches(applicationId, ids[1], data)) &&
+          (ids.size() < 3 || reviewedApplicationProfileMatches(applicationId, ids[2], data)) &&
+          (ids.size() < 4 || reviewedApplicationProfileMatches(applicationId, ids[3], data)) &&
+          (ids.size() < 5 || reviewedApplicationProfileMatches(applicationId, ids[4], data)) &&
+          (ids.size() < 6 || reviewedApplicationProfileMatches(applicationId, ids[5], data)) &&
+          (ids.size() < 7 || reviewedApplicationProfileMatches(applicationId, ids[6], data)) &&
+          (ids.size() < 8 || reviewedApplicationProfileMatches(applicationId, ids[7], data)) &&
+          (ids.size() < 9 || reviewedApplicationProfileMatches(applicationId, ids[8], data)) &&
+          (ids.size() < 10 || reviewedApplicationProfileMatches(applicationId, ids[9], data)) &&
+          (ids.size() < 11 || reviewedApplicationProfileMatches(applicationId, ids[10], data));
+    }
+
+    function validMembershipApplicationReview(applicationId) {
+      return canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
+          resource.data.status == 'pending' &&
+          request.resource.data.status in ['approved', 'rejected'] &&
+          request.resource.data.reviewedBy == request.auth.uid &&
+          request.resource.data.reviewedAt == request.time &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'reviewedAt', 'reviewedBy', 'rejectionReason', 'updatedAt'
+          ]) &&
+          (request.resource.data.status == 'approved'
+            ? !request.resource.data.keys().hasAny(['rejectionReason'])
+            : (!request.resource.data.keys().hasAny(['rejectionReason']) ||
+               (request.resource.data.rejectionReason is string &&
+                request.resource.data.rejectionReason.size() <= 500))) &&
+          allReviewedApplicationProfilesMatch(
+            applicationId, request.resource.data
+          );
+    }
+
+    function validBatchAdminReview(profileId) {
+      let applicationId = resource.data.get('applicationId', '');
+      let application = getAfter(applicationPath(applicationId)).data;
+      return applicationId is string && applicationId.size() > 0 &&
+          resource.data.approvalStatus == 'pending' &&
+          application.locationId == resource.data.locationId &&
+          profileId in application.studentProfileIds &&
+          application.status in ['approved', 'rejected'] &&
+          application.reviewedBy == request.auth.uid &&
+          application.reviewedAt == request.time &&
+          application.updatedAt == request.time &&
+          request.resource.data.approvalStatus == application.status &&
+          request.resource.data.reviewedBy == application.reviewedBy &&
+          request.resource.data.reviewedAt == application.reviewedAt &&
+          request.resource.data.updatedAt == application.updatedAt &&
+          (application.status == 'approved'
+            ? !request.resource.data.keys().hasAny(['rejectionReason'])
+            : request.resource.data.get('rejectionReason', '') ==
+              application.get('rejectionReason', '')) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'approvalStatus', 'reviewedAt', 'reviewedBy',
+            'rejectionReason', 'updatedAt'
+          ]);
+    }
+
     function validLeaveTransition(profileId) {
       let ownProfile = resource.data.get('linkedUserId', '') == request.auth.uid;
       return managesProfile(profileId) &&
           resource.data.keys().hasAny(['locationId']) &&
           resource.data.approvalStatus in ['approved', 'pending', 'rejected'] &&
+          (resource.data.approvalStatus != 'pending' ||
+            !resource.data.keys().hasAny(['applicationId'])) &&
           request.resource.data.approvalStatus == 'incomplete' &&
           !request.resource.data.keys().hasAny([
             'locationId', 'reviewedAt', 'reviewedBy', 'rejectionReason'
@@ -239,6 +392,7 @@ service cloud.firestore {
 
     function validAdminReview() {
       return canAdminLocation(resource.data.locationId) &&
+          !resource.data.keys().hasAny(['applicationId']) &&
           activeLocation(resource.data.locationId) &&
           resource.data.approvalStatus == 'pending' &&
           request.resource.data.locationId == resource.data.locationId &&
@@ -279,14 +433,24 @@ service cloud.firestore {
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
-          (validApplyTransition(profileId) || validLeaveTransition(profileId) ||
-           validAdminReview() ||
-           (canAdminLocation(resource.data.locationId) &&
-            request.resource.data.locationId == resource.data.locationId &&
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-              'approvalStatus', 'locationId', 'familyApplicationId',
-              'linkedUserId', 'guardianUserIds', 'reviewedAt', 'reviewedBy'
-            ])));
+          (currentUser().role in ['student', 'parent']
+            ? (request.resource.data.approvalStatus == 'incomplete'
+              ? validLeaveTransition(profileId)
+              : (request.resource.data.keys().hasAny(['applicationId'])
+                ? validBatchApplyTransition(profileId)
+                : validApplyTransition(profileId)))
+            : (request.resource.data.approvalStatus !=
+                resource.data.approvalStatus
+              ? (resource.data.keys().hasAny(['applicationId'])
+                ? validBatchAdminReview(profileId)
+                : validAdminReview())
+              : (canAdminLocation(resource.data.locationId) &&
+                 request.resource.data.locationId == resource.data.locationId &&
+                 !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+                   'approvalStatus', 'locationId', 'familyApplicationId',
+                   'applicationId', 'appliedAt', 'linkedUserId',
+                   'guardianUserIds', 'reviewedAt', 'reviewedBy'
+                 ]))));
       allow delete: if superAdmin();
     }
 
@@ -295,6 +459,16 @@ service cloud.firestore {
           (resource.data.isActive == true ||
            canReadReferencedLocation(locationId));
       allow create, update, delete: if superAdmin();
+    }
+
+    match /membershipApplications/{applicationId} {
+      allow create: if signedIn() &&
+          validMembershipApplicationCreate(applicationId, request.resource.data);
+      allow read: if signedIn() &&
+          (resource.data.applicantUserId == request.auth.uid ||
+           canAdminLocation(resource.data.locationId));
+      allow update: if signedIn() &&
+          validMembershipApplicationReview(applicationId);
     }
 
     match /{collectionName}/{documentId} {

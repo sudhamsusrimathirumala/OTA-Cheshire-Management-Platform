@@ -335,7 +335,6 @@ class FirestoreProfileMembershipService {
         }
         final profileEntries =
             <(DocumentReference<Map<String, dynamic>>, Map<String, dynamic>)>[];
-        var includesAccountHolder = false;
         for (final profileId in profileIds) {
           final reference = _firestore
               .collection(FirestoreCollections.studentProfiles)
@@ -351,8 +350,6 @@ class FirestoreProfileMembershipService {
               'Only incomplete or rejected profiles may apply.',
             );
           }
-          includesAccountHolder =
-              includesAccountHolder || profile?['linkedUserId'] == identity.uid;
           profileEntries.add((reference, profile!));
         }
         final timestamp = FieldValue.serverTimestamp();
@@ -385,12 +382,6 @@ class FirestoreProfileMembershipService {
             'rejectionReason': FieldValue.delete(),
             'reviewedAt': FieldValue.delete(),
             'reviewedBy': FieldValue.delete(),
-          });
-        }
-        if (includesAccountHolder) {
-          transaction.update(userRef, {
-            'locationId': request.locationId.trim(),
-            'updatedAt': timestamp,
           });
         }
       });
@@ -435,7 +426,10 @@ class FirestoreProfileMembershipService {
             'You cannot review this membership application.',
           );
         }
-        if (application?['status'] != 'pending' || profileIds.isEmpty) {
+        if (application?['status'] != 'pending' ||
+            profileIds.isEmpty ||
+            profileIds.length > 11 ||
+            profileIds.toSet().length != profileIds.length) {
           throw const MembershipServiceException(
             MembershipServiceError.invalidTransition,
             'This membership application has already been reviewed.',
@@ -507,6 +501,13 @@ class FirestoreProfileMembershipService {
         final user = (await transaction.get(userRef)).data();
         final profile = (await transaction.get(profileRef)).data();
         _requireManagedProfile(user, profileId, profile);
+        if (profile?['approvalStatus'] == 'pending' &&
+            _optionalString(profile?['applicationId']) != null) {
+          throw const MembershipServiceException(
+            MembershipServiceError.invalidTransition,
+            'A batch application cannot be changed while it awaits review.',
+          );
+        }
         if (_optionalString(profile?['locationId']) == null ||
             ![
               'approved',

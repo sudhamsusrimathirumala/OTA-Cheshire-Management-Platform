@@ -20,7 +20,12 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import {createProfiles, selectProfile} from './client_workflows.js';
+import {
+  createProfiles,
+  reviewMembershipApplication,
+  selectProfile,
+  submitMembershipApplication,
+} from './client_workflows.js';
 
 const projectId = process.env.GCLOUD_PROJECT ?? 'demo-ota-membership';
 let env;
@@ -233,6 +238,249 @@ test('application is profile-specific, active-location-only, and cannot self-app
     approvalStatus: 'approved', updatedAt: serverTimestamp(),
   }));
   await assertFails(apply(db, 'parent', 'parent-profile', 'other', true));
+});
+
+test('single-profile batch application writes one application and one profile', async () => {
+  const db = auth('student');
+  await createProfiles(db, {
+    uid: 'student', email: 'student@example.com', profileIds: ['profile'],
+  });
+  await assertSucceeds(submitMembershipApplication(db, {
+    uid: 'student', email: 'student@example.com', role: 'student',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['profile'],
+  }));
+  const application = (await getDoc(
+    doc(db, 'membershipApplications', 'application-1'),
+  )).data();
+  const profile = (await getDoc(doc(db, 'studentProfiles', 'profile'))).data();
+  assert.equal(application.applicantSnapshot.firstName, 'Account');
+  assert.deepEqual(application.studentProfileIds, ['profile']);
+  assert.equal(application.status, 'pending');
+  assert.equal(profile.applicationId, 'application-1');
+  assert.equal(profile.approvalStatus, 'pending');
+});
+
+test('multi-profile batch leaves unselected profiles unchanged', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1',
+    profileIds: ['parent-profile', 'child-1', 'child-2'],
+  });
+  await assertSucceeds(submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['child-1', 'child-2'],
+  }));
+  const own = (await getDoc(
+    doc(db, 'studentProfiles', 'parent-profile'),
+  )).data();
+  const child1 = (await getDoc(doc(db, 'studentProfiles', 'child-1'))).data();
+  const child2 = (await getDoc(doc(db, 'studentProfiles', 'child-2'))).data();
+  assert.equal(own.approvalStatus, 'incomplete');
+  assert.equal('applicationId' in own, false);
+  assert.equal(child1.applicationId, 'application-1');
+  assert.equal(child2.applicationId, 'application-1');
+});
+
+test('batch application supports an account profile plus ten children', async () => {
+  const db = auth('large-family');
+  const ids = Array.from({length: 11}, (_, index) => `family-profile-${index}`);
+  await createProfiles(db, {
+    uid: 'large-family', email: 'large-family@example.com', role: 'parent',
+    familyApplicationId: 'family-large', profileIds: ids,
+  });
+  await assertSucceeds(submitMembershipApplication(db, {
+    uid: 'large-family', email: 'large-family@example.com',
+    applicationId: 'large-application', locationId: 'cheshire', profileIds: ids,
+  }));
+  await seedAdmin('admin');
+  await assertSucceeds(reviewMembershipApplication(auth('admin'), {
+    applicationId: 'large-application', profileIds: ids,
+    reviewerId: 'admin', approved: true,
+  }));
+  assert.equal((await getDoc(
+    doc(auth('admin'), 'studentProfiles', ids.at(-1)),
+  )).data().approvalStatus, 'approved');
+});
+
+test('separate profiles can apply to another academy in another batch', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1',
+    profileIds: ['parent-profile', 'child-1', 'child-2'],
+  });
+  await submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'cheshire-application', locationId: 'cheshire',
+    profileIds: ['child-1'],
+  });
+  await assertSucceeds(submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'other-application', locationId: 'other',
+    profileIds: ['child-2'],
+  }));
+  assert.equal((await getDoc(
+    doc(db, 'membershipApplications', 'cheshire-application'),
+  )).data().locationId, 'cheshire');
+  assert.equal((await getDoc(
+    doc(db, 'membershipApplications', 'other-application'),
+  )).data().locationId, 'other');
+});
+
+test('batch approval updates the application and every profile atomically', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  await submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  await seedAdmin('admin');
+  await assertSucceeds(reviewMembershipApplication(auth('admin'), {
+    applicationId: 'application-1',
+    profileIds: ['parent-profile', 'child-profile'],
+    reviewerId: 'admin', approved: true,
+  }));
+  const application = (await getDoc(
+    doc(auth('admin'), 'membershipApplications', 'application-1'),
+  )).data();
+  const parent = (await getDoc(
+    doc(auth('admin'), 'studentProfiles', 'parent-profile'),
+  )).data();
+  const child = (await getDoc(
+    doc(auth('admin'), 'studentProfiles', 'child-profile'),
+  )).data();
+  assert.equal(application.status, 'approved');
+  assert.equal(parent.approvalStatus, 'approved');
+  assert.equal(child.approvalStatus, 'approved');
+  assert.equal(application.reviewedAt.toMillis(), parent.reviewedAt.toMillis());
+  assert.equal(application.reviewedAt.toMillis(), child.reviewedAt.toMillis());
+  assert.equal(application.updatedAt.toMillis(), parent.updatedAt.toMillis());
+  assert.equal(application.reviewedBy, 'admin');
+  assert.equal(parent.reviewedBy, 'admin');
+});
+
+test('batch rejection applies one reason and consistent review metadata', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  await submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  await seedAdmin('admin');
+  await assertSucceeds(reviewMembershipApplication(auth('admin'), {
+    applicationId: 'application-1',
+    profileIds: ['parent-profile', 'child-profile'],
+    reviewerId: 'admin', approved: false, reason: 'Please contact the academy.',
+  }));
+  const application = (await getDoc(
+    doc(auth('admin'), 'membershipApplications', 'application-1'),
+  )).data();
+  const profiles = await Promise.all(['parent-profile', 'child-profile'].map(
+    async (id) => (await getDoc(doc(auth('admin'), 'studentProfiles', id))).data(),
+  ));
+  assert.equal(application.status, 'rejected');
+  assert.equal(application.rejectionReason, 'Please contact the academy.');
+  profiles.forEach((profile) => {
+    assert.equal(profile.approvalStatus, 'rejected');
+    assert.equal(profile.rejectionReason, application.rejectionReason);
+    assert.equal(profile.reviewedAt.toMillis(), application.reviewedAt.toMillis());
+  });
+});
+
+test('partial batch submission and partial review are impossible', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  const partialSubmit = writeBatch(db);
+  const submitTime = serverTimestamp();
+  partialSubmit.set(doc(db, 'membershipApplications', 'partial'), {
+    applicantUserId: 'parent',
+    applicantSnapshot: {
+      firstName: 'Account', lastName: 'Holder',
+      email: 'parent@example.com', role: 'parent',
+    },
+    locationId: 'cheshire',
+    studentProfileIds: ['parent-profile', 'child-profile'],
+    status: 'pending', appliedAt: submitTime, updatedAt: submitTime,
+  });
+  partialSubmit.update(doc(db, 'studentProfiles', 'parent-profile'), {
+    locationId: 'cheshire', approvalStatus: 'pending',
+    applicationId: 'partial', appliedAt: submitTime, updatedAt: submitTime,
+  });
+  await assertFails(partialSubmit.commit());
+
+  await submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['parent-profile', 'child-profile'],
+  });
+  await seedAdmin('admin');
+  const adminDb = auth('admin');
+  const partialReview = writeBatch(adminDb);
+  const reviewTime = serverTimestamp();
+  partialReview.update(doc(adminDb, 'membershipApplications', 'application-1'), {
+    status: 'approved', reviewedAt: reviewTime, reviewedBy: 'admin',
+    updatedAt: reviewTime, rejectionReason: deleteField(),
+  });
+  partialReview.update(doc(adminDb, 'studentProfiles', 'parent-profile'), {
+    approvalStatus: 'approved', reviewedAt: reviewTime, reviewedBy: 'admin',
+    updatedAt: reviewTime, rejectionReason: deleteField(),
+  });
+  await assertFails(partialReview.commit());
+  assert.equal((await getDoc(
+    doc(adminDb, 'membershipApplications', 'application-1'),
+  )).data().status, 'pending');
+  assert.equal((await getDoc(
+    doc(adminDb, 'studentProfiles', 'parent-profile'),
+  )).data().approvalStatus, 'pending');
+});
+
+test('application reads and review remain isolated by applicant and location', async () => {
+  const db = auth('parent');
+  await createProfiles(db, {
+    uid: 'parent', email: 'parent@example.com', role: 'parent',
+    familyApplicationId: 'family-1', profileIds: ['profile'],
+  });
+  await submitMembershipApplication(db, {
+    uid: 'parent', email: 'parent@example.com',
+    applicationId: 'application-1', locationId: 'cheshire',
+    profileIds: ['profile'],
+  });
+  await seedAdmin('admin');
+  await seedAdmin('wrong-admin', 'admin', 'other');
+  await assertSucceeds(getDoc(
+    doc(db, 'membershipApplications', 'application-1'),
+  ));
+  await assertSucceeds(getDoc(
+    doc(auth('admin'), 'membershipApplications', 'application-1'),
+  ));
+  await assertFails(getDoc(
+    doc(auth('wrong-admin'), 'membershipApplications', 'application-1'),
+  ));
+  await assertFails(getDoc(
+    doc(env.unauthenticatedContext().firestore(),
+      'membershipApplications', 'application-1'),
+  ));
+  await assertFails(reviewMembershipApplication(auth('wrong-admin'), {
+    applicationId: 'application-1', profileIds: ['profile'],
+    reviewerId: 'wrong-admin', approved: true,
+  }));
 });
 
 test('admin reviews only pending applications at the assigned location', async () => {

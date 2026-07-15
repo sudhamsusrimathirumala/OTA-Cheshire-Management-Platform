@@ -218,7 +218,9 @@ class _MembershipStatusScreenState extends State<MembershipStatusScreen> {
                         label: const Text('Refresh'),
                       ),
                     if (profile.locationId.isNotEmpty &&
-                        status != StudentApprovalStatus.disabled) ...[
+                        status != StudentApprovalStatus.disabled &&
+                        !(status == StudentApprovalStatus.pending &&
+                            (profile.applicationId?.isNotEmpty ?? false))) ...[
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
                         onPressed: _loading ? null : _leave,

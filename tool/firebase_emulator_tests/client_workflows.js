@@ -1,4 +1,5 @@
 import {
+  deleteField,
   doc,
   serverTimestamp,
   updateDoc,
@@ -76,4 +77,72 @@ export async function selectProfile(db, uid, profileId) {
     selectedStudentProfileId: profileId,
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function submitMembershipApplication(db, {
+  uid,
+  email,
+  applicationId,
+  locationId,
+  profileIds,
+  role = 'parent',
+}) {
+  const timestamp = serverTimestamp();
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'membershipApplications', applicationId), {
+    applicantUserId: uid,
+    applicantSnapshot: {
+      firstName: 'Account',
+      lastName: 'Holder',
+      email: email.toLowerCase(),
+      role,
+    },
+    locationId,
+    studentProfileIds: profileIds,
+    status: 'pending',
+    appliedAt: timestamp,
+    updatedAt: timestamp,
+  });
+  profileIds.forEach((profileId) => {
+    batch.update(doc(db, 'studentProfiles', profileId), {
+      locationId,
+      approvalStatus: 'pending',
+      applicationId,
+      appliedAt: timestamp,
+      reviewedAt: deleteField(),
+      reviewedBy: deleteField(),
+      rejectionReason: deleteField(),
+      updatedAt: timestamp,
+    });
+  });
+  await batch.commit();
+}
+
+export async function reviewMembershipApplication(db, {
+  applicationId,
+  profileIds,
+  reviewerId,
+  approved,
+  reason,
+}) {
+  const timestamp = serverTimestamp();
+  const status = approved ? 'approved' : 'rejected';
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'membershipApplications', applicationId), {
+    status,
+    reviewedAt: timestamp,
+    reviewedBy: reviewerId,
+    updatedAt: timestamp,
+    rejectionReason: approved || !reason ? deleteField() : reason,
+  });
+  profileIds.forEach((profileId) => {
+    batch.update(doc(db, 'studentProfiles', profileId), {
+      approvalStatus: status,
+      reviewedAt: timestamp,
+      reviewedBy: reviewerId,
+      updatedAt: timestamp,
+      rejectionReason: approved || !reason ? deleteField() : reason,
+    });
+  });
+  await batch.commit();
 }
