@@ -25,6 +25,7 @@ import 'screens/auth/auth_gate.dart';
 import 'services/firebase/firebase_session_controller.dart';
 import 'services/firebase/route_authorization.dart';
 import 'services/app_data_service_provider.dart';
+import 'services/debug_view_controller.dart';
 import 'theme/ota_colors.dart';
 import 'services/location_time_service.dart';
 
@@ -59,14 +60,18 @@ class _OTAAppState extends State<OTAApp> {
     if (_usesFirebase) {
       firebaseSessionController.addListener(_handleSessionChanged);
     }
+    debugViewController.addListener(_handleDebugViewChanged);
   }
 
   void _handleSessionChanged() {
     final current = firebaseSessionController.stage;
+    if (current != SessionStage.signedOut) {
+      debugViewController.clear();
+    }
     final shouldReset = protectedAccessWasLost(_previousStage, current);
     _previousStage = current;
     if (!shouldReset) return;
-    setDevelopmentDataView(false);
+    debugViewController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _navigatorKey.currentState?.pushNamedAndRemoveUntil(
         OtaRoutes.gate,
@@ -75,11 +80,16 @@ class _OTAAppState extends State<OTAApp> {
     });
   }
 
+  void _handleDebugViewChanged() {
+    setDevelopmentDataView(debugViewController.mode);
+  }
+
   @override
   void dispose() {
     if (_usesFirebase) {
       firebaseSessionController.removeListener(_handleSessionChanged);
     }
+    debugViewController.removeListener(_handleDebugViewChanged);
     super.dispose();
   }
 
@@ -134,15 +144,18 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
     return null;
   }
 
-  final developmentRequest = isDevelopmentNavigationRequest(settings.arguments);
+  if (settings.name == OtaRoutes.welcome ||
+      settings.name == OtaRoutes.login ||
+      settings.name == OtaRoutes.signup) {
+    debugViewController.clear();
+  }
   final authorized = isRouteAuthorized(
     routeName: settings.name,
     stage: Firebase.apps.isNotEmpty
         ? firebaseSessionController.stage
         : SessionStage.signedOut,
-    arguments: settings.arguments,
+    debugMode: debugViewController.mode,
   );
-  setDevelopmentDataView(developmentRequest);
   final authorizedBuilder = authorized ? builder : (_) => const AuthGate();
 
   return PageRouteBuilder<void>(

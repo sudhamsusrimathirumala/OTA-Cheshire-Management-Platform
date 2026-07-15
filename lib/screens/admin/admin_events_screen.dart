@@ -55,6 +55,12 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     final now = DateTime.now();
 
     return events.where((event) {
+      final selectedLocationId = adminLocationController.selectedLocationId;
+      if (adminLocationController.isSuperAdmin &&
+          selectedLocationId != null &&
+          event.locationId != selectedLocationId) {
+        return false;
+      }
       if (event.eventType == 'closure') {
         return false;
       }
@@ -75,7 +81,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
         final events = _filteredEvents(appDataService.events);
 
@@ -94,14 +100,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
-              AdminLocationSelector(
-                locationIds: [
-                  ...appDataService.events.map((event) => event.locationId),
-                  ...appDataService.resources.map(
-                    (resource) => resource.locationId,
-                  ),
-                ],
-              ),
+              const AdminLocationSelector(),
               _EventsToolbar(onCreateEvent: () => _openEventSheet()),
               const SizedBox(height: 14),
               _FilterRow(

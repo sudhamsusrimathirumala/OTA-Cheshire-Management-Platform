@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   deleteField,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -338,4 +339,32 @@ test('super admin reads inactive status without receiving inactive content acces
   const db = auth('super-inactive');
   await assertSucceeds(getDoc(doc(db, 'locations', 'inactive')));
   await assertFails(getDoc(doc(db, 'events', 'inactive-event')));
+  await assertFails(setDoc(doc(db, 'events', 'new-inactive-event'), {
+    title: 'Blocked', locationId: 'inactive',
+  }));
+  await assertFails(updateDoc(doc(db, 'events', 'inactive-event'), {title: 'Changed'}));
+  await assertFails(deleteDoc(doc(db, 'events', 'inactive-event')));
+});
+
+test('super admin scoped content queries survive inactive documents', async () => {
+  await seedAdmin('super-active', 'superAdmin');
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'events', 'cheshire-event'), {title: 'One', locationId: 'cheshire'});
+    await setDoc(doc(db, 'events', 'other-event'), {title: 'Two', locationId: 'other'});
+    await setDoc(doc(db, 'events', 'inactive-event'), {title: 'Hidden', locationId: 'inactive'});
+  });
+  const db = auth('super-active');
+  const cheshire = await assertSucceeds(getDocs(query(
+    collection(db, 'events'), where('locationId', '==', 'cheshire'),
+  )));
+  const other = await assertSucceeds(getDocs(query(
+    collection(db, 'events'), where('locationId', '==', 'other'),
+  )));
+  await assertFails(getDocs(query(
+    collection(db, 'events'), where('locationId', '==', 'inactive'),
+  )));
+  assert.deepEqual([...cheshire.docs, ...other.docs].map((item) => item.id).sort(), [
+    'cheshire-event', 'other-event',
+  ]);
 });

@@ -6,10 +6,12 @@ import 'package:ota_cheshire_management_platform/data/sample_student.dart';
 import 'package:ota_cheshire_management_platform/data/sample_curriculum.dart'
     as curriculum_data;
 import 'package:ota_cheshire_management_platform/models/academy_event.dart';
+import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
+import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
@@ -29,7 +31,9 @@ import 'package:ota_cheshire_management_platform/screens/student_dashboard_scree
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service.dart';
+import 'package:ota_cheshire_management_platform/services/debug_view_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/admin_location_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
@@ -39,6 +43,7 @@ import 'package:ota_cheshire_management_platform/services/firestore/firestore_sc
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_seed_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
 import 'package:ota_cheshire_management_platform/widgets/admin/admin_bottom_nav_bar.dart';
+import 'package:ota_cheshire_management_platform/widgets/admin/admin_location_selector.dart';
 import 'package:ota_cheshire_management_platform/widgets/ota_bottom_nav_bar.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/general_resources_view.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/resources_landing_view.dart';
@@ -97,20 +102,107 @@ void main() {
   testWidgets('welcome debug view buttons open student and admin dashboards', (
     tester,
   ) async {
-    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
+    debugViewController.clear();
+    await tester.pumpWidget(const OTAApp());
 
     await tester.tap(find.text('Student View'));
     await tester.pumpAndSettle();
 
     expect(find.byType(StudentDashboardScreen), findsOneWidget);
+    expect(debugViewController.mode, DebugViewMode.student);
+    await tester.tap(find.text('Schedule'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ScheduleScreen), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
+    debugViewController.clear();
+    await tester.pumpWidget(const OTAApp());
 
     await tester.tap(find.text('Admin View'));
     await tester.pumpAndSettle();
 
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    expect(debugViewController.mode, DebugViewMode.admin);
+    await tester.tap(find.widgetWithText(TextButton, 'Students'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AdminStudentsScreen), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Admin profile'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Exit to Welcome'));
+    await tester.pumpAndSettle();
+    expect(debugViewController.mode, DebugViewMode.none);
+    expect(find.byType(WelcomeScreen), findsOneWidget);
+  });
+
+  testWidgets('admin selector and header use location metadata', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+      addressLine1: '12 Main Street',
+    );
+    const chicago = AcademyLocation(
+      id: 'chicago',
+      name: 'OTA Chicago',
+      timeZoneId: 'America/Chicago',
+      isActive: true,
+      city: 'Chicago',
+      state: 'IL',
+    );
+    const inactive = AcademyLocation(
+      id: 'inactive',
+      name: 'Closed Academy',
+      timeZoneId: 'America/New_York',
+      isActive: false,
+    );
+    final superAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.superAdmin,
+      locations: const [cheshire, chicago, inactive],
+    );
+    adminLocationController = superAdmin;
+    addTearDown(() {
+      superAdmin.dispose();
+      initializeMockAppDataServiceForTests();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(children: [AdminTopHeader(), AdminLocationSelector()]),
+        ),
+      ),
+    );
+    expect(find.text('OTA Administration'), findsOneWidget);
+    expect(find.text('All locations'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('OTA Cheshire'), findsOneWidget);
+    expect(find.text('12 Main Street'), findsOneWidget);
+    expect(find.text('Closed Academy'), findsNothing);
+
+    await tester.tap(find.text('OTA Chicago'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('OTA Chicago'), findsWidgets);
+
+    final cheshireAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: 'cheshire',
+    );
+    final chicagoAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [chicago],
+      assignedLocationId: 'chicago',
+    );
+    addTearDown(cheshireAdmin.dispose);
+    addTearDown(chicagoAdmin.dispose);
+    expect(adminHeaderPresentation(cheshireAdmin).title, 'OTA Cheshire');
+    expect(adminHeaderPresentation(chicagoAdmin).title, 'OTA Chicago');
   });
 
   testWidgets('student dashboard displays key student information', (
@@ -2599,22 +2691,6 @@ class _AdminNavigationTestApp extends StatelessWidget {
         OtaRoutes.adminResources: (_) => const AdminResourcesScreen(),
         OtaRoutes.adminProfile: (_) => const AdminProfileScreen(),
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
-      },
-    );
-  }
-}
-
-class _WelcomeViewButtonTestApp extends StatelessWidget {
-  const _WelcomeViewButtonTestApp();
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      initialRoute: OtaRoutes.welcome,
-      routes: {
-        OtaRoutes.welcome: (_) => const WelcomeScreen(),
-        OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
-        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
       },
     );
   }

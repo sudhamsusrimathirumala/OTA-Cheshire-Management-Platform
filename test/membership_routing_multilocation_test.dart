@@ -1,11 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
+import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_identity_contract.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/route_authorization.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/admin_location_controller.dart';
+import 'package:ota_cheshire_management_platform/services/debug_view_controller.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 
 void main() {
@@ -75,6 +78,151 @@ void main() {
         isTrue,
       );
     });
+  });
+
+  group('debug-view routing', () {
+    test('student and admin sessions remain distinct', () {
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.schedule,
+          stage: SessionStage.signedOut,
+          debugMode: DebugViewMode.student,
+        ),
+        isTrue,
+      );
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.adminSchedule,
+          stage: SessionStage.signedOut,
+          debugMode: DebugViewMode.student,
+        ),
+        isFalse,
+      );
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.adminSchedule,
+          stage: SessionStage.signedOut,
+          debugMode: DebugViewMode.admin,
+        ),
+        isTrue,
+      );
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.schedule,
+          stage: SessionStage.signedOut,
+          debugMode: DebugViewMode.admin,
+        ),
+        isFalse,
+      );
+    });
+
+    test('release builds cannot activate a requested debug mode', () {
+      expect(
+        debugViewModeForBuild(
+          debugBuild: false,
+          requestedMode: DebugViewMode.student,
+        ),
+        DebugViewMode.none,
+      );
+      expect(
+        debugViewModeForBuild(
+          debugBuild: false,
+          requestedMode: DebugViewMode.admin,
+        ),
+        DebugViewMode.none,
+      );
+    });
+  });
+
+  group('admin location selection', () {
+    const cheshire = AcademyLocation(
+      id: 'cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    const chicago = AcademyLocation(
+      id: 'chicago',
+      name: 'OTA Chicago',
+      timeZoneId: 'America/Chicago',
+      isActive: true,
+    );
+    const inactive = AcademyLocation(
+      id: 'inactive',
+      name: 'OTA Inactive',
+      timeZoneId: 'America/New_York',
+      isActive: false,
+    );
+
+    test(
+      'Super Admin can select empty active locations but not inactive ones',
+      () {
+        final controller = AdminLocationController.forTesting(
+          role: UserAccountRole.superAdmin,
+          locations: const [cheshire, chicago, inactive],
+        );
+        addTearDown(controller.dispose);
+
+        expect(controller.activeLocationIds, {'cheshire', 'chicago'});
+        controller.selectLocation('chicago');
+        expect(controller.writeLocationId, 'chicago');
+        controller.selectLocation('inactive');
+        expect(controller.selectedLocationId, isNull);
+      },
+    );
+
+    test('deactivation clears only the selected inactive location', () {
+      final controller = AdminLocationController.forTesting(
+        role: UserAccountRole.superAdmin,
+        locations: const [cheshire, chicago],
+      );
+      addTearDown(controller.dispose);
+      controller.selectLocation('chicago');
+
+      controller.replaceLocationsForTesting(const [cheshire, inactive]);
+
+      expect(controller.selectedLocationId, isNull);
+      expect(controller.activeLocationIds, {'cheshire'});
+    });
+
+    test(
+      'location Admin cannot select another academy and sign-out clears selection',
+      () {
+        final locationAdmin = AdminLocationController.forTesting(
+          role: UserAccountRole.admin,
+          locations: const [cheshire, chicago],
+          assignedLocationId: 'cheshire',
+        );
+        addTearDown(locationAdmin.dispose);
+        locationAdmin.selectLocation('chicago');
+        expect(locationAdmin.writeLocationId, 'cheshire');
+
+        final superAdmin = AdminLocationController.forTesting(
+          role: UserAccountRole.superAdmin,
+          locations: const [cheshire, chicago],
+        );
+        addTearDown(superAdmin.dispose);
+        superAdmin.selectLocation('chicago');
+        superAdmin.clearForSignOut();
+        expect(superAdmin.selectedLocationId, isNull);
+        expect(superAdmin.locations, isEmpty);
+      },
+    );
+  });
+
+  test('active-location results merge and exclude inactive locations', () {
+    expect(
+      mergeActiveLocationRecords<String>(
+        const {
+          'cheshire': ['a', 'shared'],
+          'chicago': ['b', 'shared'],
+          'inactive': ['c'],
+        },
+        const {'cheshire', 'chicago'},
+        idOf: (value) => value,
+      ),
+      ['a', 'shared', 'b'],
+    );
   });
 
   group('multi-location dates', () {

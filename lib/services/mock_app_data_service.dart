@@ -17,7 +17,9 @@ import '../models/user_account.dart';
 import 'app_data_service.dart';
 
 class MockAppDataService implements AppDataService {
-  const MockAppDataService();
+  const MockAppDataService({this.accountOverride});
+
+  final UserAccount? accountOverride;
 
   @override
   void addListener(VoidCallback listener) {}
@@ -26,7 +28,7 @@ class MockAppDataService implements AppDataService {
   void removeListener(VoidCallback listener) {}
 
   @override
-  UserAccount get currentUserAccount => sampleUserAccount;
+  UserAccount get currentUserAccount => accountOverride ?? sampleUserAccount;
 
   @override
   List<StudentProfile> get linkedStudentProfiles {

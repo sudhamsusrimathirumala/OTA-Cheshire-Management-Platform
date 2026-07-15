@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../models/academy_resource.dart';
-import '../../models/user_account.dart';
 import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
@@ -59,15 +58,13 @@ class _AdminGeneralResourcesScreenState
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
       if (resource.resourceSection != 'general') return false;
-      if (appDataService.currentUserAccount.role !=
-              UserAccountRole.superAdmin &&
+      if (!adminLocationController.isSuperAdmin &&
           resource.locationId != _adminLocationId()) {
         return false;
       }
-      if (appDataService.currentUserAccount.role ==
-              UserAccountRole.superAdmin &&
-          superAdminLocationSelection.value != null &&
-          resource.locationId != superAdminLocationSelection.value) {
+      if (adminLocationController.isSuperAdmin &&
+          adminLocationController.selectedLocationId != null &&
+          resource.locationId != adminLocationController.selectedLocationId) {
         return false;
       }
       return switch (_selectedFilter) {
@@ -92,7 +89,7 @@ class _AdminGeneralResourcesScreenState
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
         final resources = _filteredResources(appDataService.resources);
 
@@ -111,11 +108,7 @@ class _AdminGeneralResourcesScreenState
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
-              AdminLocationSelector(
-                locationIds: appDataService.resources.map(
-                  (resource) => resource.locationId,
-                ),
-              ),
+              const AdminLocationSelector(),
               _ResourcesToolbar(onCreateResource: () => _openResourceSheet()),
               const SizedBox(height: 14),
               _FilterRow(

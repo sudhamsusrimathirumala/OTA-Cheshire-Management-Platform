@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../routes.dart';
+import '../../models/academy_location.dart';
+import '../../services/app_data_service_provider.dart';
+import '../../services/firebase/admin_location_controller.dart';
 import '../../theme/ota_colors.dart';
 
 void returnToAdminResourcesLanding(BuildContext context) {
@@ -143,7 +146,7 @@ class AdminPageShell extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _AdminTopHeader(),
+            const AdminTopHeader(),
             AdminNavigationBar(
               selectedDestination: selectedDestination,
               onSelectedDestinationTap: onSelectedDestinationTap,
@@ -268,11 +271,25 @@ class AdminPlaceholderPage extends StatelessWidget {
 // Kept as an alias so existing admin screens can migrate without route churn.
 typedef AdminBottomNavBar = AdminNavigationBar;
 
-class _AdminTopHeader extends StatelessWidget {
-  const _AdminTopHeader();
+class AdminTopHeader extends StatelessWidget {
+  const AdminTopHeader({this.controller, super.key});
+
+  final AdminLocationController? controller;
 
   @override
   Widget build(BuildContext context) {
+    final locationController = controller ?? adminLocationController;
+    return AnimatedBuilder(
+      animation: locationController,
+      builder: (context, _) => _buildHeader(context, locationController),
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    AdminLocationController locationController,
+  ) {
+    final presentation = adminHeaderPresentation(locationController);
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -309,7 +326,7 @@ class _AdminTopHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Admin',
+                      presentation.title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: OtaColors.ink,
                         fontWeight: FontWeight.w800,
@@ -318,7 +335,7 @@ class _AdminTopHeader extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'OTA Cheshire Control Panel',
+                      presentation.subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: OtaColors.mutedText,
                         fontWeight: FontWeight.w600,
@@ -338,7 +355,7 @@ class _AdminTopHeader extends StatelessWidget {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'ota-cheshire',
+                  presentation.badge,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: OtaColors.ink,
                     fontWeight: FontWeight.w700,
@@ -367,6 +384,55 @@ class _AdminTopHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+class AdminHeaderPresentation {
+  const AdminHeaderPresentation({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+  });
+
+  final String title;
+  final String subtitle;
+  final String badge;
+}
+
+AdminHeaderPresentation adminHeaderPresentation(
+  AdminLocationController controller,
+) {
+  if (controller.isDebugAdmin) {
+    return const AdminHeaderPresentation(
+      title: 'OTA Cheshire',
+      subtitle: 'Development Admin View',
+      badge: 'Debug',
+    );
+  }
+  if (controller.isSuperAdmin) {
+    final selected = controller.selectedLocation;
+    return AdminHeaderPresentation(
+      title: 'OTA Administration',
+      subtitle: selected?.name ?? 'All locations',
+      badge: selected == null
+          ? 'Select a location for edits'
+          : _locationSecondaryText(selected),
+    );
+  }
+  final assigned = controller.assignedLocation;
+  return AdminHeaderPresentation(
+    title: assigned?.name ?? 'OTA Administration',
+    subtitle: assigned == null
+        ? 'Academy location unavailable'
+        : assigned.isActive
+        ? _locationSecondaryText(assigned)
+        : 'Academy unavailable',
+    badge: 'Location Admin',
+  );
+}
+
+String _locationSecondaryText(AcademyLocation location) {
+  final address = location.formattedAddress;
+  return address.isEmpty ? location.id : address.replaceAll('\n', ', ');
 }
 
 class _AdminPageTitle extends StatelessWidget {

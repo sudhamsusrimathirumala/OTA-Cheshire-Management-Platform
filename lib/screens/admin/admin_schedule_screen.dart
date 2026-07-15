@@ -23,11 +23,20 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
-        final sessions = [
-          ...appDataService.scheduleForWeekday(_selectedWeekday),
-        ]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+        final selectedLocationId = adminLocationController.selectedLocationId;
+        final sessions =
+            appDataService
+                .scheduleForWeekday(_selectedWeekday)
+                .where(
+                  (session) =>
+                      !adminLocationController.isSuperAdmin ||
+                      selectedLocationId == null ||
+                      session.locationId == selectedLocationId,
+                )
+                .toList()
+              ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.schedule,
@@ -36,11 +45,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AdminLocationSelector(
-                locationIds: appDataService.schedule.values
-                    .expand((sessions) => sessions)
-                    .map((session) => session.locationId),
-              ),
+              const AdminLocationSelector(),
               _ScheduleToolbar(
                 onAddClass: () => _openClassSheet(),
                 onBulkAction: _openBulkActionSheet,

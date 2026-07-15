@@ -27,9 +27,13 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   var _selectedFilter = _AnnouncementFilter.all;
 
   List<_AdminAnnouncement> get _announcements {
+    final selectedLocationId = adminLocationController.selectedLocationId;
     return [
       for (final announcement in appDataService.adminAnnouncements)
-        _AdminAnnouncement.fromAcademyAnnouncement(announcement),
+        if (!adminLocationController.isSuperAdmin ||
+            selectedLocationId == null ||
+            announcement.locationId == selectedLocationId)
+          _AdminAnnouncement.fromAcademyAnnouncement(announcement),
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 
@@ -71,7 +75,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
         final announcements = _filteredAnnouncements;
 
@@ -82,11 +86,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AdminLocationSelector(
-                locationIds: appDataService.adminAnnouncements.map(
-                  (announcement) => announcement.locationId,
-                ),
-              ),
+              const AdminLocationSelector(),
               _AnnouncementsToolbar(
                 onCreateAnnouncement: () => _openAnnouncementSheet(),
               ),

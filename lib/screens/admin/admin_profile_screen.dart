@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../routes.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/debug_view_controller.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/profile/profile_section.dart';
 
@@ -126,6 +127,7 @@ class AdminProfileScreen extends StatelessWidget {
                         label: 'Exit to Welcome',
                         showDivider: false,
                         onTap: () {
+                          debugViewController.clear();
                           Navigator.of(context).pushNamedAndRemoveUntil(
                             OtaRoutes.welcome,
                             (_) => false,

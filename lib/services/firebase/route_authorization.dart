@@ -1,20 +1,8 @@
-import 'package:flutter/foundation.dart';
-
 import '../../routes.dart';
+import '../debug_view_controller.dart';
 import 'firebase_session_controller.dart';
 
 enum RouteAccess { public, authenticated, student, admin }
-
-const _developmentNavigationToken = Object();
-
-Object developmentNavigationArguments() {
-  assert(kDebugMode);
-  return _developmentNavigationToken;
-}
-
-bool isDevelopmentNavigationRequest(Object? arguments) {
-  return kDebugMode && identical(arguments, _developmentNavigationToken);
-}
 
 RouteAccess accessForRoute(String? routeName) {
   return switch (routeName) {
@@ -45,10 +33,17 @@ RouteAccess accessForRoute(String? routeName) {
 bool isRouteAuthorized({
   required String? routeName,
   required SessionStage stage,
-  Object? arguments,
+  DebugViewMode debugMode = DebugViewMode.none,
 }) {
-  if (isDevelopmentNavigationRequest(arguments)) return true;
-  return switch (accessForRoute(routeName)) {
+  final access = accessForRoute(routeName);
+  if (debugMode == DebugViewMode.student &&
+      (access == RouteAccess.student || access == RouteAccess.authenticated)) {
+    return true;
+  }
+  if (debugMode == DebugViewMode.admin && access == RouteAccess.admin) {
+    return true;
+  }
+  return switch (access) {
     RouteAccess.public => true,
     RouteAccess.authenticated => switch (stage) {
       SessionStage.incomplete ||

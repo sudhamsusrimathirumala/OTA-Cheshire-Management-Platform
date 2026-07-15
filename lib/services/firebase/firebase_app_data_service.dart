@@ -13,25 +13,41 @@ import '../../models/notification_item.dart';
 import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
+import '../debug_view_controller.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
+import 'admin_location_controller.dart';
 import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
 import '../location_time_service.dart';
 import '../mock_app_data_service.dart';
 
+const _debugAdminAccount = UserAccount(
+  id: 'debug-admin',
+  firstName: 'Development',
+  lastName: 'Admin',
+  email: 'debug-admin@example.invalid',
+  role: UserAccountRole.admin,
+  approvalStatus: UserAccountApprovalStatus.approved,
+  linkedStudentProfileIds: [],
+  locationId: LocationTimeService.otaCheshireLocationId,
+);
+
 class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   FirebaseAppDataService({
+    required this._adminLocations,
     FirebaseFirestore? firestore,
     AppDataService? fallbackService,
   }) : _fallbackService = fallbackService ?? const MockAppDataService() {
     _firestore = firestore;
     firebaseSessionController.addListener(_handleSessionChanged);
+    _adminLocations.addListener(_handleAdminLocationsChanged);
     _handleSessionChanged();
   }
 
   FirebaseFirestore? _firestore;
   final AppDataService _fallbackService;
+  final AdminLocationController _adminLocations;
   Map<int, List<ClassSession>> _schedule = const <int, List<ClassSession>>{};
   List<NotificationItem> _notifications = const <NotificationItem>[];
   List<AcademyAnnouncement> _adminAnnouncements = const <AcademyAnnouncement>[];
@@ -47,6 +63,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   _resourcesSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _adminStudentsSubscription;
+  final List<StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
+  _superAdminContentSubscriptions = [];
+  final Map<String, Map<int, List<ClassSession>>> _superAdminSchedules = {};
+  final Map<String, List<AcademyAnnouncement>> _superAdminAnnouncements = {};
+  final Map<String, List<AcademyEvent>> _superAdminEvents = {};
+  final Map<String, List<AcademyResource>> _superAdminResources = {};
+  int _superAdminContentGeneration = 0;
+  String _activeLocationsFingerprint = '';
+  bool _superAdminContentInitialized = false;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
@@ -59,15 +84,18 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _isAdminStudentsLoading = true;
   String? _adminStudentsErrorMessage;
   bool _isUsingFallbackData = false;
-  bool _developmentViewActive = const bool.fromEnvironment('FLUTTER_TEST');
+  DebugViewMode _developmentViewMode = DebugViewMode.none;
   String? _listeningLocationId;
   bool _listeningAsSuperAdmin = false;
 
-  void setDevelopmentViewActive(bool active) {
-    final enabled = kDebugMode && active;
-    if (_developmentViewActive == enabled) return;
-    _developmentViewActive = enabled;
-    if (enabled) {
+  bool get _developmentViewActive =>
+      kDebugMode && _developmentViewMode != DebugViewMode.none;
+
+  void setDevelopmentViewMode(DebugViewMode mode) {
+    final effective = kDebugMode ? mode : DebugViewMode.none;
+    if (_developmentViewMode == effective) return;
+    _developmentViewMode = effective;
+    if (_developmentViewActive) {
       _useFallbackDataForUnavailableFirebase();
     } else if (firebaseSessionController.stage != SessionStage.approved &&
         firebaseSessionController.stage != SessionStage.admin) {
@@ -120,10 +148,14 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           const LocationTimeService().loadLocation(firestore, locationId),
         );
       }
-      _listenToSchedule(firestore, locationId, superAdmin);
-      _listenToAnnouncements(firestore, locationId, superAdmin);
-      _listenToEvents(firestore, locationId, superAdmin);
-      _listenToResources(firestore, locationId, superAdmin);
+      if (superAdmin) {
+        _listenToSuperAdminContent(firestore);
+      } else {
+        _listenToSchedule(firestore, locationId, false);
+        _listenToAnnouncements(firestore, locationId, false);
+        _listenToEvents(firestore, locationId, false);
+        _listenToResources(firestore, locationId, false);
+      }
       if (firebaseSessionController.stage == SessionStage.admin) {
         _listenToAdminStudents(firestore, locationId, superAdmin);
       }
@@ -138,6 +170,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
+    _cancelSuperAdminContentListeners();
     _scheduleSubscription = null;
     _announcementsSubscription = null;
     _eventsSubscription = null;
@@ -156,6 +189,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _events = const <AcademyEvent>[];
     _resources = const <AcademyResource>[];
     _adminStudentProfiles = const <StudentProfile>[];
+    _superAdminSchedules.clear();
+    _superAdminAnnouncements.clear();
+    _superAdminEvents.clear();
+    _superAdminResources.clear();
+    _activeLocationsFingerprint = '';
+    _superAdminContentInitialized = false;
     _isUsingFallbackData = false;
     _isScheduleLoading = true;
     _isAnnouncementsLoading = true;
@@ -279,6 +318,231 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
   }
 
+  void _handleAdminLocationsChanged() {
+    if (!_listeningAsSuperAdmin) return;
+    final firestore = _firestore;
+    if (firestore != null) _listenToSuperAdminContent(firestore);
+  }
+
+  void _listenToSuperAdminContent(FirebaseFirestore firestore) {
+    final locationIds = _adminLocations.activeLocationIds.toList()..sort();
+    final fingerprint = locationIds.join('\u0000');
+    if (_activeLocationsFingerprint == fingerprint &&
+        _superAdminContentInitialized) {
+      return;
+    }
+    _activeLocationsFingerprint = fingerprint;
+    _superAdminContentInitialized = true;
+    _cancelSuperAdminContentListeners();
+    final generation = _superAdminContentGeneration;
+    _superAdminSchedules.clear();
+    _superAdminAnnouncements.clear();
+    _superAdminEvents.clear();
+    _superAdminResources.clear();
+    _schedule = const {};
+    _adminAnnouncements = const [];
+    _events = const [];
+    _resources = const [];
+    _isScheduleLoading = locationIds.isNotEmpty;
+    _isAnnouncementsLoading = locationIds.isNotEmpty;
+    _isEventsLoading = locationIds.isNotEmpty;
+    _isResourcesLoading = locationIds.isNotEmpty;
+    _scheduleErrorMessage = null;
+    _announcementsErrorMessage = null;
+    _eventsErrorMessage = null;
+    _resourcesErrorMessage = null;
+
+    for (final locationId in locationIds) {
+      unawaited(
+        const LocationTimeService().loadLocation(firestore, locationId),
+      );
+      _superAdminContentSubscriptions.add(
+        firestore
+            .collection(FirestoreCollections.classSessions)
+            .where('locationId', isEqualTo: locationId)
+            .orderBy('weekday')
+            .orderBy('startMinutes')
+            .snapshots()
+            .listen(
+              (snapshot) => _handleSuperAdminScheduleSnapshot(
+                locationId,
+                snapshot,
+                generation,
+              ),
+              onError: (_) => _handleSuperAdminContentError(
+                locationId,
+                generation,
+                _SuperAdminContent.schedule,
+              ),
+            ),
+      );
+      _superAdminContentSubscriptions.add(
+        firestore
+            .collection(FirestoreCollections.announcements)
+            .where('locationId', isEqualTo: locationId)
+            .snapshots()
+            .listen(
+              (snapshot) => _handleSuperAdminAnnouncementsSnapshot(
+                locationId,
+                snapshot,
+                generation,
+              ),
+              onError: (_) => _handleSuperAdminContentError(
+                locationId,
+                generation,
+                _SuperAdminContent.announcements,
+              ),
+            ),
+      );
+      _superAdminContentSubscriptions.add(
+        firestore
+            .collection(FirestoreCollections.events)
+            .where('locationId', isEqualTo: locationId)
+            .snapshots()
+            .listen(
+              (snapshot) => _handleSuperAdminEventsSnapshot(
+                locationId,
+                snapshot,
+                generation,
+              ),
+              onError: (_) => _handleSuperAdminContentError(
+                locationId,
+                generation,
+                _SuperAdminContent.events,
+              ),
+            ),
+      );
+      _superAdminContentSubscriptions.add(
+        firestore
+            .collection(FirestoreCollections.resources)
+            .where('locationId', isEqualTo: locationId)
+            .snapshots()
+            .listen(
+              (snapshot) => _handleSuperAdminResourcesSnapshot(
+                locationId,
+                snapshot,
+                generation,
+              ),
+              onError: (_) => _handleSuperAdminContentError(
+                locationId,
+                generation,
+                _SuperAdminContent.resources,
+              ),
+            ),
+      );
+    }
+    notifyListeners();
+  }
+
+  void _handleSuperAdminScheduleSnapshot(
+    String locationId,
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    int generation,
+  ) {
+    if (generation != _superAdminContentGeneration) return;
+    _superAdminSchedules[locationId] = _scheduleFromSnapshot(snapshot);
+    final merged = <int, List<ClassSession>>{};
+    for (final schedule in _superAdminSchedules.values) {
+      for (final entry in schedule.entries) {
+        merged.putIfAbsent(entry.key, () => []).addAll(entry.value);
+      }
+    }
+    _schedule = {
+      for (final entry in merged.entries)
+        entry.key: List.unmodifiable(
+          entry.value..sort((a, b) => a.startMinutes.compareTo(b.startMinutes)),
+        ),
+    };
+    _isScheduleLoading = false;
+    _scheduleErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleSuperAdminAnnouncementsSnapshot(
+    String locationId,
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    int generation,
+  ) {
+    if (generation != _superAdminContentGeneration) return;
+    _superAdminAnnouncements[locationId] = _adminAnnouncementsFromSnapshot(
+      snapshot,
+    );
+    _adminAnnouncements = mergeActiveLocationRecords(
+      _superAdminAnnouncements,
+      _adminLocations.activeLocationIds,
+      idOf: (item) => item.id,
+    )..sort((a, b) => b.displayDate.compareTo(a.displayDate));
+    _isAnnouncementsLoading = false;
+    _announcementsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleSuperAdminEventsSnapshot(
+    String locationId,
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    int generation,
+  ) {
+    if (generation != _superAdminContentGeneration) return;
+    _superAdminEvents[locationId] = _eventsFromSnapshot(snapshot);
+    _events = mergeActiveLocationRecords(
+      _superAdminEvents,
+      _adminLocations.activeLocationIds,
+      idOf: (item) => item.id,
+    )..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
+    _isEventsLoading = false;
+    _eventsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleSuperAdminResourcesSnapshot(
+    String locationId,
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+    int generation,
+  ) {
+    if (generation != _superAdminContentGeneration) return;
+    _superAdminResources[locationId] = _resourcesFromSnapshot(snapshot);
+    _resources = mergeActiveLocationRecords(
+      _superAdminResources,
+      _adminLocations.activeLocationIds,
+      idOf: (item) => item.id,
+    )..sort((a, b) => a.title.compareTo(b.title));
+    _isResourcesLoading = false;
+    _resourcesErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _handleSuperAdminContentError(
+    String locationId,
+    int generation,
+    _SuperAdminContent content,
+  ) {
+    if (generation != _superAdminContentGeneration) return;
+    switch (content) {
+      case _SuperAdminContent.schedule:
+        _superAdminSchedules.remove(locationId);
+        _isScheduleLoading = false;
+      case _SuperAdminContent.announcements:
+        _superAdminAnnouncements.remove(locationId);
+        _isAnnouncementsLoading = false;
+      case _SuperAdminContent.events:
+        _superAdminEvents.remove(locationId);
+        _isEventsLoading = false;
+      case _SuperAdminContent.resources:
+        _superAdminResources.remove(locationId);
+        _isResourcesLoading = false;
+    }
+    notifyListeners();
+  }
+
+  void _cancelSuperAdminContentListeners() {
+    ++_superAdminContentGeneration;
+    final subscriptions = [..._superAdminContentSubscriptions];
+    _superAdminContentSubscriptions.clear();
+    for (final subscription in subscriptions) {
+      unawaited(subscription.cancel());
+    }
+  }
+
   void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
     _loadTimeZonesForSnapshot(snapshot);
     _schedule = _scheduleFromSnapshot(snapshot);
@@ -379,18 +643,22 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   @override
   void dispose() {
     firebaseSessionController.removeListener(_handleSessionChanged);
+    _adminLocations.removeListener(_handleAdminLocationsChanged);
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
+    _cancelSuperAdminContentListeners();
     super.dispose();
   }
 
   @override
   UserAccount get currentUserAccount => firebaseIdentityOrDevelopmentFallback(
     firebaseSessionController.account,
-    developmentFallback: _fallbackService.currentUserAccount,
+    developmentFallback: _developmentViewMode == DebugViewMode.admin
+        ? _debugAdminAccount
+        : _fallbackService.currentUserAccount,
     developmentViewActive: _developmentViewActive,
     identityName: 'authenticated account',
   );
@@ -892,6 +1160,22 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       );
     }
   }
+}
+
+enum _SuperAdminContent { schedule, announcements, events, resources }
+
+List<T> mergeActiveLocationRecords<T>(
+  Map<String, List<T>> recordsByLocation,
+  Set<String> activeLocationIds, {
+  required String Function(T item) idOf,
+}) {
+  final byId = <String, T>{};
+  for (final locationId in activeLocationIds) {
+    for (final item in recordsByLocation[locationId] ?? const []) {
+      byId[idOf(item)] = item;
+    }
+  }
+  return byId.values.toList();
 }
 
 bool recordIsInDataScope({

@@ -6,6 +6,7 @@ import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/debug_view_controller.dart';
 import '../services/location_time_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../theme/ota_colors.dart';
@@ -332,7 +333,14 @@ class _SettingsActionsSection extends StatelessWidget {
           icon: Icons.logout_rounded,
           label: 'Sign Out',
           isDestructive: true,
-          onTap: hasFirebase
+          onTap: debugViewController.isActive
+              ? () {
+                  debugViewController.clear();
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil(OtaRoutes.welcome, (_) => false);
+                }
+              : hasFirebase
               ? () async {
                   await firebaseSessionController.signOut();
                   if (context.mounted) {
