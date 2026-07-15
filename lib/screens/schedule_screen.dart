@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -26,10 +27,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   late DateTime _selectedDate;
   var _viewMode = _ScheduleViewMode.day;
 
+  DateTime get _academyNow => const LocationTimeService().toLocationTime(
+    DateTime.now(),
+    appDataService.selectedStudentProfile.locationId,
+  );
+
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateUtils.dateOnly(widget.initialDate ?? DateTime.now());
+    _selectedDate = DateUtils.dateOnly(widget.initialDate ?? _academyNow);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrentTime());
   }
 
@@ -39,8 +45,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     super.dispose();
   }
 
-  bool get _isViewingToday =>
-      DateUtils.isSameDay(_selectedDate, DateTime.now());
+  bool get _isViewingToday => DateUtils.isSameDay(_selectedDate, _academyNow);
 
   StudentProfile get _student => appDataService.selectedStudentProfile;
 
@@ -57,7 +62,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         return true;
       }
 
-      return session.startDateTime(_selectedDate).isAfter(DateTime.now());
+      final academyNow = _academyNow;
+      return session.startMinutes > academyNow.hour * 60 + academyNow.minute;
     }).toList();
 
     if (classes.isEmpty) {
@@ -98,11 +104,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _pickDate() async {
+    final academyToday = _academyNow;
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2026),
-      lastDate: DateTime(2027, 12, 31),
+      firstDate: DateTime(academyToday.year - 2),
+      lastDate: DateTime(academyToday.year + 5, 12, 31),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -145,7 +152,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
-    final now = DateTime.now();
+    final now = _academyNow;
     final currentMinutes = now.hour * 60 + now.minute;
     final targetOffset = ((currentMinutes / 60) * _hourHeight) - 180;
     final clampedOffset = targetOffset.clamp(
@@ -220,6 +227,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         eventGap: _eventGap,
                         student: _student,
                         nextEligibleSession: _nextEligibleClass,
+                        academyNow: _academyNow,
                         onClassTap: _showClassDetails,
                       ),
                     ),
@@ -339,6 +347,7 @@ class _ScheduleContent extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onClassTap,
   });
 
@@ -352,6 +361,7 @@ class _ScheduleContent extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final ValueChanged<ClassSession> onClassTap;
 
   @override
@@ -372,6 +382,18 @@ class _ScheduleContent extends StatelessWidget {
         icon: Icons.cloud_off_rounded,
         title: 'Schedule unavailable',
         detail: scheduleErrorMessage,
+        onRetry: appDataService.retryLiveData,
+      );
+    }
+
+    final hasPublishedClasses = appDataService.schedule.values.any(
+      (sessions) => sessions.isNotEmpty,
+    );
+    if (!hasPublishedClasses) {
+      return const _ScheduleStatusState(
+        icon: Icons.event_busy_rounded,
+        title: 'No published classes',
+        detail: 'The academy has not published a class schedule yet.',
       );
     }
 
@@ -397,6 +419,7 @@ class _ScheduleContent extends StatelessWidget {
       eventGap: eventGap,
       student: student,
       nextEligibleSession: nextEligibleSession,
+      academyNow: academyNow,
       onClassTap: onClassTap,
     );
   }
@@ -798,6 +821,7 @@ class _ScheduleTimeline extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onClassTap,
   });
 
@@ -810,6 +834,7 @@ class _ScheduleTimeline extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final ValueChanged<ClassSession> onClassTap;
 
   @override
@@ -858,11 +883,12 @@ class _ScheduleTimeline extends StatelessWidget {
                       eventGap: eventGap,
                       student: student,
                       nextEligibleSession: nextEligibleSession,
+                      academyNow: academyNow,
                       onTap: () => onClassTap(positionedEvent.session),
                     ),
                   if (isViewingToday)
                     _CurrentTimeIndicator(
-                      top: _currentTimeTop(hourHeight),
+                      top: _currentTimeTop(hourHeight, academyNow),
                       timelineGutterWidth: timelineGutterWidth,
                     ),
                 ],
@@ -932,6 +958,7 @@ class _PositionedClassBlock extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onTap,
   });
 
@@ -943,6 +970,7 @@ class _PositionedClassBlock extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final VoidCallback onTap;
 
   @override
@@ -958,7 +986,11 @@ class _PositionedClassBlock extends StatelessWidget {
     final top = (session.startMinutes / 60) * hourHeight;
     final height = (session.durationMinutes / 60) * hourHeight;
     final isEligible = session.isEligibleFor(student);
-    final isPast = session.endDateTime(selectedDate).isBefore(DateTime.now());
+    final isPast = classHasPassed(
+      session: session,
+      selectedDate: selectedDate,
+      academyNow: academyNow,
+    );
     final isNext = session == nextEligibleSession;
 
     return Positioned(
@@ -1135,12 +1167,14 @@ class _ScheduleStatusState extends StatelessWidget {
     required this.title,
     required this.detail,
     this.showProgress = false,
+    this.onRetry,
   });
 
   final IconData icon;
   final String title;
   final String detail;
   final bool showProgress;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1193,6 +1227,14 @@ class _ScheduleStatusState extends StatelessWidget {
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
               ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
             ],
           ),
         ),
@@ -1360,9 +1402,21 @@ bool _sessionsOverlap(ClassSession a, ClassSession b) {
   return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
 }
 
-double _currentTimeTop(double hourHeight) {
-  final now = DateTime.now();
-  return ((now.hour * 60 + now.minute) / 60) * hourHeight;
+double _currentTimeTop(double hourHeight, DateTime academyNow) {
+  return ((academyNow.hour * 60 + academyNow.minute) / 60) * hourHeight;
+}
+
+@visibleForTesting
+bool classHasPassed({
+  required ClassSession session,
+  required DateTime selectedDate,
+  required DateTime academyNow,
+}) {
+  final selectedDay = DateUtils.dateOnly(selectedDate);
+  final academyToday = DateUtils.dateOnly(academyNow);
+  if (selectedDay.isBefore(academyToday)) return true;
+  if (selectedDay.isAfter(academyToday)) return false;
+  return session.endMinutes <= academyNow.hour * 60 + academyNow.minute;
 }
 
 String _formatFullDate(DateTime date) {

@@ -11,6 +11,7 @@ import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
+import 'package:ota_cheshire_management_platform/models/class_session.dart';
 import 'package:ota_cheshire_management_platform/models/membership_application.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
@@ -276,6 +277,58 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('12 AM'), findsNothing);
     expect(find.text('Sunday'), findsWidgets);
+  });
+
+  testWidgets('schedule distinguishes loading error and empty states', (
+    tester,
+  ) async {
+    final service = _ScheduleStateTestService(isLoadingState: true);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: ScheduleScreen()));
+    expect(find.text('Loading schedule'), findsOneWidget);
+
+    service.setState(
+      isLoading: false,
+      errorMessage: 'Unable to load schedule from Firestore.',
+    );
+    await tester.pump();
+    expect(find.text('Schedule unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    expect(service.retryCount, 1);
+
+    service.setState(isLoading: false, errorMessage: null);
+    await tester.pump();
+    expect(find.text('No published classes'), findsOneWidget);
+    expect(find.text('No classes scheduled today.'), findsNothing);
+  });
+
+  testWidgets('zero sticker target shows configuration message', (
+    tester,
+  ) async {
+    final student = Student(
+      id: 'student-zero-target',
+      name: 'Zero Target',
+      locationId: 'ota-cheshire',
+      belt: 'White',
+      dateOfBirth: DateTime.utc(2010),
+      stickerCount: 7,
+      stickersRequired: 0,
+      nextRank: 'Yellow',
+      approvalStatus: StudentApprovalStatus.approved,
+    );
+    appDataService = _DashboardStateTestService(student: student);
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+
+    expect(
+      find.text('Sticker tracking has not been configured yet.'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   testWidgets('bottom navigation opens every primary destination', (
@@ -1776,6 +1829,87 @@ void main() {
     );
   });
 
+  test('dashboard next class states remain distinct', () {
+    final session = sampleSummerSchedule[DateTime.monday]!.first;
+    expect(
+      dashboardNextClassState(
+        isLoading: true,
+        errorMessage: null,
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.loading,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: 'permission-denied',
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.error,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.noSchedule,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: {
+          DateTime.monday: [session],
+        },
+        nextClass: null,
+      ),
+      DashboardNextClassState.noEligibleClass,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: {
+          DateTime.monday: [session],
+        },
+        nextClass: session,
+      ),
+      DashboardNextClassState.found,
+    );
+  });
+
+  test('schedule passed-state uses academy-local date and time', () {
+    final session = sampleSummerSchedule[DateTime.monday]!.first;
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 14),
+        academyNow: DateTime(2026, 7, 15, 12),
+      ),
+      isTrue,
+    );
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 16),
+        academyNow: DateTime(2026, 7, 15, 12),
+      ),
+      isFalse,
+    );
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 15),
+        academyNow: DateTime(2026, 7, 15, 23, 59),
+      ),
+      isTrue,
+    );
+  });
+
   test('curriculum supports sorted multiple video and text items', () {
     final curriculum = CurriculumRequirement(
       locationId: 'ota-cheshire',
@@ -2719,6 +2853,20 @@ void main() {
     expect(student, isNotNull);
     expect(student!.dateOfBirth, isNull);
     expect(student.legacyAge, 17);
+    expect(student.approvalStatus, StudentApprovalStatus.disabled);
+  });
+
+  test('admin student parser never grants unknown status', () {
+    final student = studentProfileFromFirestoreData('student', {
+      'fullName': 'Student',
+      'locationId': 'ota-cheshire',
+      'beltRank': 'Black',
+      'age': 17,
+      'approvalStatus': 'active',
+    });
+
+    expect(student, isNotNull);
+    expect(student!.approvalStatus, StudentApprovalStatus.disabled);
   });
 
   test('approved schema update contains targeted updates and no deletes', () {
@@ -2873,6 +3021,59 @@ class _EventsTestService extends MockAppDataService {
 
   @override
   List<AcademyResource> get resources => const <AcademyResource>[];
+}
+
+class _ScheduleStateTestService extends MockAppDataService {
+  _ScheduleStateTestService({required this.isLoadingState});
+
+  final Set<VoidCallback> _listeners = {};
+  bool isLoadingState;
+  String? _errorMessage;
+  int retryCount = 0;
+
+  @override
+  Map<int, List<ClassSession>> get schedule => const {};
+
+  @override
+  bool get isScheduleLoading => isLoadingState;
+
+  @override
+  String? get scheduleErrorMessage => _errorMessage;
+
+  @override
+  void retryLiveData() => retryCount++;
+
+  @override
+  void addListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
+
+  void setState({required bool isLoading, required String? errorMessage}) {
+    isLoadingState = isLoading;
+    _errorMessage = errorMessage;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
+class _DashboardStateTestService extends MockAppDataService {
+  const _DashboardStateTestService({required this.student});
+
+  final Student student;
+
+  @override
+  Student get selectedStudentProfile => student;
+
+  @override
+  List<Student> get linkedStudentProfiles => [student];
+
+  @override
+  Map<int, List<ClassSession>> get schedule => const {};
+
+  @override
+  ClassSession? nextClassForDashboard() => null;
 }
 
 class _LiveEventsTestService extends MockAppDataService {

@@ -155,6 +155,25 @@ void main() {
       },
     );
 
+    test('unknown or missing student approval status fails closed', () {
+      expect(() => parseStudentApprovalStatus('active'), throwsFormatException);
+      expect(() => parseStudentApprovalStatus(null), throwsFormatException);
+      expect(
+        () => studentProfileFromCanonicalData('student-1', {
+          'firstName': 'Grace',
+          'lastName': 'Hopper',
+          'dateOfBirth': Timestamp.fromDate(DateTime.utc(2010, 1, 2)),
+          'beltRank': 'Blue',
+          'guardianEmail': 'family@example.com',
+          'guardianUserIds': ['parent-uid'],
+          'approvalStatus': 'active',
+          'createdAt': now,
+          'updatedAt': now,
+        }),
+        throwsFormatException,
+      );
+    });
+
     test('existing guardian email is preserved', () {
       expect(
         deriveGuardianEmail('student-1', {

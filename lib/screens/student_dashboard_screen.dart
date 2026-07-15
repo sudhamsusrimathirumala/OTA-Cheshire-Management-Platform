@@ -8,6 +8,14 @@ import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
+enum DashboardNextClassState {
+  loading,
+  error,
+  noSchedule,
+  noEligibleClass,
+  found,
+}
+
 class StudentDashboardScreen extends StatelessWidget {
   const StudentDashboardScreen({super.key});
 
@@ -18,7 +26,21 @@ class StudentDashboardScreen extends StatelessWidget {
       builder: (context, child) {
         final student = appDataService.selectedStudentProfile;
         final notifications = appDataService.notifications;
-        final nextClass = appDataService.nextClassForDashboard();
+        final scheduleLoading = appDataService.isScheduleLoading;
+        final scheduleError = appDataService.scheduleErrorMessage;
+        final hasSchedule = appDataService.schedule.values.any(
+          (sessions) => sessions.isNotEmpty,
+        );
+        final nextClass =
+            !scheduleLoading && scheduleError == null && hasSchedule
+            ? appDataService.nextClassForDashboard()
+            : null;
+        final nextClassState = dashboardNextClassState(
+          isLoading: scheduleLoading,
+          errorMessage: scheduleError,
+          schedule: appDataService.schedule,
+          nextClass: nextClass,
+        );
         final nextClassWeekday = nextClass == null
             ? null
             : appDataService.schedule.entries
@@ -49,6 +71,8 @@ class StudentDashboardScreen extends StatelessWidget {
                             _NextClassCard(
                               nextClass: nextClass,
                               weekday: nextClassWeekday,
+                              state: nextClassState,
+                              errorMessage: scheduleError,
                             ),
                             const SizedBox(height: 16),
                             _BeltProgressCard(student: student),
@@ -152,17 +176,44 @@ class _DashboardHeader extends StatelessWidget {
 }
 
 class _NextClassCard extends StatelessWidget {
-  const _NextClassCard({required this.nextClass, required this.weekday});
+  const _NextClassCard({
+    required this.nextClass,
+    required this.weekday,
+    required this.state,
+    required this.errorMessage,
+  });
 
   final ClassSession? nextClass;
   final int? weekday;
+  final DashboardNextClassState state;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    final weekdayLabel = nextClass == null
-        ? 'No upcoming class'
-        : _weekdayLabel(weekday ?? DateTime.now().weekday);
-    final timeLabel = nextClass?.timeRangeLabel ?? '--';
+    final weekdayLabel = state == DashboardNextClassState.found
+        ? _weekdayLabel(weekday ?? DateTime.monday)
+        : _nextClassStatusLabel(state);
+    final timeLabel = state == DashboardNextClassState.found
+        ? nextClass!.timeRangeLabel
+        : '--';
+    final title = switch (state) {
+      DashboardNextClassState.loading => 'Loading Next Class',
+      DashboardNextClassState.error => 'Schedule Unavailable',
+      DashboardNextClassState.noSchedule => 'No Academy Schedule',
+      DashboardNextClassState.noEligibleClass => 'No Eligible Upcoming Class',
+      DashboardNextClassState.found => '${nextClass!.className} Class',
+    };
+    final detail = switch (state) {
+      DashboardNextClassState.loading =>
+        'Checking the latest academy schedule.',
+      DashboardNextClassState.error =>
+        errorMessage ?? 'The academy schedule could not be loaded.',
+      DashboardNextClassState.noSchedule =>
+        'The academy has not published a class schedule yet.',
+      DashboardNextClassState.noEligibleClass =>
+        'No upcoming class currently matches this student profile.',
+      DashboardNextClassState.found => nextClass!.eligibilityLabel,
+    };
 
     return _DashboardCard(
       padding: EdgeInsets.zero,
@@ -211,9 +262,7 @@ class _NextClassCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    nextClass == null
-                        ? 'No Class Scheduled'
-                        : '${nextClass!.className} Class',
+                    title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: OtaColors.white,
                       fontWeight: FontWeight.w900,
@@ -266,8 +315,7 @@ class _NextClassCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    nextClass?.eligibilityLabel ??
-                        'Check the schedule for updates.',
+                    detail,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: OtaColors.white.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w600,
@@ -290,6 +338,14 @@ class _BeltProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasStickerTarget = student.stickersRequired > 0;
+    final progress = hasStickerTarget
+        ? (student.stickerCount / student.stickersRequired).clamp(0.0, 1.0)
+        : 0.0;
+    final remaining =
+        hasStickerTarget && student.stickerCount < student.stickersRequired
+        ? student.stickersRequired - student.stickerCount
+        : 0;
     return _DashboardCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,44 +382,53 @@ class _BeltProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 22),
-          Wrap(
-            spacing: 10,
-            runSpacing: 4,
-            alignment: WrapAlignment.spaceBetween,
-            children: [
-              Text(
-                'Sticker Progress',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w800,
+          if (!hasStickerTarget)
+            Text(
+              'Sticker tracking has not been configured yet.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
+            )
+          else ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Sticker Progress',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              Text(
-                '${student.stickerCount} / ${student.stickersRequired} Stickers',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: OtaColors.maroon,
-                  fontWeight: FontWeight.w900,
+                Text(
+                  '${student.stickerCount} / ${student.stickersRequired} Stickers',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.maroon,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: student.stickerCount / student.stickersRequired,
-              minHeight: 12,
-              backgroundColor: OtaColors.softRed,
-              color: OtaColors.actionRed,
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${student.stickersRequired - student.stickerCount} more stickers until your next rank review.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
-          ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: OtaColors.softRed,
+                color: OtaColors.actionRed,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$remaining more stickers until your next rank review.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
+            ),
+          ],
         ],
       ),
     );
@@ -735,4 +800,28 @@ String _weekdayLabel(int weekday) {
     DateTime.sunday => 'Sunday',
     _ => 'Next class',
   };
+}
+
+String _nextClassStatusLabel(DashboardNextClassState state) => switch (state) {
+  DashboardNextClassState.loading => 'Loading schedule',
+  DashboardNextClassState.error => 'Unable to load schedule',
+  DashboardNextClassState.noSchedule => 'No published classes',
+  DashboardNextClassState.noEligibleClass => 'No matching class',
+  DashboardNextClassState.found => 'Next class',
+};
+
+@visibleForTesting
+DashboardNextClassState dashboardNextClassState({
+  required bool isLoading,
+  required String? errorMessage,
+  required Map<int, List<ClassSession>> schedule,
+  required ClassSession? nextClass,
+}) {
+  if (isLoading) return DashboardNextClassState.loading;
+  if (errorMessage != null) return DashboardNextClassState.error;
+  if (!schedule.values.any((sessions) => sessions.isNotEmpty)) {
+    return DashboardNextClassState.noSchedule;
+  }
+  if (nextClass == null) return DashboardNextClassState.noEligibleClass;
+  return DashboardNextClassState.found;
 }

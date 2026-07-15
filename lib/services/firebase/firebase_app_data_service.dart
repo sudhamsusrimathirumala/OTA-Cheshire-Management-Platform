@@ -271,11 +271,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       FirestoreCollections.classSessions,
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
-    _scheduleSubscription = query
-        .orderBy('weekday')
-        .orderBy('startMinutes')
-        .snapshots()
-        .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
+    _scheduleSubscription = query.snapshots().listen(
+      _handleScheduleSnapshot,
+      onError: _handleScheduleError,
+    );
   }
 
   void _listenToAnnouncements(
@@ -422,8 +421,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         firestore
             .collection(FirestoreCollections.classSessions)
             .where('locationId', isEqualTo: locationId)
-            .orderBy('weekday')
-            .orderBy('startMinutes')
             .snapshots()
             .listen(
               (snapshot) => _handleSuperAdminScheduleSnapshot(
@@ -1347,7 +1344,7 @@ T firebaseIdentityOrDevelopmentFallback<T>(
 DateTime _dateTimeFromWeekdayAndMinutes(int weekday, int minutes) {
   final hour = minutes ~/ 60;
   final minute = minutes % 60;
-  return DateTime(2026, 6, 21 + weekday, hour, minute);
+  return DateTime(2000, 1, 2 + weekday, hour, minute);
 }
 
 String? _stringValue(Object? value) {
