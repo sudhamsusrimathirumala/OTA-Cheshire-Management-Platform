@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'firebase_options.dart';
+import 'firebase_options_dev.dart';
 import 'services/firestore/firestore_audit_service.dart';
 import 'services/location_time_service.dart';
 
@@ -15,7 +15,9 @@ Future<void> main() async {
     runApp(const _ReleaseModeRefusalApp());
     return;
   }
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DevelopmentFirebaseOptions.currentPlatform,
+  );
   LocationTimeService.initialize();
   runApp(const FirestoreAuditApp());
 }

@@ -13,14 +13,14 @@
   "flutter": {
     "platforms": {
       "android": {
-        "default": {
+        "dev": {
           "projectId": "ota-management-platform",
           "appId": "1:835576059374:android:abd14d2a4564a748822aff",
-          "fileOutput": "android/app/google-services.json"
+          "fileOutput": "android/app/src/dev/google-services.json"
         }
       },
       "dart": {
-        "lib/firebase_options.dart": {
+        "lib/firebase_options_dev.dart": {
           "projectId": "ota-management-platform",
           "configurations": {
             "android": "1:835576059374:android:abd14d2a4564a748822aff",

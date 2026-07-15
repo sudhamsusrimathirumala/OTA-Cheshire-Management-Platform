@@ -10,19 +10,37 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
 
     defaultConfig {
-        applicationId = "com.otamanagement.app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            applicationId = "com.otamanagement.app"
+            resValue("string", "app_name", "OTA Dev")
+        }
+        create("prod") {
+            dimension = "environment"
+            // Placeholder only. Replace after the academy confirms ownership.
+            applicationId = "com.academy.olympictaekwondo.placeholder"
+            resValue("string", "app_name", "Olympic Taekwondo Academy")
+        }
     }
 
     buildTypes {

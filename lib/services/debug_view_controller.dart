@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../app_environment.dart';
+
 enum DebugViewMode { none, student, admin }
 
 DebugViewMode debugViewModeForBuild({
@@ -10,8 +12,10 @@ DebugViewMode debugViewModeForBuild({
 class DebugViewController extends ChangeNotifier {
   DebugViewMode _mode = DebugViewMode.none;
 
-  DebugViewMode get mode =>
-      debugViewModeForBuild(debugBuild: kDebugMode, requestedMode: _mode);
+  DebugViewMode get mode => debugViewModeForBuild(
+    debugBuild: AppEnvironmentConfig.allowsDebugViews,
+    requestedMode: _mode,
+  );
   bool get isActive => mode != DebugViewMode.none;
   bool get isStudent => mode == DebugViewMode.student;
   bool get isAdmin => mode == DebugViewMode.admin;
@@ -27,7 +31,7 @@ class DebugViewController extends ChangeNotifier {
 
   void _setMode(DebugViewMode value) {
     final effective = debugViewModeForBuild(
-      debugBuild: kDebugMode,
+      debugBuild: AppEnvironmentConfig.allowsDebugViews,
       requestedMode: value,
     );
     if (_mode == effective) return;

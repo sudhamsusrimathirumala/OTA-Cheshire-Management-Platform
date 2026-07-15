@@ -18,19 +18,19 @@ current source before running any write-capable target.
 Read-only audit:
 
 ```powershell
-flutter run -t lib/firestore_audit_main.dart
+flutter run --flavor dev -t lib/firestore_audit_main.dart
 ```
 
 Read-only export:
 
 ```powershell
-flutter run -t lib/firestore_export_main.dart
+flutter run --flavor dev -t lib/firestore_export_main.dart
 ```
 
 Cleanup planning and guarded apply:
 
 ```powershell
-flutter run -t lib/firestore_cleanup_main.dart
+flutter run --flavor dev -t lib/firestore_cleanup_main.dart
 ```
 
 The plan is read-only. Apply requires `enableFirestoreCleanupApply`, the exact
@@ -43,7 +43,7 @@ audit.
 MVP readiness migration:
 
 ```powershell
-flutter run -t lib/seed_firestore_main.dart
+flutter run --flavor dev -t lib/seed_firestore_main.dart
 ```
 
 This entrypoint calls `FirestoreMigrationService.runMvpReadinessMigration()`,
@@ -58,7 +58,7 @@ categories to `general`, and explicitly deletes legacy `resourceType` fields.
 Historical approved schema update:
 
 ```powershell
-flutter run -t lib/firestore_schema_update_main.dart
+flutter run --flavor dev -t lib/firestore_schema_update_main.dart
 ```
 
 This completed one-time tool is disabled. Do not re-enable it without reviewing
@@ -67,7 +67,7 @@ every fixed document ID and operation.
 Full sample seed:
 
 ```powershell
-flutter run -t tool/seed_firestore.dart
+flutter run --flavor dev -t tool/seed_firestore.dart
 ```
 
 This is the highest-risk utility because the script directly invokes the full

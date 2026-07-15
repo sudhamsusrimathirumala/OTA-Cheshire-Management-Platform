@@ -157,6 +157,7 @@
 				97C146EB1CF9000F007C117D /* Frameworks */,
 				97C146EC1CF9000F007C117D /* Resources */,
 				9705A1C41CF9048500538489 /* Embed Frameworks */,
+				F00000000000000000000001 /* Copy Firebase Configuration */,
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 			);
 			buildRules = (
@@ -235,6 +236,22 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		F00000000000000000000001 /* Copy Firebase Configuration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Copy Firebase Configuration";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/GoogleService-Info.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "/bin/sh \"${PROJECT_DIR}/scripts/copy_firebase_config.sh\"";
+		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -591,6 +608,120 @@
 			};
 			name = Release;
 		};
+		D00000000000000000000001 /* Debug-dev */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Debug-dev";
+		};
+		D00000000000000000000002 /* Release-dev */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Release-dev";
+		};
+		D00000000000000000000003 /* Profile-dev */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Profile-dev";
+		};
+		D00000000000000000000004 /* Debug-prod */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Debug-prod";
+		};
+		D00000000000000000000005 /* Release-prod */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Release-prod";
+		};
+		D00000000000000000000006 /* Profile-prod */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			name = "Profile-prod";
+		};
+		E00000000000000000000001 /* Debug-dev */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "OTA Dev";
+				APP_ENVIRONMENT = dev;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Debug-dev";
+		};
+		E00000000000000000000002 /* Release-dev */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "OTA Dev";
+				APP_ENVIRONMENT = dev;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Release-dev";
+		};
+		E00000000000000000000003 /* Profile-dev */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "OTA Dev";
+				APP_ENVIRONMENT = dev;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Profile-dev";
+		};
+		E00000000000000000000004 /* Debug-prod */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
+				APP_ENVIRONMENT = prod;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Debug-prod";
+		};
+		E00000000000000000000005 /* Release-prod */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
+				APP_ENVIRONMENT = prod;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Release-prod";
+		};
+		E00000000000000000000006 /* Profile-prod */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
+			buildSettings = {
+				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
+				APP_ENVIRONMENT = prod;
+				INFOPLIST_FILE = Runner/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = "Profile-prod";
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -610,6 +741,12 @@
 				97C147031CF9000F007C117D /* Debug */,
 				97C147041CF9000F007C117D /* Release */,
 				249021D3217E4FDB00AE95B9 /* Profile */,
+				D00000000000000000000001 /* Debug-dev */,
+				D00000000000000000000002 /* Release-dev */,
+				D00000000000000000000003 /* Profile-dev */,
+				D00000000000000000000004 /* Debug-prod */,
+				D00000000000000000000005 /* Release-prod */,
+				D00000000000000000000006 /* Profile-prod */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -620,6 +757,12 @@
 				97C147061CF9000F007C117D /* Debug */,
 				97C147071CF9000F007C117D /* Release */,
 				249021D4217E4FDB00AE95B9 /* Profile */,
+				E00000000000000000000001 /* Debug-dev */,
+				E00000000000000000000002 /* Release-dev */,
+				E00000000000000000000003 /* Profile-dev */,
+				E00000000000000000000004 /* Debug-prod */,
+				E00000000000000000000005 /* Release-prod */,
+				E00000000000000000000006 /* Profile-prod */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

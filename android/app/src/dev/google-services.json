@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "835576059374",
+    "project_id": "ota-management-platform",
+    "storage_bucket": "ota-management-platform.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:835576059374:android:abd14d2a4564a748822aff",
+        "android_client_info": {
+          "package_name": "com.otamanagement.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "835576059374-b752sguedid4cs7cknaqeei7ie4q8afs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.otamanagement.app",
+            "certificate_hash": "7848d8fa59ca7fe3d1e805b57483ed393042f3c7"
+          }
+        },
+        {
+          "client_id": "835576059374-t6b3eocn1lheu1i9nfu6fcf83altmp0r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDg5pE2Q6rn-RGW1RoV5EJ1NS1PufDzTr0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "835576059374-t6b3eocn1lheu1i9nfu6fcf83altmp0r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "835576059374-sdtetuin3e98ql2omvchrd2e5lsim6hb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.otaCheshireManagementPlatform"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

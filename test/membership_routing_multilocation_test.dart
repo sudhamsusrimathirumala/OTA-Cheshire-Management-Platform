@@ -1,4 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/app_environment.dart';
+import 'package:ota_cheshire_management_platform/firebase_options_dev.dart';
+import 'package:ota_cheshire_management_platform/firebase_options_prod.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
@@ -132,6 +135,41 @@ void main() {
         DebugViewMode.none,
       );
     });
+
+    test('production environment cannot activate the debug controller', () {
+      AppEnvironmentConfig.initialize(AppEnvironment.prod);
+      addTearDown(() {
+        debugViewController.clear();
+        AppEnvironmentConfig.initialize(AppEnvironment.dev);
+      });
+
+      debugViewController.enterStudent();
+
+      expect(debugViewController.mode, DebugViewMode.none);
+    });
+  });
+
+  group('Firebase environment isolation', () {
+    test('development options identify only the development project', () {
+      expect(
+        DevelopmentFirebaseOptions.android.projectId,
+        'ota-management-platform',
+      );
+      expect(
+        DevelopmentFirebaseOptions.android.appId,
+        '1:835576059374:android:abd14d2a4564a748822aff',
+      );
+    });
+
+    test(
+      'production options fail closed until academy configuration exists',
+      () {
+        expect(
+          () => ProductionFirebaseOptions.currentPlatform,
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
   });
 
   group('admin location selection', () {

@@ -1,6 +1,6 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../app_environment.dart';
 import '../routes.dart';
 import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
@@ -22,7 +22,7 @@ class WelcomeScreen extends StatelessWidget {
               ? (constraints.maxWidth * 0.38).clamp(240.0, 280.0)
               : (constraints.maxWidth * 0.48).clamp(150.0, 230.0);
           final availableHeight = constraints.maxHeight - 48;
-          final minimumContentHeight = kDebugMode
+          final minimumContentHeight = AppEnvironmentConfig.allowsDebugViews
               ? logoSize + 540
               : logoSize + 400;
           final contentHeight = availableHeight > minimumContentHeight
@@ -63,7 +63,7 @@ class WelcomeScreen extends StatelessWidget {
                         letterSpacing: 0.3,
                       ),
                     ),
-                    if (kDebugMode) ...[
+                    if (AppEnvironmentConfig.allowsDebugViews) ...[
                       // Development-only shortcuts for visual UI work. The
                       // compile-time debug guard removes them from release.
                       const SizedBox(height: 24),

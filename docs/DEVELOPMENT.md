@@ -17,10 +17,12 @@ desktop workload. It is not required for Android or web development.
 flutter pub get
 flutter doctor
 flutter devices
-flutter run
+flutter run --flavor dev -t lib/main_dev.dart
 ```
 
-The normal application initializes Firebase from `lib/firebase_options.dart`.
+The development application initializes Firebase from
+`lib/firebase_options_dev.dart`. Production configuration is intentionally
+absent. See [Firebase environments](FIREBASE_ENVIRONMENTS.md).
 
 ## Firebase Authentication setup
 
@@ -53,26 +55,26 @@ monetization. Deploy only Firestore Rules when explicitly required.
 
 ## Common Run Targets
 
-Normal application:
+Development application:
 
 ```powershell
-flutter run -t lib/main.dart
+flutter run --flavor dev -t lib/main_dev.dart
 ```
 
 Development-only, read-only utilities:
 
 ```powershell
-flutter run -t lib/firestore_audit_main.dart
-flutter run -t lib/firestore_export_main.dart
+flutter run --flavor dev -t lib/firestore_audit_main.dart
+flutter run --flavor dev -t lib/firestore_export_main.dart
 ```
 
 Development-only, write-capable utilities:
 
 ```powershell
-flutter run -t lib/firestore_cleanup_main.dart
-flutter run -t lib/firestore_schema_update_main.dart
-flutter run -t lib/seed_firestore_main.dart
-flutter run -t tool/seed_firestore.dart
+flutter run --flavor dev -t lib/firestore_cleanup_main.dart
+flutter run --flavor dev -t lib/firestore_schema_update_main.dart
+flutter run --flavor dev -t lib/seed_firestore_main.dart
+flutter run --flavor dev -t tool/seed_firestore.dart
 ```
 
 Do not run a write-capable target until its current flags and behavior have
@@ -109,13 +111,15 @@ firebase emulators:exec --only firestore --project demo-ota-membership "npm --pr
 Local builds:
 
 ```powershell
-flutter build apk
-flutter build apk --release
+flutter build apk --debug --flavor dev -t lib/main_dev.dart
+flutter build apk --release --flavor dev -t lib/main_dev.dart
 ```
 
-The Android application ID is `com.otamanagement.app`. The current release
-build type still uses debug signing and is not ready for production
-distribution.
+The development Android application ID remains `com.otamanagement.app` because
+that is the package registered in the existing development Firebase client.
+The `prod` flavor uses an unmistakable placeholder until the academy confirms
+its final package name. The current release build type still uses debug signing
+and is not ready for production distribution.
 
 The `Build Debug APK Release` GitHub Actions workflow is manual. It builds a
 debug APK, renames it to `OTA-Cheshire-debug.apk`, creates a tag named

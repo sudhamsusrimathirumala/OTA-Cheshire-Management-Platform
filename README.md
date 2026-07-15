@@ -160,7 +160,7 @@ lib/
   theme/      OTA color system
   utils/      Presentation helpers
   widgets/    Shared UI components
-  main.dart   Normal application entrypoint
+  main_dev.dart / main_prod.dart   Environment-specific entrypoints
   *_main.dart Development-only Firestore entrypoints
 docs/         Schema, architecture, operations, and backlog documentation
 test/         Unit, service-helper, and widget tests
@@ -173,7 +173,7 @@ assets/       OTA image assets
 
 ```powershell
 flutter pub get
-flutter run
+flutter run --flavor dev -t lib/main_dev.dart
 ```
 
 Android development is supported through Android Studio and an Android
@@ -184,11 +184,11 @@ See [Development guide](docs/DEVELOPMENT.md) for run targets and build commands.
 
 ## Firebase Setup
 
-Firebase initialization uses `lib/firebase_options.dart`. The configured
-project ID is `ota-management-platform`, and the Android application ID is
-`com.otamanagement.app`. Running against Firebase requires valid platform
-configuration and Firestore permissions. Do not place credentials in
-documentation or source control.
+Firebase initialization is explicit by environment. Development uses
+`lib/main_dev.dart` and `lib/firebase_options_dev.dart` for the
+`ota-management-platform` project. Production uses `lib/main_prod.dart` and a
+deliberately unconfigured `lib/firebase_options_prod.dart`; it cannot fall back
+to development. See [Firebase environments](docs/FIREBASE_ENVIRONMENTS.md).
 
 `firestore.rules` protects atomic pending applications and admin review writes.
 Firebase deployments are limited to explicit Firestore Rules releases; no
