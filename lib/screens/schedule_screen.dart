@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
 import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -71,7 +73,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     classes.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    return classes.first;
+    final preferredGroups = _student.preferredClassGroupIds.toSet();
+    return classes.firstWhere(
+      (session) => preferredGroups.contains(session.bulkGroupId),
+      orElse: () => classes.first,
+    );
   }
 
   void _goToPreviousDay() {
@@ -246,6 +252,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   void _showClassDetails(ClassSession session) {
     final isEligible = session.isEligibleFor(_student);
+    final isPreferred = _student.preferredClassGroupIds.contains(
+      session.bulkGroupId,
+    );
     final timeLabel = session.timeRangeLabel;
 
     showModalBottomSheet<void>(
@@ -324,7 +333,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 _DetailRow(
                   icon: Icons.favorite_rounded,
                   label: 'Preferred Class',
-                  value: session.isPreferred ? 'Yes' : 'No',
+                  value: isPreferred ? 'Yes' : 'No',
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: isEligible
+                        ? () {
+                            Navigator.pop(context);
+                            _changePreferredClass(session);
+                          }
+                        : null,
+                    icon: Icon(
+                      isPreferred
+                          ? Icons.heart_broken_rounded
+                          : Icons.favorite_rounded,
+                    ),
+                    label: Text(
+                      isPreferred
+                          ? 'Remove preferred class'
+                          : 'Set as preferred class',
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -332,6 +363,62 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         );
       },
     );
+  }
+
+  Future<void> _changePreferredClass(ClassSession session) async {
+    final student = _student;
+    final existing = student.preferredClassGroupIds.firstOrNull;
+    final removing = existing == session.bulkGroupId;
+    if (!removing && existing != null) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Replace preferred class?'),
+          content: const Text(
+            'This student already has a preferred class. Replace it with this class group?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+      if (replace != true) return;
+    }
+    try {
+      await firebaseSessionController.profileService.updatePreferredClass(
+        profile: student,
+        session: removing ? null : session,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            removing
+                ? 'Preferred class removed.'
+                : 'Preferred class updated for ${student.name}.',
+          ),
+        ),
+      );
+    } on ProfileServiceException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update preferred class.')),
+        );
+      }
+    }
   }
 }
 
@@ -992,6 +1079,9 @@ class _PositionedClassBlock extends StatelessWidget {
       academyNow: academyNow,
     );
     final isNext = session == nextEligibleSession;
+    final isPreferred = student.preferredClassGroupIds.contains(
+      session.bulkGroupId,
+    );
 
     return Positioned(
       top: top + 4,
@@ -1003,6 +1093,7 @@ class _PositionedClassBlock extends StatelessWidget {
         isEligible: isEligible,
         isPast: isPast,
         isNext: isNext,
+        isPreferred: isPreferred,
         onTap: onTap,
       ),
     );
@@ -1015,6 +1106,7 @@ class _ClassBlock extends StatelessWidget {
     required this.isEligible,
     required this.isPast,
     required this.isNext,
+    required this.isPreferred,
     required this.onTap,
   });
 
@@ -1022,6 +1114,7 @@ class _ClassBlock extends StatelessWidget {
   final bool isEligible;
   final bool isPast;
   final bool isNext;
+  final bool isPreferred;
   final VoidCallback onTap;
 
   @override
@@ -1069,11 +1162,15 @@ class _ClassBlock extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        if (isEligible) ...[
-                          const Icon(
-                            Icons.star_rounded,
+                        if (isEligible || isPreferred) ...[
+                          Icon(
+                            isPreferred
+                                ? Icons.favorite_rounded
+                                : Icons.star_rounded,
                             size: 15,
-                            color: Color(0xFFD9A441),
+                            color: isPreferred
+                                ? OtaColors.maroon
+                                : const Color(0xFFD9A441),
                           ),
                           const SizedBox(width: 4),
                         ],
@@ -1113,6 +1210,19 @@ class _ClassBlock extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: OtaColors.navy,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                    if (isPreferred && !isCompact && !isNext) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Preferred class',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: OtaColors.maroon,
                           fontWeight: FontWeight.w900,
                           height: 1,
                         ),

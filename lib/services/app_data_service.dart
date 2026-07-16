@@ -58,6 +58,10 @@ abstract class AppDataService implements Listenable {
 
   List<NotificationItem> get notifications;
 
+  Future<void> markNotificationRead(String announcementId);
+
+  Future<void> markAllNotificationsRead();
+
   List<AcademyAnnouncement> get adminAnnouncements;
 
   List<AcademyEvent> get events;
@@ -71,12 +75,19 @@ ClassSession? nextEligibleClassFromSchedule(
   required int currentWeekday,
   required int currentMinutes,
 }) {
+  final preferredGroups = student.preferredClassGroupIds.toSet();
+  ClassSession? firstEligible;
   for (var offset = 0; offset < DateTime.daysPerWeek; offset++) {
     final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
     for (final session in schedule[weekday] ?? const <ClassSession>[]) {
-      if (offset == 0 && session.endMinutes <= currentMinutes) continue;
-      if (session.isEligibleFor(student)) return session;
+      if (!session.isPublished ||
+          (offset == 0 && session.endMinutes <= currentMinutes) ||
+          !session.isEligibleFor(student)) {
+        continue;
+      }
+      firstEligible ??= session;
+      if (preferredGroups.contains(session.bulkGroupId)) return session;
     }
   }
-  return null;
+  return firstEligible;
 }

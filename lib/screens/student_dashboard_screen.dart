@@ -3,8 +3,12 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/notification_item.dart';
 import '../models/student_profile.dart';
+import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -16,8 +20,17 @@ enum DashboardNextClassState {
   found,
 }
 
-class StudentDashboardScreen extends StatelessWidget {
-  const StudentDashboardScreen({super.key});
+class StudentDashboardScreen extends StatefulWidget {
+  const StudentDashboardScreen({super.key, this.selectProfile});
+
+  final Future<void> Function(String profileId)? selectProfile;
+
+  @override
+  State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  bool _switchingProfile = false;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +38,7 @@ class StudentDashboardScreen extends StatelessWidget {
       animation: appDataService,
       builder: (context, child) {
         final student = appDataService.selectedStudentProfile;
+        final account = appDataService.currentUserAccount;
         final notifications = appDataService.notifications;
         final scheduleLoading = appDataService.isScheduleLoading;
         final scheduleError = appDataService.scheduleErrorMessage;
@@ -66,7 +80,15 @@ class StudentDashboardScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _DashboardHeader(student: student),
+                            _DashboardHeader(
+                              account: account,
+                              student: student,
+                              profileCount: appDataService.linkedStudentProfiles
+                                  .where((profile) => profile.isActive)
+                                  .length,
+                              isSwitching: _switchingProfile,
+                              onTap: _showProfileSwitcher,
+                            ),
                             const SizedBox(height: 22),
                             _NextClassCard(
                               nextClass: nextClass,
@@ -110,69 +132,191 @@ class StudentDashboardScreen extends StatelessWidget {
       },
     );
   }
+
+  Future<void> _showProfileSwitcher() async {
+    if (_switchingProfile) return;
+    final profiles = appDataService.linkedStudentProfiles
+        .where((profile) => profile.isActive)
+        .toList(growable: false);
+    if (profiles.isEmpty) return;
+    final selected = appDataService.selectedStudentProfile;
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 12),
+          children: [
+            ListTile(
+              title: Text(
+                profiles.length == 1 ? 'Student profile' : 'Switch student',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: profiles.length == 1
+                  ? const Text('This is the only active linked profile.')
+                  : const Text('Dashboard content updates for your selection.'),
+            ),
+            for (final profile in profiles)
+              ListTile(
+                leading: Icon(
+                  profile.id == selected.id
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: profile.id == selected.id
+                      ? OtaColors.maroon
+                      : OtaColors.mutedText,
+                ),
+                title: Text(profile.name),
+                subtitle: Text('${profile.belt} Belt'),
+                selected: profile.id == selected.id,
+                onTap: profile.id == selected.id
+                    ? () => Navigator.pop(context)
+                    : () => Navigator.pop(context, profile.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (id == null || !mounted) return;
+    setState(() => _switchingProfile = true);
+    try {
+      await (widget.selectProfile?.call(id) ??
+          firebaseSessionController.selectProfile(id));
+    } on ProfileServiceException catch (error) {
+      if (mounted) _showProfileError(error.message);
+    } catch (_) {
+      if (mounted) {
+        _showProfileError('Unable to switch profiles. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _switchingProfile = false);
+    }
+  }
+
+  void _showProfileError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.student});
+  const _DashboardHeader({
+    required this.account,
+    required this.student,
+    required this.profileCount,
+    required this.isSwitching,
+    required this.onTap,
+  });
 
+  final UserAccount account;
   final StudentProfile student;
+  final int profileCount;
+  final bool isSwitching;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final academyNow = const LocationTimeService().toLocationTime(
+      DateTime.now(),
+      student.locationId,
+    );
+    final subtitle = account.role == UserAccountRole.parent
+        ? 'Viewing ${student.name} â€¢ ${student.belt} Belt'
+        : 'Your student profile â€¢ ${student.belt} Belt';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
             children: [
-              Text(
-                'Good Evening, ${student.name}',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w900,
-                  height: 1.08,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${academyGreeting(academyNow)}, ${account.firstName}',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: OtaColors.ink,
+                            fontWeight: FontWeight.w900,
+                            height: 1.08,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: OtaColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '${student.belt} Student',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: OtaColors.mutedText,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 16),
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: OtaColors.navy,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: OtaColors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: OtaColors.navy.withValues(alpha: 0.16),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
+                alignment: Alignment.center,
+                child: isSwitching
+                    ? const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: OtaColors.white,
+                        ),
+                      )
+                    : Text(
+                        account.displayName.isEmpty
+                            ? student.initials
+                            : account.displayName
+                                  .trim()
+                                  .split(RegExp(r'\s+'))
+                                  .map((part) => part[0])
+                                  .take(2)
+                                  .join()
+                                  .toUpperCase(),
+                        style: TextStyle(
+                          color: OtaColors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
+              if (profileCount > 1) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.expand_more_rounded, color: OtaColors.navy),
+              ],
             ],
           ),
         ),
-        const SizedBox(width: 16),
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: OtaColors.navy,
-            shape: BoxShape.circle,
-            border: Border.all(color: OtaColors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: OtaColors.navy.withValues(alpha: 0.16),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            student.initials,
-            style: TextStyle(
-              color: OtaColors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
+}
+
+@visibleForTesting
+String academyGreeting(DateTime academyTime) {
+  if (academyTime.hour < 12) return 'Good morning';
+  if (academyTime.hour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 class _NextClassCard extends StatelessWidget {
