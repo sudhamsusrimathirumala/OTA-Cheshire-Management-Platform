@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
+import '../../models/class_session.dart';
 import '../firestore/firestore_collections.dart';
 
 class FirebaseAdminWriteService {
@@ -484,7 +485,7 @@ class ResourceWriteData {
 }
 
 class ClassSessionWriteData {
-  const ClassSessionWriteData({
+  ClassSessionWriteData({
     required this.className,
     required this.classTypeId,
     String? bulkGroupId,
@@ -500,7 +501,7 @@ class ClassSessionWriteData {
     this.eligibilityNote,
     this.resumesOn,
     this.createdAt,
-  }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard';
+  }) : bulkGroupId = resolvedPreferredClassGroupId(className, bulkGroupId);
 
   final String? id;
   final String className;

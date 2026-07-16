@@ -315,6 +315,35 @@ void main() {
     expect(find.text('Sunday'), findsWidgets);
   });
 
+  testWidgets('preferred-class update stays on Schedule', (tester) async {
+    ClassSession? updatedSession;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleScreen(
+          initialDate: DateTime(2026, 6, 22),
+          updatePreferredClass: (profile, session) async {
+            updatedSession = session;
+          },
+        ),
+      ),
+    );
+
+    final level = find.text('Level 3').first;
+    await tester.ensureVisible(level);
+    await tester.tap(level);
+    await tester.pumpAndSettle();
+    final replacePreference = find.text('Replace preferred class');
+    await tester.ensureVisible(replacePreference);
+    await tester.pumpAndSettle();
+    await tester.tap(replacePreference);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Replace'));
+    await tester.pumpAndSettle();
+
+    expect(updatedSession?.className, 'Level 3');
+    expect(find.byType(ScheduleScreen), findsOneWidget);
+  });
+
   testWidgets('schedule distinguishes loading error and empty states', (
     tester,
   ) async {
@@ -2222,7 +2251,7 @@ void main() {
   });
 
   test('schedule write data preserves wall clock minutes', () {
-    const data = ClassSessionWriteData(
+    final data = ClassSessionWriteData(
       className: 'Teen/Adult Sparring',
       classTypeId: 'teen-adult-sparring',
       bulkGroupId: 'teen-adult-sparring-standard',
@@ -2237,6 +2266,47 @@ void main() {
     );
 
     expect(data.startMinutes, 1160);
+    expect(data.bulkGroupId, 'teen-adult-sparring-standard');
+
+    final adult = ClassSessionWriteData(
+      className: 'Adult',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.monday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+      isPreferred: false,
+    );
+    final blackBelt = ClassSessionWriteData(
+      className: 'Black Belt',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.tuesday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+      isPreferred: false,
+    );
+    final teenBlackBelt = ClassSessionWriteData(
+      className: 'Teen & Black Belt',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.wednesday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+      isPreferred: false,
+    );
+    expect(adult.bulkGroupId, 'adult-standard');
+    expect(blackBelt.bulkGroupId, 'black-belt-standard');
+    expect(teenBlackBelt.bulkGroupId, 'teen-black-belt-standard');
     expect(data.startTime.hour, 19);
     expect(data.startTime.minute, 20);
     expect(data.bulkGroupId, 'teen-adult-sparring-standard');
@@ -2742,6 +2812,31 @@ void main() {
       expect(find.text(profile.name), findsOneWidget);
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('explicit profile switching still resets to Dashboard', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManageProfilesScreen(selectProfile: service.selectProfile),
+        routes: {
+          OtaRoutes.dashboard: (_) => const Scaffold(body: Text('DASHBOARD')),
+        },
+      ),
+    );
+
+    final switchButton = find.text('Switch to profile');
+    await tester.ensureVisible(switchButton);
+    await tester.pumpAndSettle();
+    await tester.tap(switchButton);
+    await tester.pumpAndSettle();
+
+    expect(service.selectedId, 'student_maya');
+    expect(find.text('DASHBOARD'), findsOneWidget);
   });
 
   test('event writes use only General Resource registration fields', () {

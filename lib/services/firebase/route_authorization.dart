@@ -59,7 +59,19 @@ bool isRouteAuthorized({
 }
 
 bool protectedAccessWasLost(SessionStage previous, SessionStage current) {
+  if (current == SessionStage.loading) return false;
   return (previous == SessionStage.member && current != SessionStage.member) ||
       (previous == SessionStage.admin && current != SessionStage.admin) ||
       current == SessionStage.signedOut;
+}
+
+SessionStage rememberedStageForRouteProtection(
+  SessionStage previous,
+  SessionStage current,
+) {
+  if (current == SessionStage.loading &&
+      (previous == SessionStage.member || previous == SessionStage.admin)) {
+    return previous;
+  }
+  return current;
 }

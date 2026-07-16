@@ -58,7 +58,7 @@ class _OTAAppState extends State<OTAApp> {
       debugViewController.clear();
     }
     final shouldReset = protectedAccessWasLost(_previousStage, current);
-    _previousStage = current;
+    _previousStage = rememberedStageForRouteProtection(_previousStage, current);
     if (!shouldReset) return;
     debugViewController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {

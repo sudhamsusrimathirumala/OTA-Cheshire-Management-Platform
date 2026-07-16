@@ -376,7 +376,7 @@ void main() {
 
     test('clearing class optionals deletes both fields on edits', () {
       final fields = classSessionWriteFields(
-        const ClassSessionWriteData(
+        ClassSessionWriteData(
           id: 'session-1',
           className: 'Level 1',
           classTypeId: 'level-1',

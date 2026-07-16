@@ -311,7 +311,13 @@ class FirestoreProfileService {
           );
         }
         if (session != null) {
-          final storedGroup = _optionalString(storedClass?['bulkGroupId']);
+          final storedClassName = _optionalString(storedClass?['className']);
+          final storedGroup = storedClassName == null
+              ? null
+              : resolvedPreferredClassGroupId(
+                  storedClassName,
+                  _optionalString(storedClass?['bulkGroupId']),
+                );
           if (storedClass == null ||
               storedClass['isActive'] != true ||
               storedClass['locationId'] != storedProfile?['locationId'] ||

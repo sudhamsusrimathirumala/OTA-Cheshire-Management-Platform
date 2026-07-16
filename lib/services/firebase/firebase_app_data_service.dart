@@ -1096,7 +1096,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       className: className,
       classTypeId:
           _stringValue(data['classTypeId']) ?? _classTypeIdFor(className),
-      bulkGroupId: _stringValue(data['bulkGroupId']) ?? '',
+      bulkGroupId: resolvedPreferredClassGroupId(
+        className,
+        _stringValue(data['bulkGroupId']),
+      ),
       locationId: _stringValue(data['locationId']) ?? '',
       startTime: startTime,
       endTime: endTime,
@@ -1565,7 +1568,9 @@ StudentProfile? studentProfileFromFirestoreData(
         _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
     linkedUserId:
         _stringValue(data['linkedUserId']) ?? _stringValue(data['selfUserId']),
-    preferredClassGroupIds: _stringListValue(data['preferredClassGroupIds']),
+    preferredClassGroupIds: resolvedSavedPreferredClassGroupIds(
+      _stringListValue(data['preferredClassGroupIds']),
+    ),
     promotionHistory: _stringListValue(data['promotionHistory']),
     testingNotes: _stringListValue(data['testingNotes']),
     isActive: data['isActive'] as bool,

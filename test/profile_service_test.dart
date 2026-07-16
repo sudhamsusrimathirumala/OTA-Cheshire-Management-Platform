@@ -226,62 +226,61 @@ void main() {
     });
   });
 
-  test('preferred class requires publication location and recurring group', () {
-    final student = Student(
-      id: 'student',
-      name: 'Student',
-      locationId: 'cheshire',
-      belt: 'Blue',
-      dateOfBirth: DateTime(2000),
-      stickerCount: 0,
-      stickersRequired: 0,
-      nextRank: 'Blue-Red',
-    );
-    ClassSession session({
-      String locationId = 'cheshire',
-      bool published = true,
-      List<String> belts = const ['Blue'],
-    }) => ClassSession(
-      id: 'session',
-      className: 'Class',
-      classTypeId: 'level-3',
-      bulkGroupId: 'level-3-standard',
-      locationId: locationId,
-      startTime: DateTime(2026, 1, 1, 18),
-      endTime: DateTime(2026, 1, 1, 19),
-      eligibleBelts: belts,
-      description: '',
-      isPublished: published,
-    );
+  test(
+    'preferred class requires publication and location with exact group',
+    () {
+      final student = Student(
+        id: 'student',
+        name: 'Student',
+        locationId: 'cheshire',
+        belt: 'Blue',
+        dateOfBirth: DateTime(2000),
+        stickerCount: 0,
+        stickersRequired: 0,
+        nextRank: 'Blue-Red',
+      );
+      ClassSession session({
+        String locationId = 'cheshire',
+        bool published = true,
+        List<String> belts = const ['Blue'],
+      }) => ClassSession(
+        id: 'session',
+        className: 'Class',
+        classTypeId: 'level-3',
+        bulkGroupId: 'level-3-standard',
+        locationId: locationId,
+        startTime: DateTime(2026, 1, 1, 18),
+        endTime: DateTime(2026, 1, 1, 19),
+        eligibleBelts: belts,
+        description: '',
+        isPublished: published,
+      );
 
-    expect(canSetPreferredClass(student, session()), isTrue);
-    expect(
-      canSetPreferredClass(student, session(locationId: 'other')),
-      isFalse,
-    );
-    expect(canSetPreferredClass(student, session(published: false)), isFalse);
-    expect(
-      canSetPreferredClass(student, session(belts: const ['White'])),
-      isTrue,
-    );
-    expect(
-      canSetPreferredClass(
-        student,
-        ClassSession(
-          id: 'missing-group',
-          className: 'Class',
-          classTypeId: 'level-3',
-          bulkGroupId: '',
-          locationId: 'cheshire',
-          startTime: DateTime(2026, 1, 1, 18),
-          endTime: DateTime(2026, 1, 1, 19),
-          eligibleBelts: const ['Blue'],
-          description: '',
-        ),
-      ),
-      isFalse,
-    );
-  });
+      expect(canSetPreferredClass(student, session()), isTrue);
+      expect(
+        canSetPreferredClass(student, session(locationId: 'other')),
+        isFalse,
+      );
+      expect(canSetPreferredClass(student, session(published: false)), isFalse);
+      expect(
+        canSetPreferredClass(student, session(belts: const ['White'])),
+        isTrue,
+      );
+      final generatedGroup = ClassSession(
+        id: 'generated-group',
+        className: 'Class',
+        classTypeId: 'level-3',
+        bulkGroupId: '',
+        locationId: 'cheshire',
+        startTime: DateTime(2026, 1, 1, 18),
+        endTime: DateTime(2026, 1, 1, 19),
+        eligibleBelts: const ['Blue'],
+        description: '',
+      );
+      expect(generatedGroup.bulkGroupId, 'class-standard');
+      expect(canSetPreferredClass(student, generatedGroup), isTrue);
+    },
+  );
 
   test('parent self profile is linked without creating another account', () {
     final data = parentSelfProfileCreationData(

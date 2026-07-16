@@ -71,6 +71,14 @@ void main() {
 
     test('losing active access invalidates protected stacks', () {
       expect(
+        protectedAccessWasLost(SessionStage.member, SessionStage.loading),
+        isFalse,
+      );
+      expect(
+        protectedAccessWasLost(SessionStage.admin, SessionStage.loading),
+        isFalse,
+      );
+      expect(
         protectedAccessWasLost(SessionStage.member, SessionStage.signedOut),
         isTrue,
       );
@@ -79,8 +87,58 @@ void main() {
         isTrue,
       );
       expect(
+        protectedAccessWasLost(SessionStage.member, SessionStage.error),
+        isTrue,
+      );
+      expect(
         protectedAccessWasLost(SessionStage.admin, SessionStage.adminDisabled),
         isTrue,
+      );
+      expect(
+        protectedAccessWasLost(SessionStage.admin, SessionStage.signedOut),
+        isTrue,
+      );
+      expect(
+        rememberedStageForRouteProtection(
+          SessionStage.member,
+          SessionStage.loading,
+        ),
+        SessionStage.member,
+      );
+      expect(
+        protectedAccessWasLost(SessionStage.member, SessionStage.admin),
+        isTrue,
+      );
+    });
+
+    test('routine access refresh preserves established protected stages', () {
+      expect(
+        sessionStageDuringAccessRefresh(
+          current: SessionStage.member,
+          established: SessionStage.member,
+        ),
+        SessionStage.member,
+      );
+      expect(
+        sessionStageDuringAccessRefresh(
+          current: SessionStage.admin,
+          established: SessionStage.admin,
+        ),
+        SessionStage.admin,
+      );
+      expect(
+        sessionStageDuringAccessRefresh(
+          current: SessionStage.loading,
+          established: SessionStage.member,
+        ),
+        SessionStage.loading,
+      );
+      expect(
+        sessionStageDuringAccessRefresh(
+          current: SessionStage.member,
+          established: SessionStage.admin,
+        ),
+        SessionStage.loading,
       );
     });
   });
@@ -339,10 +397,12 @@ void main() {
       'locationId': 'cheshire',
       'beltRank': 'White',
       'dateOfBirth': DateTime.utc(2010, 1, 1),
+      'preferredClassGroupIds': ['teen-adult-standard'],
       'isActive': true,
     });
     expect(valid, isNotNull);
     expect(valid!.isActive, isTrue);
+    expect(valid.preferredClassGroupIds, isEmpty);
     expect(
       studentProfileFromFirestoreData('student-1', {
         'firstName': 'Test',

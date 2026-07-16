@@ -13,9 +13,15 @@ import '../widgets/ota_bottom_nav_bar.dart';
 enum _ScheduleViewMode { day, week }
 
 class ScheduleScreen extends StatefulWidget {
-  const ScheduleScreen({this.initialDate, super.key});
+  const ScheduleScreen({
+    this.initialDate,
+    this.updatePreferredClass,
+    super.key,
+  });
 
   final DateTime? initialDate;
+  final Future<void> Function(StudentProfile profile, ClassSession? session)?
+  updatePreferredClass;
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -70,9 +76,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     classes.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    final preferredGroups = _student.preferredClassGroupIds.toSet();
     return classes.firstWhere(
-      (session) => preferredGroups.contains(session.bulkGroupId),
+      (session) => matchesResolvedPreferredClassGroup(
+        _student.preferredClassGroupIds,
+        session.bulkGroupId,
+      ),
       orElse: () => classes.firstWhere(
         (session) => isTypicallyRecommendedFor(session, _student),
         orElse: () => classes.first,
@@ -252,7 +260,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   void _showClassDetails(ClassSession session) {
     final isRecommended = isTypicallyRecommendedFor(session, _student);
-    final isPreferred = _student.preferredClassGroupIds.contains(
+    final isPreferred = matchesResolvedPreferredClassGroup(
+      _student.preferredClassGroupIds,
       session.bulkGroupId,
     );
     final canSelect = canSetPreferredClass(_student, session);
@@ -411,10 +420,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       if (replace != true) return;
     }
     try {
-      await firebaseSessionController.profileService.updatePreferredClass(
-        profile: student,
-        session: removing ? null : session,
-      );
+      final update = widget.updatePreferredClass;
+      if (update == null) {
+        await firebaseSessionController.profileService.updatePreferredClass(
+          profile: student,
+          session: removing ? null : session,
+        );
+      } else {
+        await update(student, removing ? null : session);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1113,7 +1127,8 @@ class _PositionedClassBlock extends StatelessWidget {
       academyNow: academyNow,
     );
     final isNext = session == nextEligibleSession;
-    final isPreferred = student.preferredClassGroupIds.contains(
+    final isPreferred = matchesResolvedPreferredClassGroup(
+      student.preferredClassGroupIds,
       session.bulkGroupId,
     );
 

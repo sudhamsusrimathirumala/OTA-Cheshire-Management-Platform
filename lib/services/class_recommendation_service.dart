@@ -67,7 +67,12 @@ ClassSession? nextRecommendedClassFromSchedule(
   final preferred = student.preferredClassGroupIds.firstOrNull;
   if (preferred != null) {
     for (final session in candidates) {
-      if (session.bulkGroupId == preferred) return session;
+      if (matchesResolvedPreferredClassGroup(
+        student.preferredClassGroupIds,
+        session.bulkGroupId,
+      )) {
+        return session;
+      }
     }
   }
 

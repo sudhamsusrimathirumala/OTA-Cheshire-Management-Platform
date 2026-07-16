@@ -673,7 +673,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       id: session?.id,
       className: className,
       classTypeId: classTypeId,
-      bulkGroupId: session?.bulkGroupId ?? '$classTypeId-standard',
+      bulkGroupId: preferredClassGroupIdForClassName(className),
       locationId: _adminLocationId(),
       weekday: _weekday,
       startMinutes: startMinutes,

@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
+import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import '../routes.dart';
@@ -12,7 +13,9 @@ import '../theme/ota_colors.dart';
 import '../widgets/profile/profile_edit_sheets.dart';
 
 class ManageProfilesScreen extends StatelessWidget {
-  const ManageProfilesScreen({super.key});
+  const ManageProfilesScreen({this.selectProfile, super.key});
+
+  final Future<void> Function(String profileId)? selectProfile;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -119,7 +122,12 @@ class ManageProfilesScreen extends StatelessWidget {
     if (group == null) return null;
     for (final sessions in appDataService.schedule.values) {
       for (final session in sessions) {
-        if (session.bulkGroupId == group) return session.className;
+        if (matchesResolvedPreferredClassGroup(
+          profile.preferredClassGroupIds,
+          session.bulkGroupId,
+        )) {
+          return session.className;
+        }
       }
     }
     return 'Preferred class selected';
@@ -191,7 +199,9 @@ class ManageProfilesScreen extends StatelessWidget {
   Future<void> _switchProfile(BuildContext context, String profileId) async {
     _showLoading(context);
     try {
-      await firebaseSessionController.selectProfile(profileId);
+      await (selectProfile ?? firebaseSessionController.selectProfile)(
+        profileId,
+      );
       if (!context.mounted) return;
       Navigator.of(context).pop();
       Navigator.of(

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/academy_location.dart';
 import '../../models/academy_resource.dart';
 import '../../models/student.dart';
+import '../../models/class_session.dart';
 import '../../models/user_account.dart';
 
 const firebaseGoogleProviderId = 'google.com';
@@ -106,7 +107,9 @@ Student studentProfileFromCanonicalData(String id, Map<String, dynamic> data) {
         : normalizeRequiredEmail(guardianEmailValue),
     guardianUserIds: _stringList(data['guardianUserIds']),
     linkedUserId: _optionalString(data['linkedUserId']),
-    preferredClassGroupIds: _stringList(data['preferredClassGroupIds']),
+    preferredClassGroupIds: resolvedSavedPreferredClassGroupIds(
+      _stringList(data['preferredClassGroupIds']),
+    ),
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'Next rank',

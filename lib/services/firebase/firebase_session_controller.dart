@@ -173,7 +173,13 @@ class FirebaseSessionController extends ChangeNotifier {
     final loadedAccount = account!;
     if (loadedAccount.role == UserAccountRole.admin ||
         loadedAccount.role == UserAccountRole.superAdmin) {
-      stage = adminAccessStageFor(account: loadedAccount);
+      final evaluatedStage = adminAccessStageFor(account: loadedAccount);
+      stage = evaluatedStage == SessionStage.loading
+          ? sessionStageDuringAccessRefresh(
+              current: stage,
+              established: SessionStage.admin,
+            )
+          : evaluatedStage;
       if (stage == SessionStage.adminDisabled) {
         errorMessage = 'This administrator account is disabled.';
         unawaited(_cancelLocationSubscription());
@@ -393,7 +399,10 @@ class FirebaseSessionController extends ChangeNotifier {
     }
 
     final locationId = loadedAccount.locationId;
-    stage = SessionStage.loading;
+    stage = sessionStageDuringAccessRefresh(
+      current: stage,
+      established: SessionStage.member,
+    );
     _locationSubscription = _database
         .collection(FirestoreCollections.locations)
         .doc(locationId)
@@ -552,6 +561,14 @@ bool listenerCallbackIsCurrent({
   return !disposed &&
       callbackGeneration == currentGeneration &&
       callbackIdentity == currentIdentity;
+}
+
+@visibleForTesting
+SessionStage sessionStageDuringAccessRefresh({
+  required SessionStage current,
+  required SessionStage established,
+}) {
+  return current == established ? established : SessionStage.loading;
 }
 
 @visibleForTesting
