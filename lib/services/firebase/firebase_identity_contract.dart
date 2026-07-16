@@ -128,8 +128,10 @@ Map<String, Object?> studentProfileWriteFields(
   if (dateOfBirth == null) {
     throw ArgumentError('dateOfBirth is required for new student profiles.');
   }
-  if (guardianEmail == null) {
-    throw ArgumentError('guardianEmail is required for new student profiles.');
+  if (guardianEmail == null && linkedUserId == null) {
+    throw ArgumentError(
+      'guardianEmail is required for parent-managed student profiles.',
+    );
   }
   return <String, Object?>{
     'firstName': _requiredString(profile.firstName, 'firstName'),
@@ -137,7 +139,8 @@ Map<String, Object?> studentProfileWriteFields(
     'dateOfBirth': Timestamp.fromDate(dateOfBirth),
     'beltRank': _requiredString(profile.beltRank, 'beltRank'),
     'locationId': ?locationId,
-    'guardianEmail': normalizeRequiredEmail(guardianEmail),
+    if (guardianEmail != null)
+      'guardianEmail': normalizeRequiredEmail(guardianEmail),
     'guardianUserIds': profile.guardianUserIds,
     'isActive': profile.isActive,
     'linkedUserId': ?linkedUserId,

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
+import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_identity_contract.dart';
@@ -182,6 +183,30 @@ void main() {
         }, const {}),
         'existing@example.com',
       );
+    });
+
+    test('self-managed profile writer permits missing guardian email', () {
+      final fields = studentProfileWriteFields(
+        Student(
+          id: 'self-profile',
+          name: 'Self Managed',
+          canonicalFirstName: 'Self',
+          canonicalLastName: 'Managed',
+          locationId: 'ota-cheshire',
+          belt: 'Blue',
+          dateOfBirth: DateTime.utc(2000, 1, 2),
+          stickerCount: 0,
+          stickersRequired: 0,
+          nextRank: 'Blue-Red',
+          linkedUserId: 'self-uid',
+        ),
+        now: now,
+        isCreate: true,
+      );
+
+      expect(fields, isNot(contains('guardianEmail')));
+      expect(fields['linkedUserId'], 'self-uid');
+      expect(fields['guardianUserIds'], isEmpty);
     });
 
     test('guardian email derives only from one linked parent', () {

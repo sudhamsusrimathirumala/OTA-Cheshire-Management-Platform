@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/models/class_session.dart';
+import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
 
 void main() {
@@ -46,6 +48,28 @@ void main() {
     expect(profile['isActive'], isTrue);
     expect(profile['locationId'], 'cheshire');
   });
+
+  test(
+    'independent student may omit guardian contact without adding access',
+    () {
+      final plan = build(
+        ProfileCreationRequest(
+          firstName: 'Student',
+          lastName: 'Member',
+          dateOfBirth: DateTime(2000, 1, 2),
+          applicantBeltRank: 'Blue',
+          role: ProfileAccountRole.student,
+          locationId: 'cheshire',
+        ),
+      );
+
+      final profile = plan.profiles['profile-1']!;
+      expect(profile, isNot(contains('guardianEmail')));
+      expect(profile['guardianUserIds'], isEmpty);
+      expect(profile['linkedUserId'], identity.uid);
+      expect(plan.profiles, hasLength(1));
+    },
+  );
 
   test('parent account and every profile share one location', () {
     final plan = build(
@@ -186,5 +210,126 @@ void main() {
     );
     expect(error.error, ProfileServiceError.permissionDenied);
     expect(error.message, isNot(contains('permission-denied')));
+  });
+
+  test('preferred class payload stores zero or one stable group', () {
+    expect(
+      preferredClassUpdateData('level-3-standard', timestamp: 'server-time'),
+      {
+        'preferredClassGroupIds': ['level-3-standard'],
+        'updatedAt': 'server-time',
+      },
+    );
+    expect(preferredClassUpdateData(null, timestamp: 'server-time'), {
+      'preferredClassGroupIds': <String>[],
+      'updatedAt': 'server-time',
+    });
+  });
+
+  test('preferred class requires publication location and eligibility', () {
+    final student = Student(
+      id: 'student',
+      name: 'Student',
+      locationId: 'cheshire',
+      belt: 'Blue',
+      dateOfBirth: DateTime(2000),
+      stickerCount: 0,
+      stickersRequired: 0,
+      nextRank: 'Blue-Red',
+    );
+    ClassSession session({
+      String locationId = 'cheshire',
+      bool published = true,
+      List<String> belts = const ['Blue'],
+    }) => ClassSession(
+      id: 'session',
+      className: 'Class',
+      classTypeId: 'level-3',
+      bulkGroupId: 'level-3-standard',
+      locationId: locationId,
+      startTime: DateTime(2026, 1, 1, 18),
+      endTime: DateTime(2026, 1, 1, 19),
+      eligibleBelts: belts,
+      description: '',
+      isPublished: published,
+    );
+
+    expect(canSetPreferredClass(student, session()), isTrue);
+    expect(
+      canSetPreferredClass(student, session(locationId: 'other')),
+      isFalse,
+    );
+    expect(canSetPreferredClass(student, session(published: false)), isFalse);
+    expect(
+      canSetPreferredClass(student, session(belts: const ['White'])),
+      isFalse,
+    );
+  });
+
+  test(
+    'new child payload preserves parent ownership and starts unconfigured',
+    () {
+      final data = childProfileCreationData(
+        input: StudentProfileInput(
+          firstName: ' Child ',
+          lastName: ' Member ',
+          dateOfBirth: DateTime(2015, 1, 2),
+          beltRank: 'White',
+          guardianEmail: ' Parent@Example.com ',
+        ),
+        parentUid: 'parent-uid',
+        locationId: 'cheshire',
+        timestamp: 'server-time',
+        today: today,
+      );
+
+      expect(data['locationId'], 'cheshire');
+      expect(data['guardianUserIds'], ['parent-uid']);
+      expect(data, isNot(contains('linkedUserId')));
+      expect(data['preferredClassGroupIds'], isEmpty);
+      expect(data['isActive'], isTrue);
+      expect(data['stickerProgress'], {
+        'current': 0,
+        'required': 0,
+        'nextRank': 'White-Yellow',
+      });
+    },
+  );
+
+  test('profile edits derive next rank and validate sticker counts', () {
+    final data = studentProfileUpdateData(
+      StudentProfileEditInput(
+        profileId: 'profile-1',
+        firstName: 'Student',
+        lastName: 'Member',
+        dateOfBirth: DateTime(2000, 1, 2),
+        beltRank: 'Blue',
+        stickerCurrent: 7,
+        stickerRequired: 3,
+      ),
+      requireGuardianEmail: false,
+      timestamp: 'server-time',
+    );
+    expect(data['stickerProgress'], {
+      'current': 7,
+      'required': 3,
+      'nextRank': 'Blue-Red',
+    });
+    expect(
+      () => studentProfileUpdateData(
+        StudentProfileEditInput(
+          profileId: 'profile-1',
+          firstName: 'Student',
+          lastName: 'Member',
+          dateOfBirth: DateTime(2000, 1, 2),
+          beltRank: 'Blue',
+          stickerCurrent: -1,
+          stickerRequired: 0,
+        ),
+        requireGuardianEmail: false,
+        timestamp: 'server-time',
+      ),
+      throwsA(isA<ProfileServiceException>()),
+    );
   });
 }

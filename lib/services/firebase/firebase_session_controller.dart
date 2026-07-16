@@ -30,12 +30,16 @@ class FirebaseSessionController extends ChangeNotifier {
     FirebaseFirestore? firestore,
     FirestoreProfileService? profileService,
   }) : authentication = authentication ?? FirebaseAuthenticationService(),
-       _firestore = firestore ?? FirebaseFirestore.instance,
-       profileService = profileService ?? FirestoreProfileService();
+       _firestoreOverride = firestore,
+       _profileServiceOverride = profileService;
 
   final AuthenticationService authentication;
-  final FirebaseFirestore _firestore;
-  final FirestoreProfileService profileService;
+  final FirebaseFirestore? _firestoreOverride;
+  FirebaseFirestore get _database =>
+      _firestoreOverride ?? FirebaseFirestore.instance;
+  FirestoreProfileService? _profileServiceOverride;
+  FirestoreProfileService get profileService =>
+      _profileServiceOverride ??= FirestoreProfileService();
 
   SessionStage stage = SessionStage.loading;
   User? authUser;
@@ -126,7 +130,7 @@ class FirebaseSessionController extends ChangeNotifier {
     }
     stage = SessionStage.loading;
     notifyListeners();
-    _userSubscription = _firestore
+    _userSubscription = _database
         .collection(FirestoreCollections.users)
         .doc(user.uid)
         .snapshots()
@@ -217,7 +221,7 @@ class FirebaseSessionController extends ChangeNotifier {
       _setError('This administrator has no assigned academy location.');
       return;
     }
-    _locationSubscription = _firestore
+    _locationSubscription = _database
         .collection(FirestoreCollections.locations)
         .doc(locationId)
         .snapshots()
@@ -293,7 +297,7 @@ class FirebaseSessionController extends ChangeNotifier {
       return;
     }
     final linkedFingerprint = linkedIds.join('\u0000');
-    _profilesSubscription = _firestore
+    _profilesSubscription = _database
         .collection(FirestoreCollections.studentProfiles)
         .where(FieldPath.documentId, whereIn: linkedIds)
         .snapshots()
@@ -390,7 +394,7 @@ class FirebaseSessionController extends ChangeNotifier {
 
     final locationId = loadedAccount.locationId;
     stage = SessionStage.loading;
-    _locationSubscription = _firestore
+    _locationSubscription = _database
         .collection(FirestoreCollections.locations)
         .doc(locationId)
         .snapshots()

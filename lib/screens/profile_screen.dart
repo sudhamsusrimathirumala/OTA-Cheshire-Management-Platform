@@ -9,59 +9,69 @@ import '../services/app_data_service_provider.dart';
 import '../services/debug_view_controller.dart';
 import '../services/location_time_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
+import '../widgets/profile/profile_edit_sheets.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final student = appDataService.selectedStudentProfile;
-    final account = appDataService.currentUserAccount;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, _) {
+        final student = appDataService.selectedStudentProfile;
+        final account = appDataService.currentUserAccount;
 
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ProfileIdentityHeader(student: student),
-                        const SizedBox(height: 24),
-                        _StudentInformationSection(student: student),
-                        const SizedBox(height: 22),
-                        _BeltPromotionSection(student: student),
-                        const SizedBox(height: 22),
-                        _FamilyAccountSection(account: account),
-                        const SizedBox(height: 22),
-                        _AcademySection(student: student),
-                        const SizedBox(height: 22),
-                        _SettingsActionsSection(student: student),
-                      ],
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          body: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _ProfileIdentityHeader(student: student),
+                            const SizedBox(height: 24),
+                            _StudentInformationSection(student: student),
+                            const SizedBox(height: 22),
+                            _BeltPromotionSection(student: student),
+                            const SizedBox(height: 22),
+                            _FamilyAccountSection(account: account),
+                            const SizedBox(height: 22),
+                            _AcademySection(student: student),
+                            const SizedBox(height: 22),
+                            _SettingsActionsSection(
+                              student: student,
+                              account: account,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar:
-          Firebase.apps.isEmpty ||
-              firebaseSessionController.stage == SessionStage.member
-          ? const OtaBottomNavBar(
-              selectedDestination: OtaBottomNavDestination.profile,
-            )
-          : null,
+          ),
+          bottomNavigationBar:
+              Firebase.apps.isEmpty ||
+                  firebaseSessionController.stage == SessionStage.member
+              ? const OtaBottomNavBar(
+                  selectedDestination: OtaBottomNavDestination.profile,
+                )
+              : null,
+        );
+      },
     );
   }
 }
@@ -281,8 +291,9 @@ class _AcademySection extends StatelessWidget {
 }
 
 class _SettingsActionsSection extends StatelessWidget {
-  const _SettingsActionsSection({required this.student});
+  const _SettingsActionsSection({required this.student, required this.account});
   final StudentProfile student;
+  final UserAccount account;
 
   @override
   Widget build(BuildContext context) {
@@ -293,7 +304,32 @@ class _SettingsActionsSection extends StatelessWidget {
     return ProfileSection(
       title: 'Settings & Actions',
       children: [
-        const ProfileActionRow(icon: Icons.edit_rounded, label: 'Edit Profile'),
+        ProfileActionRow(
+          icon: Icons.manage_accounts_rounded,
+          label: 'Edit Account',
+          onTap: hasFirebase ? () => _editAccount(context) : null,
+        ),
+        ProfileActionRow(
+          icon: Icons.edit_rounded,
+          label: 'Edit Student Profile',
+          onTap: hasFirebase ? () => _editStudent(context) : null,
+        ),
+        if (account.role == UserAccountRole.parent)
+          ProfileActionRow(
+            icon: Icons.person_add_alt_1_rounded,
+            label: 'Add Child',
+            value:
+                '${account.linkedStudentProfileIds.length}/${FirestoreProfileService.maximumAdditionalStudents + 1}',
+            onTap: hasFirebase ? () => _addChild(context) : null,
+          ),
+        if (account.role == UserAccountRole.parent &&
+            student.linkedUserId != account.id)
+          ProfileActionRow(
+            icon: Icons.person_remove_alt_1_rounded,
+            label: 'Remove from account',
+            isDestructive: true,
+            onTap: hasFirebase ? () => _removeChild(context) : null,
+          ),
         ProfileActionRow(
           icon: Icons.switch_account_rounded,
           label: 'Switch Profile',
@@ -363,7 +399,109 @@ class _SettingsActionsSection extends StatelessWidget {
         ),
       ),
     );
-    if (id != null) await firebaseSessionController.selectProfile(id);
+    if (id == null) return;
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await firebaseSessionController.selectProfile(id);
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(OtaRoutes.dashboard, (_) => false);
+    } on ProfileServiceException catch (error) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      _showError(context, error.message);
+    } catch (_) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      _showError(context, 'Unable to switch profiles. Please try again.');
+    }
+  }
+
+  Future<void> _editAccount(BuildContext context) async {
+    final changed = await showAccountEditSheet(
+      context,
+      account: account,
+      service: firebaseSessionController.profileService,
+    );
+    if (changed && context.mounted) _showSuccess(context, 'Account updated.');
+  }
+
+  Future<void> _editStudent(BuildContext context) async {
+    final changed = await showStudentEditSheet(
+      context,
+      student: student,
+      service: firebaseSessionController.profileService,
+      guardianEmailRequired: student.linkedUserId == null,
+    );
+    if (changed && context.mounted) {
+      _showSuccess(context, 'Student profile updated.');
+    }
+  }
+
+  Future<void> _addChild(BuildContext context) async {
+    final added = await showAddChildSheet(
+      context,
+      account: account,
+      service: firebaseSessionController.profileService,
+    );
+    if (added && context.mounted) {
+      _showSuccess(context, 'Child added to your account.');
+    }
+  }
+
+  Future<void> _removeChild(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Remove ${student.name} from account?'),
+        content: const Text(
+          'This student will no longer appear in the parent account. Academy history will be retained and is not permanently deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove from account'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await firebaseSessionController.profileService.removeChild(student.id);
+      if (!context.mounted) return;
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(OtaRoutes.dashboard, (_) => false);
+    } on ProfileServiceException catch (error) {
+      if (context.mounted) _showError(context, error.message);
+    } catch (_) {
+      if (context.mounted) {
+        _showError(context, 'Unable to remove this child from the account.');
+      }
+    }
+  }
+
+  void _showSuccess(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
