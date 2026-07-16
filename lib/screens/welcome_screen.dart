@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../app_environment.dart';
 import '../routes.dart';
-import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_branded_scaffold.dart';
@@ -22,9 +20,7 @@ class WelcomeScreen extends StatelessWidget {
               ? (constraints.maxWidth * 0.38).clamp(240.0, 280.0)
               : (constraints.maxWidth * 0.48).clamp(150.0, 230.0);
           final availableHeight = constraints.maxHeight - 48;
-          final minimumContentHeight = AppEnvironmentConfig.allowsDebugViews
-              ? logoSize + 540
-              : logoSize + 400;
+          final minimumContentHeight = logoSize + 400;
           final contentHeight = availableHeight > minimumContentHeight
               ? availableHeight
               : minimumContentHeight;
@@ -63,29 +59,6 @@ class WelcomeScreen extends StatelessWidget {
                         letterSpacing: 0.3,
                       ),
                     ),
-                    if (AppEnvironmentConfig.allowsDebugViews) ...[
-                      // Development-only shortcuts for visual UI work. The
-                      // compile-time debug guard removes them from release.
-                      const SizedBox(height: 24),
-                      OtaActionButton(
-                        label: 'Student View',
-                        onPressed: () {
-                          debugViewController.enterStudent();
-                          Navigator.of(context).pushNamed(OtaRoutes.dashboard);
-                        },
-                      ),
-                      const SizedBox(height: 14),
-                      OtaActionButton(
-                        label: 'Admin View',
-                        variant: OtaActionButtonVariant.secondary,
-                        onPressed: () {
-                          debugViewController.enterAdmin();
-                          Navigator.of(
-                            context,
-                          ).pushNamed(OtaRoutes.adminDashboard);
-                        },
-                      ),
-                    ],
                     const Spacer(),
                     const SizedBox(height: 48),
                     OtaActionButton(

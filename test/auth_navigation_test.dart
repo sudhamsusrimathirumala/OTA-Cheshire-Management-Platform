@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
@@ -174,4 +175,49 @@ void main() {
       expect(authGateDestination(stage: stage), isA<Widget>());
     }
   });
+
+  test('administrator sign out clears the protected session stage', () async {
+    final authentication = _SignOutAuthenticationService();
+    final controller = FirebaseSessionController(
+      authentication: authentication,
+    );
+    controller.stage = SessionStage.admin;
+
+    await controller.signOut();
+
+    expect(authentication.signOutCalls, 1);
+    expect(controller.stage, SessionStage.signedOut);
+    expect(controller.account, isNull);
+    controller.dispose();
+  });
+}
+
+class _SignOutAuthenticationService implements AuthenticationService {
+  int signOutCalls = 0;
+
+  @override
+  Stream<User?> authStateChanges() => const Stream.empty();
+
+  @override
+  User? get currentUser => null;
+
+  @override
+  Future<User?> refreshUser() async => null;
+
+  @override
+  Future<void> signOut() async => signOutCalls++;
+
+  @override
+  Future<void> sendPasswordReset(String email) => throw UnimplementedError();
+
+  @override
+  Future<UserCredential> signInWithEmail(String email, String password) =>
+      throw UnimplementedError();
+
+  @override
+  Future<UserCredential> signInWithGoogle() => throw UnimplementedError();
+
+  @override
+  Future<UserCredential> signUpWithEmail(String email, String password) =>
+      throw UnimplementedError();
 }
