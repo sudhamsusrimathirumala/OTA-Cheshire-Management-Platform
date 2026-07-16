@@ -67,15 +67,15 @@ Required fields:
 - `lastName`: String
 - `beltRank`: String
 - `dateOfBirth`: Timestamp
-- `guardianEmail`: normalized lowercase String
 - `guardianUserIds`: List<String> referencing `users`
 - `locationId`: String matching the owning account location
 - `isActive`: bool controlling profile availability
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `linkedUserId` and `preferredClassGroupIds`.
-`guardianEmail` is a contact/notification address;
+Optional fields are `linkedUserId`, `guardianEmail`, and
+`preferredClassGroupIds`. `guardianEmail` is required for a parent-managed
+child and optional for a self-managed student. It is a contact address;
 it does not create a user or replace `guardianUserIds`. Existing profiles may
 temporarily omit it. Migration derives it only from one unambiguous existing
 parent relationship and otherwise reports it missing.
@@ -85,6 +85,18 @@ Independent students and parents who are also students receive `linkedUserId`;
 child profiles receive the parent UID in `guardianUserIds`. Account and profile
 creation is atomic, and all profiles under one parent account share one academy
 location.
+
+`preferredClassGroupIds` retains list compatibility but contains zero or one
+`ClassSession.bulkGroupId` for the current release. Parents and self-managed
+students may update only profiles they manage. Parents may atomically add a
+child at their account location or unlink and deactivate a child while academy
+history remains stored.
+
+## `users/{uid}/notificationReads/{announcementId}`
+
+Persistent notification read state is scoped to the authenticated account.
+The document ID is the announcement ID and the only field is `readAt`, a server
+timestamp. No administrator may read another user's notification state.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when

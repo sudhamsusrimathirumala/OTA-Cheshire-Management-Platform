@@ -24,12 +24,13 @@ constraint.
 
 ### Student and Parent Experience
 
-- Dashboard with the selected student's next eligible class, belt progress,
-  and academy updates.
+- Dashboard with account-holder greeting, linked-profile switching, the
+  selected student's preferred/next eligible class, belt progress, and academy
+  updates.
 - Day and week schedule views with recurrence, overlap, eligibility, and class
   detail presentation.
-- Firestore-backed announcements, notification filters, and notification
-  details.
+- Firestore-backed announcements, per-account persistent read state,
+  notification filters, and notification details.
 - Firestore-backed published events in a seven-column month calendar, using
   academy-local dates and retaining published past events for browsing. Events
   open from Dashboard or Resources, and the Events page intentionally has no
@@ -42,8 +43,9 @@ constraint.
 - Firebase email/password and Google authentication, password reset, profile
   creation without mandatory email verification, immediate academy access,
   and persisted profile switching.
-- Student profile, linked account, academy location, and profile switching
-  backed by the authenticated Firebase UID.
+- Student profile, linked account, academy location, preferred class, family
+  child management, contact/profile editing, and profile switching backed by
+  the authenticated Firebase UID.
 
 ### Administrator Experience
 
@@ -70,9 +72,10 @@ Firebase session gate; no public role-escalation route exists.
 `AppDataService` defines the data consumed by screens. The provider switch in
 `lib/services/app_data_service_provider.dart` currently selects
 `FirebaseAppDataService`. It maintains Firestore snapshot listeners for
-`classSessions`, `announcements`, `events`, `resources`, `studentProfiles`, and
-same-location `users`. `MockAppDataService` is limited to isolated tests and
-the clearly labeled development-debug sample views. An authenticated Firebase
+`classSessions`, `announcements`, `events`, `resources`, `studentProfiles`,
+per-account notification reads, and same-location `users`.
+`MockAppDataService` is limited to isolated tests and internal development
+harnesses; the Welcome page exposes no sample-view shortcut. An authenticated Firebase
 session never falls back to sample data when a listener fails; the affected UI
 keeps its loading, empty, and error states distinct.
 
@@ -143,8 +146,8 @@ for the current data flow and fallback boundaries.
 ### Planned or Remaining
 
 - Production deployment and broader authorization testing for Firestore rules.
-- Guardian display-name resolution and generic student profile editing.
-- Admin student profile editing and production curriculum data.
+- Guardian display-name resolution and broader academy history management.
+- Obtain the academy-approved bundled curriculum wording and optional videos.
 - End-to-end release validation, production signing, and content review.
 
 See [Project backlog](docs/Project_Backlog.md) for prioritized remaining work.

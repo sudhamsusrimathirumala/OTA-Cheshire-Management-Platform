@@ -60,10 +60,10 @@ Development application:
 flutter run --flavor dev -t lib/main_dev.dart
 ```
 
-The Debug Student View and Sample Admin View are development-debug mock views.
-Their labels remain visible, they cannot write to Firestore,
-and they are unavailable in release builds. Real authenticated sessions always
-use Firebase and show listener failures instead of substituting sample data.
+Mock services remain available to automated tests and internal development
+harnesses. The public Welcome screen exposes no Student or Admin bypass. Real
+authenticated sessions always use Firebase and show listener failures instead
+of substituting sample data.
 
 Development-only, read-only utilities:
 

@@ -7,7 +7,7 @@ cleanup and schema-update work is not listed as active work.
 
 ### Identity and Authorization
 
-- [ ] Connect the login, signup, Google sign-in, and password-reset UI to
+- [x] Connect the login, signup, Google sign-in, and password-reset UI to
   Firebase Authentication.
 - [x] Load the current `users` document and enforce active account/location
   access.
@@ -43,7 +43,7 @@ cleanup and schema-update work is not listed as active work.
 
 ### Student, Parent, and Account Experience
 
-- [ ] Implement a parent/family dashboard for multiple linked students.
+- [x] Add account-holder Dashboard context and linked-profile switching.
 - [x] Add profile switching for parent, student, and parent-who-trains cases.
 - [x] Add handling for accounts with no linked student profile.
 - [x] Use authenticated live current-user and selected-profile state outside
@@ -51,8 +51,8 @@ cleanup and schema-update work is not listed as active work.
 
 ### Student Management
 
-- [ ] Add approved admin student-profile editing and validation.
-- [ ] Add parent/user management rather than displaying guardian IDs.
+- [x] Add validated parent/self-managed student profile editing.
+- [x] Add parent child-profile creation and retained-history removal.
 - [ ] Define a fuller belt progression and promotion-history workflow.
 
 ### Schedule
@@ -68,15 +68,15 @@ cleanup and schema-update work is not listed as active work.
 - [ ] Add attachments, links, and deep-link destinations to announcements.
 - [ ] Add device push delivery. The current notification center is an in-app
   presentation of Firestore announcements.
-- [ ] Define persistent read/unread state per authenticated user.
+- [x] Persist read/unread state per authenticated user.
 
 ### Curriculum
 
-- [ ] Replace local sample curriculum and placeholder items with approved
-  production curriculum content.
-- [ ] Add approved individual YouTube video URLs for form items where videos
-  are available. The bundled data already supports an independent optional URL
-  or video ID for each form; placeholder forms intentionally keep this null.
+- [ ] Obtain the complete official curriculum from the academy and replace
+  placeholder/sample bundled content with approved bundled production content.
+- [ ] Validate canonical belt ordering, exact academy wording, and optional
+  per-form video links while preserving hardcoded local delivery. Placeholder
+  forms intentionally keep unavailable video values null.
 
 ### Events
 

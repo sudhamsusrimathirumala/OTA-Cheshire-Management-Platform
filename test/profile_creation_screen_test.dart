@@ -77,7 +77,8 @@ void main() {
       find.descendant(of: roleSelector, matching: find.text('Student')),
     );
     await tester.pump();
-    await tester.tap(
+    await tapInStepper(
+      tester,
       find.descendant(of: roleSelector, matching: find.text('Parent')),
     );
     await tester.pump();
@@ -127,6 +128,72 @@ void main() {
 
     expect(find.text('Every student needs a date of birth.'), findsOneWidget);
     expect(find.text('Create profiles'), findsNothing);
+  });
+
+  testWidgets('parent to student switch ignores hidden children on submit', (
+    tester,
+  ) async {
+    ProfileCreationRequest? submitted;
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileCreationScreen(
+          accountEmail: 'student@example.com',
+          loadLocations: () async => const [cheshire],
+          createProfiles: (request) async => submitted = request,
+          onProfilesCreated: () {},
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'First name').first,
+      'Independent',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Last name').first,
+      'Student',
+    );
+    await tester.tap(find.text('Date of birth').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tapInStepper(
+      tester,
+      find.byKey(const ValueKey('profile-continue-0')),
+    );
+
+    final roleSelector = find.byType(SegmentedButton<ProfileAccountRole>);
+    await tapInStepper(
+      tester,
+      find.descendant(of: roleSelector, matching: find.text('Parent')),
+    );
+    await tapInStepper(tester, find.byKey(const ValueKey('add-student')));
+    await tapInStepper(
+      tester,
+      find.descendant(of: roleSelector, matching: find.text('Student')),
+    );
+    await tester.pumpAndSettle();
+    await tapInStepper(
+      tester,
+      find.byKey(const ValueKey('profile-continue-1')),
+    );
+    expect(find.text('Review and create'), findsWidgets);
+    expect(find.text('Student 1'), findsNothing);
+
+    await tapInStepper(tester, find.byType(CheckboxListTile));
+    await tapInStepper(
+      tester,
+      find.byKey(const ValueKey('profile-continue-2')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(submitted, isNotNull);
+    expect(submitted!.role, ProfileAccountRole.student);
+    expect(submitted!.additionalStudents, isEmpty);
+    expect(submitted!.guardianEmail?.trim() ?? '', isEmpty);
   });
 
   test('completed additional student is included in the creation plan', () {

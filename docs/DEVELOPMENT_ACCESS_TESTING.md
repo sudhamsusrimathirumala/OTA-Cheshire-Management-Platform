@@ -53,8 +53,9 @@ removes legacy review fields, and deletes the retired application documents.
 It does not delete users or profiles, change Authentication users, deploy code,
 run seeds, or access a production project.
 
-## Sample Admin View
+## Internal sample data
 
-The development-debug shortcut opens **Sample Admin View** with labeled mock
-data. Real Firestore records are not loaded. Use a manually configured
-development administrator for end-to-end Firestore verification.
+Mock student and administrator services remain available to tests and internal
+development harnesses. The Welcome screen does not expose sample-view buttons
+or authentication bypasses. Use a manually configured development
+administrator for end-to-end Firestore verification.
