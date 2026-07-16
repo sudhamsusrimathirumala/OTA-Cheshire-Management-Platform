@@ -69,6 +69,66 @@ service cloud.firestore {
           profileId in currentUser().linkedStudentProfileIds;
     }
 
+    function userManagesProfile(profileId, profileData) {
+      return activeUser() &&
+          ((currentUser().role == 'parent' &&
+            profileId in currentUser().linkedStudentProfileIds) ||
+           (currentUser().role == 'student' &&
+            profileId in currentUser().linkedStudentProfileIds &&
+            profileData.get('linkedUserId', '') == request.auth.uid));
+    }
+
+    function canonicalBelt(belt) {
+      return belt in [
+        'No Belt', 'White', 'White-Yellow', 'Yellow', 'Yellow-Green',
+        'Green', 'Green-Blue', 'Blue', 'Blue-Red', 'Red', 'Red-Yellow',
+        'Red-Green', 'Red-Blue', 'Red-Black', 'Black'
+      ];
+    }
+
+    function expectedNextRank(belt) {
+      return belt == 'No Belt' ? 'White' :
+          belt == 'White' ? 'White-Yellow' :
+          belt == 'White-Yellow' ? 'Yellow' :
+          belt == 'Yellow' ? 'Yellow-Green' :
+          belt == 'Yellow-Green' ? 'Green' :
+          belt == 'Green' ? 'Green-Blue' :
+          belt == 'Green-Blue' ? 'Blue' :
+          belt == 'Blue' ? 'Blue-Red' :
+          belt == 'Blue-Red' ? 'Red' :
+          belt == 'Red' ? 'Red-Yellow' :
+          belt == 'Red-Yellow' ? 'Red-Green' :
+          belt == 'Red-Green' ? 'Red-Blue' :
+          belt == 'Red-Blue' ? 'Red-Black' :
+          belt == 'Red-Black' ? 'Black' : 'Black';
+    }
+
+    function validGuardianEmail(data) {
+      return data.keys().hasAny(['linkedUserId'])
+          ? (!data.keys().hasAny(['guardianEmail']) ||
+             (data.guardianEmail is string && data.guardianEmail.size() > 3))
+          : data.guardianEmail is string && data.guardianEmail.size() > 3;
+    }
+
+    function validPreferredClasses(data) {
+      return data.preferredClassGroupIds is list &&
+          data.preferredClassGroupIds.size() <= 1 &&
+          (data.preferredClassGroupIds.size() == 0 ||
+           (data.preferredClassGroupIds[0] is string &&
+            data.preferredClassGroupIds[0].size() > 0));
+    }
+
+    function validStickerProgress(data) {
+      return data.stickerProgress is map &&
+          data.stickerProgress.keys().hasOnly(['current', 'required', 'nextRank']) &&
+          data.stickerProgress.keys().hasAll(['current', 'required', 'nextRank']) &&
+          data.stickerProgress.current is int &&
+          data.stickerProgress.current >= 0 &&
+          data.stickerProgress.required is int &&
+          data.stickerProgress.required >= 0 &&
+          data.stickerProgress.nextRank == expectedNextRank(data.beltRank);
+    }
+
     function selectedProfileOwnedByUser() {
       return activeUser() &&
           currentUser().role in ['student', 'parent'] &&
@@ -188,19 +248,19 @@ service cloud.firestore {
           ]) &&
           data.keys().hasAll([
             'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
-            'guardianEmail', 'guardianUserIds', 'preferredClassGroupIds',
+            'guardianUserIds', 'preferredClassGroupIds',
             'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
             'createdAt', 'updatedAt'
           ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
           data.dateOfBirth is timestamp &&
-          data.beltRank is string && data.beltRank.size() > 0 &&
+          canonicalBelt(data.beltRank) &&
           data.locationId == user.locationId &&
-          data.guardianEmail is string && data.guardianEmail.size() > 3 &&
+          validGuardianEmail(data) &&
           data.guardianUserIds is list &&
-          data.preferredClassGroupIds is list &&
-          data.stickerProgress is map &&
+          validPreferredClasses(data) &&
+          validStickerProgress(data) &&
           data.promotionHistory is list &&
           data.testingNotes is list &&
           data.isActive == true &&
@@ -216,16 +276,172 @@ service cloud.firestore {
           ]) &&
           request.resource.data.selectedStudentProfileId in
               resource.data.linkedStudentProfileIds &&
+          request.resource.data.firstName is string &&
+          request.resource.data.firstName.size() > 0 &&
+          request.resource.data.lastName is string &&
+          request.resource.data.lastName.size() > 0 &&
+          (!request.resource.data.keys().hasAny(['phoneNumber']) ||
+           (request.resource.data.phoneNumber is string &&
+            request.resource.data.phoneNumber.size() > 0)) &&
           request.resource.data.updatedAt == request.time;
     }
 
-    function validAdminAccountUpdate() {
-      return canAdminLocation(resource.data.locationId) &&
+    function validOwnContactUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'phoneNumber', 'updatedAt'
+          ]) &&
+          request.resource.data.firstName is string &&
+          request.resource.data.firstName.size() > 0 &&
+          request.resource.data.lastName is string &&
+          request.resource.data.lastName.size() > 0 &&
+          (!request.resource.data.keys().hasAny(['phoneNumber']) ||
+           (request.resource.data.phoneNumber is string &&
+            request.resource.data.phoneNumber.size() > 0)) &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validAdminAccountActivation() {
+      return ((superAdmin()) ||
+              (locationAdmin() &&
+               resource.data.role in ['student', 'parent'] &&
+               resource.data.locationId == currentUser().locationId)) &&
           request.resource.data.locationId == resource.data.locationId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'isActive', 'updatedAt'
           ]) &&
           request.resource.data.isActive is bool &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validManagedProfileUpdate(profileId) {
+      return userManagesProfile(profileId, resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
+            'guardianEmail', 'preferredClassGroupIds', 'stickerProgress',
+            'updatedAt'
+          ]) &&
+          request.resource.data.firstName is string &&
+          request.resource.data.firstName.size() > 0 &&
+          request.resource.data.lastName is string &&
+          request.resource.data.lastName.size() > 0 &&
+          request.resource.data.dateOfBirth is timestamp &&
+          canonicalBelt(request.resource.data.beltRank) &&
+          validGuardianEmail(request.resource.data) &&
+          validPreferredClasses(request.resource.data) &&
+          validStickerProgress(request.resource.data) &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function linkedProfileValidAfter(uid, profileId, userData) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.isActive == true &&
+          profile.locationId == userData.locationId &&
+          ((profile.get('linkedUserId', '') == uid &&
+            profile.guardianUserIds.size() == 0) ||
+           (profile.get('linkedUserId', '') == '' &&
+            profile.guardianUserIds == [uid]));
+    }
+
+    function allLinkedProfilesValidAfter(uid, ids, userData) {
+      return ids.size() >= 1 && ids.size() <= 11 &&
+          ids.toSet().size() == ids.size() &&
+          linkedProfileValidAfter(uid, ids[0], userData) &&
+          (ids.size() < 2 || linkedProfileValidAfter(uid, ids[1], userData)) &&
+          (ids.size() < 3 || linkedProfileValidAfter(uid, ids[2], userData)) &&
+          (ids.size() < 4 || linkedProfileValidAfter(uid, ids[3], userData)) &&
+          (ids.size() < 5 || linkedProfileValidAfter(uid, ids[4], userData)) &&
+          (ids.size() < 6 || linkedProfileValidAfter(uid, ids[5], userData)) &&
+          (ids.size() < 7 || linkedProfileValidAfter(uid, ids[6], userData)) &&
+          (ids.size() < 8 || linkedProfileValidAfter(uid, ids[7], userData)) &&
+          (ids.size() < 9 || linkedProfileValidAfter(uid, ids[8], userData)) &&
+          (ids.size() < 10 || linkedProfileValidAfter(uid, ids[9], userData)) &&
+          (ids.size() < 11 || linkedProfileValidAfter(uid, ids[10], userData));
+    }
+
+    function removedProfileSafe(uid, profileId, remainingIds, locationId) {
+      let before = get(profilePath(profileId)).data;
+      let after = getAfter(profilePath(profileId)).data;
+      return profileId in remainingIds ||
+          (before.get('linkedUserId', '') == '' &&
+           uid in before.guardianUserIds &&
+           after.isActive == false &&
+           after.locationId == locationId &&
+           after.get('linkedUserId', '') == before.get('linkedUserId', '') &&
+           after.guardianUserIds == before.guardianUserIds);
+    }
+
+    function allRemovedProfilesSafe(uid, oldIds, newIds, locationId) {
+      return removedProfileSafe(uid, oldIds[0], newIds, locationId) &&
+          (oldIds.size() < 2 || removedProfileSafe(uid, oldIds[1], newIds, locationId)) &&
+          (oldIds.size() < 3 || removedProfileSafe(uid, oldIds[2], newIds, locationId)) &&
+          (oldIds.size() < 4 || removedProfileSafe(uid, oldIds[3], newIds, locationId)) &&
+          (oldIds.size() < 5 || removedProfileSafe(uid, oldIds[4], newIds, locationId)) &&
+          (oldIds.size() < 6 || removedProfileSafe(uid, oldIds[5], newIds, locationId)) &&
+          (oldIds.size() < 7 || removedProfileSafe(uid, oldIds[6], newIds, locationId)) &&
+          (oldIds.size() < 8 || removedProfileSafe(uid, oldIds[7], newIds, locationId)) &&
+          (oldIds.size() < 9 || removedProfileSafe(uid, oldIds[8], newIds, locationId)) &&
+          (oldIds.size() < 10 || removedProfileSafe(uid, oldIds[9], newIds, locationId)) &&
+          (oldIds.size() < 11 || removedProfileSafe(uid, oldIds[10], newIds, locationId));
+    }
+
+    function validParentFamilyUpdate() {
+      let oldIds = resource.data.linkedStudentProfileIds;
+      let newIds = request.resource.data.linkedStudentProfileIds;
+      let adding = newIds.size() == oldIds.size() + 1 && newIds.hasAll(oldIds);
+      let removing = newIds.size() == oldIds.size() - 1 && oldIds.hasAll(newIds);
+      return activeUser() && currentUser().role == 'parent' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'linkedStudentProfileIds', 'selectedStudentProfileId', 'updatedAt'
+          ]) &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.selectedStudentProfileId in newIds &&
+          (adding || removing) &&
+          allLinkedProfilesValidAfter(request.auth.uid, newIds, request.resource.data) &&
+          (adding ||
+           (removing &&
+            allRemovedProfilesSafe(request.auth.uid, oldIds, newIds,
+              resource.data.locationId)));
+    }
+
+    function validParentChildCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'preferredClassGroupIds',
+            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
+            'createdAt', 'updatedAt'
+          ]) &&
+          data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
+          data.guardianEmail is string && data.guardianEmail.size() > 3 &&
+          data.guardianUserIds == [request.auth.uid] &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          data.stickerProgress.current == 0 &&
+          data.stickerProgress.required == 0 &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.isActive == true &&
+          data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
+    function validParentChildDeactivation(profileId) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          resource.data.get('linkedUserId', '') == '' &&
+          request.auth.uid in resource.data.guardianUserIds &&
+          !(profileId in afterUser.linkedStudentProfileIds) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isActive', 'updatedAt'
+          ]) &&
+          request.resource.data.isActive == false &&
           request.resource.data.updatedAt == request.time;
     }
 
@@ -237,6 +453,10 @@ service cloud.firestore {
             'guardianEmail', 'preferredClassGroupIds', 'stickerProgress',
             'promotionHistory', 'testingNotes', 'isActive', 'updatedAt'
           ]) &&
+          canonicalBelt(request.resource.data.beltRank) &&
+          validGuardianEmail(request.resource.data) &&
+          validPreferredClasses(request.resource.data) &&
+          validStickerProgress(request.resource.data) &&
           request.resource.data.isActive is bool &&
           request.resource.data.updatedAt == request.time;
     }
@@ -270,20 +490,34 @@ service cloud.firestore {
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
-          ((request.auth.uid == uid && validOwnAccountUpdate()) ||
-           validAdminAccountUpdate());
+          ((request.auth.uid == uid &&
+            (validOwnContactUpdate() || validOwnAccountUpdate() ||
+             validParentFamilyUpdate())) ||
+           validAdminAccountActivation());
       allow delete: if superAdmin();
+
+      match /notificationReads/{announcementId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid &&
+            request.resource.data.keys().hasOnly(['readAt']) &&
+            request.resource.data.keys().hasAll(['readAt']) &&
+            request.resource.data.readAt == request.time;
+      }
     }
 
     match /studentProfiles/{profileId} {
       allow create: if signedIn() &&
-          validInitialProfile(profileId, request.resource.data);
+          (validInitialProfile(profileId, request.resource.data) ||
+           validParentChildCreate(profileId, request.resource.data));
       allow read: if signedIn() &&
           (managesProfile(profileId) ||
            superAdmin() ||
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));
-      allow update: if signedIn() && validAdminProfileUpdate();
+      allow update: if signedIn() &&
+          (validManagedProfileUpdate(profileId) ||
+           validParentChildDeactivation(profileId) ||
+           validAdminProfileUpdate());
       allow delete: if superAdmin();
     }
 

@@ -63,6 +63,7 @@ async function seedAccount({
   selectedProfileId = profileIds[0],
   profileActive = true,
   profileLocationId = locationId,
+  selfManaged = role === 'student',
 }) {
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -77,9 +78,10 @@ async function seedAccount({
       await setDoc(doc(db, 'studentProfiles', profileId), {
         firstName: 'Student', lastName: profileId,
         dateOfBirth: new Date('2010-01-02T00:00:00Z'), beltRank: 'White',
-        locationId: profileLocationId, guardianEmail: `${uid}@example.com`,
-        guardianUserIds: [uid], preferredClassGroupIds: [],
-        stickerProgress: {current: 0, required: 0, nextRank: 'Next rank'},
+        locationId: profileLocationId,
+        ...(selfManaged ? {linkedUserId: uid} : {guardianEmail: `${uid}@example.com`}),
+        guardianUserIds: selfManaged ? [] : [uid], preferredClassGroupIds: [],
+        stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
         promotionHistory: [], testingNotes: [], isActive: profileActive,
         createdAt: new Date(), updatedAt: new Date(),
       });
@@ -132,6 +134,19 @@ test('student atomically creates active records at one location', async () => {
   assert.equal(profile.isActive, true);
 });
 
+test('self-managed student may omit guardian email without creating access', async () => {
+  const uid = 'self-managed';
+  const db = auth(uid);
+  await assertSucceeds(createProfiles(db, {
+    uid, email: `${uid}@example.com`, profileIds: ['self-profile'],
+    omitGuardianEmail: true,
+  }));
+  const profile = (await getDoc(doc(db, 'studentProfiles', 'self-profile'))).data();
+  assert.equal(profile.guardianEmail, undefined);
+  assert.deepEqual(profile.guardianUserIds, []);
+  assert.equal(profile.linkedUserId, uid);
+});
+
 test('parent atomically creates one-location household profiles', async () => {
   const db = auth('parent');
   await assertSucceeds(createProfiles(db, {
@@ -177,6 +192,103 @@ test('parent cannot claim another user profile or change ownership', async () =>
   await assertFails(updateDoc(doc(db, 'studentProfiles', 'owner-profile'), {
     guardianUserIds: ['other'], updatedAt: serverTimestamp(),
   }));
+});
+
+test('managed profile edits allow canonical fields and reject escalation', async () => {
+  await seedAccount({uid: 'parent'});
+  await seedAccount({uid: 'other'});
+  const db = auth('parent');
+  const profileRef = doc(db, 'studentProfiles', 'parent-profile');
+  await assertSucceeds(updateDoc(profileRef, {
+    firstName: 'Updated', beltRank: 'Yellow',
+    preferredClassGroupIds: ['level-2-standard'],
+    stickerProgress: {current: 7, required: 3, nextRank: 'Yellow-Green'},
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'parent'), {
+    firstName: 'Updated', phoneNumber: '555-0100',
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    locationId: 'other', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    guardianUserIds: ['other'], updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    isActive: false, updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    promotionHistory: ['unauthorized'], updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(auth('other'), 'studentProfiles', 'parent-profile'), {
+    preferredClassGroupIds: ['other-group'], updatedAt: serverTimestamp(),
+  }));
+});
+
+test('parent adds and removes a child only through atomic family writes', async () => {
+  await seedAccount({uid: 'parent'});
+  const db = auth('parent');
+  const userRef = doc(db, 'users', 'parent');
+  const childRef = doc(db, 'studentProfiles', 'new-child');
+  let batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile', 'new-child'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(childRef, {
+    firstName: 'New', lastName: 'Child',
+    dateOfBirth: new Date('2015-01-02T00:00:00Z'), beltRank: 'White',
+    locationId: 'cheshire', guardianEmail: 'parent@example.com',
+    guardianUserIds: ['parent'], preferredClassGroupIds: [],
+    stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
+    promotionHistory: [], testingNotes: [], isActive: true,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile'],
+    selectedStudentProfileId: 'parent-profile',
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(childRef, {isActive: false, updatedAt: serverTimestamp()});
+  await assertSucceeds(batch.commit());
+  await env.withSecurityRulesDisabled(async (context) => {
+    const removed = await getDoc(
+      doc(context.firestore(), 'studentProfiles', 'new-child'),
+    );
+    assert.equal(removed.data().isActive, false);
+  });
+
+  const finalBatch = writeBatch(db);
+  finalBatch.update(userRef, {
+    linkedStudentProfileIds: [], updatedAt: serverTimestamp(),
+  });
+  finalBatch.update(doc(db, 'studentProfiles', 'parent-profile'), {
+    isActive: false, updatedAt: serverTimestamp(),
+  });
+  await assertFails(finalBatch.commit());
+});
+
+test('notification read state is private to the authenticated account', async () => {
+  await seedAccount({uid: 'reader'});
+  await seedAccount({uid: 'other'});
+  const ownRef = doc(auth('reader'), 'users', 'reader', 'notificationReads', 'notice');
+  await assertSucceeds(setDoc(ownRef, {readAt: serverTimestamp()}));
+  await assertSucceeds(getDoc(ownRef));
+  await assertFails(getDoc(
+    doc(auth('other'), 'users', 'reader', 'notificationReads', 'notice'),
+  ));
+  await assertFails(setDoc(
+    doc(auth('other'), 'users', 'reader', 'notificationReads', 'other-write'),
+    {readAt: serverTimestamp()},
+  ));
+  await assertFails(setDoc(
+    doc(auth('reader'), 'users', 'reader', 'notificationReads', 'bad'),
+    {readAt: serverTimestamp(), extra: true},
+  ));
 });
 
 test('active matching account reads only published student content', async () => {
@@ -226,13 +338,32 @@ test('location admin reads and edits only assigned-location records', async () =
   await assertFails(getDoc(doc(db, 'studentProfiles', 'other-parent-profile')));
   await assertSucceeds(getDoc(doc(db, 'announcements', 'draft')));
   await assertSucceeds(updateDoc(doc(db, 'studentProfiles', 'cheshire-parent-profile'), {
-    beltRank: 'Yellow', updatedAt: serverTimestamp(),
+    beltRank: 'Yellow',
+    stickerProgress: {current: 0, required: 0, nextRank: 'Yellow-Green'},
+    updatedAt: serverTimestamp(),
   }));
   await assertFails(updateDoc(doc(db, 'studentProfiles', 'cheshire-parent-profile'), {
     locationId: 'other', updatedAt: serverTimestamp(),
   }));
   await assertFails(updateDoc(doc(db, 'users', 'cheshire-parent'), {
     role: 'admin', updatedAt: serverTimestamp(),
+  }));
+});
+
+test('location admin cannot change administrator activation', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  await seedAccount({uid: 'second-admin', role: 'admin', profileIds: []});
+  await seedAccount({uid: 'member'});
+  await seedAccount({uid: 'super', role: 'superAdmin', profileIds: []});
+  const adminDb = auth('admin');
+  await assertSucceeds(updateDoc(doc(adminDb, 'users', 'member'), {
+    isActive: false, updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(adminDb, 'users', 'second-admin'), {
+    isActive: false, updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(auth('super'), 'users', 'second-admin'), {
+    isActive: false, updatedAt: serverTimestamp(),
   }));
 });
 

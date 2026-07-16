@@ -8,6 +8,7 @@ export async function createProfiles(db, {
   profileIds,
   googleAccountId,
   parentIsStudent = false,
+  omitGuardianEmail = false,
 }) {
   const timestamp = serverTimestamp();
   const batch = writeBatch(db);
@@ -34,13 +35,15 @@ export async function createProfiles(db, {
       ),
       beltRank: 'White',
       locationId,
-      guardianEmail: ownProfile && role === 'student'
-        ? 'guardian@example.com'
-        : email,
+      ...(!omitGuardianEmail ? {
+        guardianEmail: ownProfile && role === 'student'
+          ? 'guardian@example.com'
+          : email,
+      } : {}),
       guardianUserIds: ownProfile ? [] : [uid],
       ...(ownProfile ? {linkedUserId: uid} : {}),
       preferredClassGroupIds: [],
-      stickerProgress: {current: 0, required: 0, nextRank: 'Next rank'},
+      stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
       promotionHistory: [],
       testingNotes: [],
       isActive: true,
