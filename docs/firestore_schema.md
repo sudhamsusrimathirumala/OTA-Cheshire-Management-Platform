@@ -266,7 +266,8 @@ publication history are preserved on edits.
   meaning but do not independently grant or deny basic linked-profile edit
   access. This role-neutral rule avoids reintroducing approval-style barriers
   through legacy relationship metadata or selected-profile state.
-- An account and every profile it may edit use one matching `locationId`.
+- An account and every profile it may edit use one matching
+  `locationId`.
 - Event resource IDs must resolve to same-location General Resources. The
   primary registration resource must be included in `linkedResourceIds`.
 - Every `locationId` must resolve to `locations`.

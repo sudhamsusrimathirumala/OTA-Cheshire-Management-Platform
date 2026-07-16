@@ -233,7 +233,8 @@ fields enforced separately. This follows the same simplification used when the
 approval process was removed: barriers that did not improve the release's
 security boundary added user friction and unnecessary Rules, client, and test
 complexity. The earlier workflows may be reconsidered if real expansion or
-identity-review needs justify them; they are not part of the current runtime.
+identity-review needs justify them; they are not part of the current runtime,
+Firestore schema, security rules, or user experience.
 
 ## Testing and Validation
 
