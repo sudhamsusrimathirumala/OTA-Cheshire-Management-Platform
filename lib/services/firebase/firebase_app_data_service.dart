@@ -59,6 +59,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   _scheduleSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _announcementsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _notificationReadsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _resourcesSubscription;
@@ -76,6 +78,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String _activeLocationsFingerprint = '';
   bool _superAdminContentInitialized = false;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
+  Set<String> _notificationReadIds = const <String>{};
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
   bool _isAnnouncementsLoading = true;
@@ -161,6 +164,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
             firebaseSessionController.stage == SessionStage.member;
         _listenToSchedule(firestore, locationId, studentView);
         _listenToAnnouncements(firestore, locationId, studentView);
+        if (studentView) {
+          final uid = firebaseSessionController.authUser?.uid;
+          if (uid != null) _listenToNotificationReads(firestore, uid);
+        }
         _listenToEvents(firestore, locationId, studentView);
         _listenToResources(firestore, locationId, studentView);
       }
@@ -177,6 +184,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _stopFirestoreListeners() {
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
+    unawaited(_notificationReadsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
@@ -184,6 +192,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _cancelSuperAdminContentListeners();
     _scheduleSubscription = null;
     _announcementsSubscription = null;
+    _notificationReadsSubscription = null;
     _eventsSubscription = null;
     _resourcesSubscription = null;
     _adminStudentsSubscription = null;
@@ -197,6 +206,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _clearData() {
     _schedule = const <int, List<ClassSession>>{};
     _notifications = const <NotificationItem>[];
+    _notificationReadIds = const <String>{};
     _adminAnnouncements = const <AcademyAnnouncement>[];
     _events = const <AcademyEvent>[];
     _resources = const <AcademyResource>[];
@@ -630,6 +640,27 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     notifyListeners();
   }
 
+  void _listenToNotificationReads(FirebaseFirestore firestore, String uid) {
+    _notificationReadsSubscription = firestore
+        .collection(FirestoreCollections.users)
+        .doc(uid)
+        .collection('notificationReads')
+        .snapshots()
+        .listen(
+          (snapshot) {
+            _notificationReadIds = snapshot.docs.map((doc) => doc.id).toSet();
+            final announcements = _latestAnnouncementsSnapshot;
+            if (announcements != null) {
+              _notifications = _announcementsFromSnapshot(announcements);
+            }
+            notifyListeners();
+          },
+          onError: (Object error) {
+            _debugFirebaseError('notification read state', error);
+          },
+        );
+  }
+
   void _handleAnnouncementsError(Object error) {
     _notifications = const <NotificationItem>[];
     _adminAnnouncements = const <AcademyAnnouncement>[];
@@ -741,6 +772,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminLocations.removeListener(_handleAdminLocationsChanged);
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
+    unawaited(_notificationReadsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
     unawaited(_adminStudentsSubscription?.cancel());
@@ -844,22 +876,20 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
   }
 
-  // TODO: Replace mock delegation with Firestore-backed curriculum resources.
+  // Curriculum is intentionally bundled for reliable local delivery.
   @override
   List<String> get curriculumBeltOrder => _fallbackService.curriculumBeltOrder;
 
-  // TODO: Replace mock delegation with Firestore-backed curriculum resources.
+  // The fallback service owns the bundled curriculum implementation.
   @override
   Map<String, CurriculumRequirement> get curriculum =>
       _fallbackService.curriculum;
 
-  // TODO: Replace mock delegation with Firestore-backed curriculum resources.
   @override
   CurriculumRequirement curriculumForBelt(String belt) {
     return _fallbackService.curriculumForBelt(belt);
   }
 
-  // TODO: Replace mock delegation with Firestore-backed curriculum resources.
   @override
   String beltDisplayLabel(String belt) {
     return _fallbackService.beltDisplayLabel(belt);
@@ -867,6 +897,53 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   List<NotificationItem> get notifications => _notifications;
+
+  @override
+  Future<void> markNotificationRead(String announcementId) async {
+    if (_developmentViewActive || announcementId.trim().isEmpty) return;
+    final uid = firebaseSessionController.authUser?.uid;
+    final firestore = _firestore;
+    if (uid == null || firestore == null) {
+      throw StateError('Notification read state is unavailable.');
+    }
+    await firestore
+        .collection(FirestoreCollections.users)
+        .doc(uid)
+        .collection('notificationReads')
+        .doc(announcementId)
+        .set({'readAt': FieldValue.serverTimestamp()});
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    if (_developmentViewActive) return;
+    final unreadIds = _notifications
+        .where((item) => !item.isRead)
+        .map((item) => item.id)
+        .toList(growable: false);
+    if (unreadIds.isEmpty) return;
+    final uid = firebaseSessionController.authUser?.uid;
+    final firestore = _firestore;
+    if (uid == null || firestore == null) {
+      throw StateError('Notification read state is unavailable.');
+    }
+    const batchSize = 450;
+    for (var start = 0; start < unreadIds.length; start += batchSize) {
+      final end = (start + batchSize).clamp(0, unreadIds.length);
+      final batch = firestore.batch();
+      for (final id in unreadIds.sublist(start, end)) {
+        batch.set(
+          firestore
+              .collection(FirestoreCollections.users)
+              .doc(uid)
+              .collection('notificationReads')
+              .doc(id),
+          {'readAt': FieldValue.serverTimestamp()},
+        );
+      }
+      await batch.commit();
+    }
+  }
 
   @override
   List<AcademyAnnouncement> get adminAnnouncements => _adminAnnouncements;
@@ -1039,7 +1116,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       summary: summary,
       body: body,
       timestamp: publishedAt,
-      isRead: false,
+      isRead: _notificationReadIds.contains(document.id),
       category: _categoryForAnnouncementType(announcementType),
       priority: _priorityForAnnouncement(priority),
       requiresAction: _boolValue(data['requiresAction']) ?? false,

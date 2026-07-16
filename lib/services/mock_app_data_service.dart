@@ -157,6 +157,12 @@ class MockAppDataService implements AppDataService {
   }
 
   @override
+  Future<void> markNotificationRead(String announcementId) async {}
+
+  @override
+  Future<void> markAllNotificationsRead() async {}
+
+  @override
   List<AcademyAnnouncement> get adminAnnouncements {
     return [
           ...sampleNotifications.map(
