@@ -80,6 +80,26 @@ class StudentProfileEditInput {
   final String? guardianEmail;
 }
 
+class ParentSelfProfileInput {
+  const ParentSelfProfileInput({
+    required this.firstName,
+    required this.lastName,
+    required this.dateOfBirth,
+    required this.beltRank,
+    required this.stickerCurrent,
+    required this.stickerRequired,
+    this.guardianEmail,
+  });
+
+  final String firstName;
+  final String lastName;
+  final DateTime dateOfBirth;
+  final String beltRank;
+  final int stickerCurrent;
+  final int stickerRequired;
+  final String? guardianEmail;
+}
+
 class ProfileCreationRequest {
   const ProfileCreationRequest({
     required this.firstName,
@@ -253,8 +273,8 @@ class FirestoreProfileService {
     final identity = authProfileIdentity(_auth.currentUser);
     if (session != null && !canSetPreferredClass(profile, session)) {
       throw const ProfileServiceException(
-        ProfileServiceError.permissionDenied,
-        'This class cannot be selected for the current student.',
+        ProfileServiceError.invalidData,
+        'This class is not currently available as a preferred class.',
       );
     }
     try {
@@ -267,16 +287,38 @@ class FirestoreProfileService {
             .doc(profile.id);
         final user = (await transaction.get(userRef)).data();
         final storedProfile = (await transaction.get(profileRef)).data();
+        final storedClass = session == null
+            ? null
+            : (await transaction.get(
+                _firestore
+                    .collection(FirestoreCollections.classSessions)
+                    .doc(session.id),
+              )).data();
         final linked = _stringList(user?['linkedStudentProfileIds']);
-        if (user?['selectedStudentProfileId'] != profile.id ||
+        if (user == null ||
+            user['isActive'] != true ||
+            user['selectedStudentProfileId'] != profile.id ||
             !linked.contains(profile.id) ||
             storedProfile?['isActive'] != true ||
-            storedProfile?['locationId'] != user?['locationId'] ||
+            storedProfile?['locationId'] != user['locationId'] ||
             storedProfile?['locationId'] != profile.locationId) {
           throw const ProfileServiceException(
             ProfileServiceError.permissionDenied,
             'This preference can only be changed for the selected student.',
           );
+        }
+        if (session != null) {
+          final storedGroup = _optionalString(storedClass?['bulkGroupId']);
+          if (storedClass == null ||
+              storedClass['isActive'] != true ||
+              storedClass['locationId'] != storedProfile?['locationId'] ||
+              storedGroup == null ||
+              storedGroup != session.bulkGroupId) {
+            throw const ProfileServiceException(
+              ProfileServiceError.invalidData,
+              'This class is not currently available as a preferred class.',
+            );
+          }
         }
         transaction.update(
           profileRef,
@@ -337,6 +379,69 @@ class FirestoreProfileService {
         });
       });
       return childRef.id;
+    } on ProfileServiceException {
+      rethrow;
+    } on FirebaseException catch (error) {
+      throw mapProfileFirebaseException(error);
+    }
+  }
+
+  Future<String> addParentSelfProfile(ParentSelfProfileInput input) async {
+    final identity = authProfileIdentity(_auth.currentUser);
+    final profileRef = _firestore
+        .collection(FirestoreCollections.studentProfiles)
+        .doc();
+    try {
+      await _firestore.runTransaction((transaction) async {
+        final userRef = _firestore
+            .collection(FirestoreCollections.users)
+            .doc(identity.uid);
+        final user = (await transaction.get(userRef)).data();
+        final linked = _stringList(user?['linkedStudentProfileIds']);
+        final locationId = _optionalString(user?['locationId']);
+        if (user?['role'] != ProfileAccountRole.parent.name ||
+            user?['isActive'] != true ||
+            locationId == null) {
+          throw const ProfileServiceException(
+            ProfileServiceError.permissionDenied,
+            'Only an active parent account may add its own student profile.',
+          );
+        }
+        if (linked.length >= maximumAdditionalStudents + 1) {
+          throw const ProfileServiceException(
+            ProfileServiceError.invalidData,
+            'This account has reached the student profile limit.',
+          );
+        }
+        for (final id in linked) {
+          final existing = (await transaction.get(
+            _firestore.collection(FirestoreCollections.studentProfiles).doc(id),
+          )).data();
+          if (existing?['isActive'] == true &&
+              existing?['linkedUserId'] == identity.uid) {
+            throw const ProfileServiceException(
+              ProfileServiceError.alreadyExists,
+              'Your student profile is already linked to this account.',
+            );
+          }
+        }
+        final timestamp = FieldValue.serverTimestamp();
+        transaction.set(
+          profileRef,
+          parentSelfProfileCreationData(
+            input: input,
+            parentUid: identity.uid,
+            locationId: locationId,
+            timestamp: timestamp,
+            today: DateTime.now(),
+          ),
+        );
+        transaction.update(userRef, {
+          'linkedStudentProfileIds': [...linked, profileRef.id],
+          'updatedAt': timestamp,
+        });
+      });
+      return profileRef.id;
     } on ProfileServiceException {
       rethrow;
     } on FirebaseException catch (error) {
@@ -486,14 +591,14 @@ bool canSetPreferredClass(StudentProfile profile, ClassSession session) =>
     profile.isActive &&
     session.isPublished &&
     session.locationId == profile.locationId &&
-    session.isEligibleFor(profile);
+    session.bulkGroupId.trim().isNotEmpty;
 
 Map<String, Object?> preferredClassUpdateData(
   String? bulkGroupId, {
   required Object timestamp,
 }) {
   final normalized = _optionalString(bulkGroupId);
-  return {
+  return <String, Object?>{
     'preferredClassGroupIds': normalized == null ? <String>[] : [normalized],
     'updatedAt': timestamp,
   };
@@ -513,7 +618,7 @@ Map<String, Object?> childProfileCreationData({
     );
   }
   final belt = _canonicalBelt(input.beltRank);
-  return {
+  final data = <String, Object?>{
     'firstName': _requiredInput(input.firstName, 'First name'),
     'lastName': _requiredInput(input.lastName, 'Last name'),
     'dateOfBirth': Timestamp.fromDate(_dateOnly(input.dateOfBirth)),
@@ -536,6 +641,55 @@ Map<String, Object?> childProfileCreationData({
     'createdAt': timestamp,
     'updatedAt': timestamp,
   };
+  return data;
+}
+
+Map<String, Object?> parentSelfProfileCreationData({
+  required ParentSelfProfileInput input,
+  required String parentUid,
+  required String locationId,
+  required Object timestamp,
+  required DateTime today,
+}) {
+  if (input.dateOfBirth.isAfter(today)) {
+    throw const ProfileServiceException(
+      ProfileServiceError.invalidData,
+      'Date of birth cannot be in the future.',
+    );
+  }
+  if (input.stickerCurrent < 0 || input.stickerRequired < 0) {
+    throw const ProfileServiceException(
+      ProfileServiceError.invalidData,
+      'Sticker counts cannot be negative.',
+    );
+  }
+  final belt = _canonicalBelt(input.beltRank);
+  final guardianEmail = _optionalNormalizedEmail(
+    input.guardianEmail,
+    'Guardian email',
+  );
+  final data = <String, Object?>{
+    'firstName': _requiredInput(input.firstName, 'First name'),
+    'lastName': _requiredInput(input.lastName, 'Last name'),
+    'dateOfBirth': Timestamp.fromDate(_dateOnly(input.dateOfBirth)),
+    'beltRank': belt,
+    'locationId': _requiredInput(locationId, 'Academy location'),
+    'guardianUserIds': <String>[],
+    'linkedUserId': parentUid,
+    'preferredClassGroupIds': <String>[],
+    'stickerProgress': <String, Object?>{
+      'current': input.stickerCurrent,
+      'required': input.stickerRequired,
+      'nextRank': nextRankForBelt(belt),
+    },
+    'promotionHistory': <String>[],
+    'testingNotes': <String>[],
+    'isActive': true,
+    'createdAt': timestamp,
+    'updatedAt': timestamp,
+  };
+  if (guardianEmail != null) data['guardianEmail'] = guardianEmail;
+  return data;
 }
 
 Map<String, Object?> accountContactUpdateData(

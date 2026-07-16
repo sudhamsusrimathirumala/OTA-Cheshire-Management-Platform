@@ -8,6 +8,7 @@ import '../models/curriculum_requirement.dart';
 import '../models/notification_item.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
+import 'class_recommendation_service.dart';
 
 abstract class AppDataService implements Listenable {
   UserAccount get currentUserAccount;
@@ -74,20 +75,9 @@ ClassSession? nextEligibleClassFromSchedule(
   StudentProfile student, {
   required int currentWeekday,
   required int currentMinutes,
-}) {
-  final preferredGroups = student.preferredClassGroupIds.toSet();
-  ClassSession? firstEligible;
-  for (var offset = 0; offset < DateTime.daysPerWeek; offset++) {
-    final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
-    for (final session in schedule[weekday] ?? const <ClassSession>[]) {
-      if (!session.isPublished ||
-          (offset == 0 && session.endMinutes <= currentMinutes) ||
-          !session.isEligibleFor(student)) {
-        continue;
-      }
-      firstEligible ??= session;
-      if (preferredGroups.contains(session.bulkGroupId)) return session;
-    }
-  }
-  return firstEligible;
-}
+}) => nextRecommendedClassFromSchedule(
+  schedule,
+  student,
+  currentWeekday: currentWeekday,
+  currentMinutes: currentMinutes,
+);

@@ -226,7 +226,7 @@ void main() {
     });
   });
 
-  test('preferred class requires publication location and eligibility', () {
+  test('preferred class requires publication location and recurring group', () {
     final student = Student(
       id: 'student',
       name: 'Student',
@@ -262,8 +262,52 @@ void main() {
     expect(canSetPreferredClass(student, session(published: false)), isFalse);
     expect(
       canSetPreferredClass(student, session(belts: const ['White'])),
+      isTrue,
+    );
+    expect(
+      canSetPreferredClass(
+        student,
+        ClassSession(
+          id: 'missing-group',
+          className: 'Class',
+          classTypeId: 'level-3',
+          bulkGroupId: '',
+          locationId: 'cheshire',
+          startTime: DateTime(2026, 1, 1, 18),
+          endTime: DateTime(2026, 1, 1, 19),
+          eligibleBelts: const ['Blue'],
+          description: '',
+        ),
+      ),
       isFalse,
     );
+  });
+
+  test('parent self profile is linked without creating another account', () {
+    final data = parentSelfProfileCreationData(
+      input: ParentSelfProfileInput(
+        firstName: 'Parent',
+        lastName: 'Student',
+        dateOfBirth: DateTime(1990, 1, 2),
+        beltRank: 'Green',
+        stickerCurrent: 7,
+        stickerRequired: 3,
+      ),
+      parentUid: 'parent-uid',
+      locationId: 'cheshire',
+      timestamp: 'server-time',
+      today: today,
+    );
+
+    expect(data['linkedUserId'], 'parent-uid');
+    expect(data['guardianUserIds'], isEmpty);
+    expect(data, isNot(contains('guardianEmail')));
+    expect(data['preferredClassGroupIds'], isEmpty);
+    expect(data['stickerProgress'], {
+      'current': 7,
+      'required': 3,
+      'nextRank': 'Green-Blue',
+    });
   });
 
   test(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/class_recommendation_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/location_time_service.dart';
@@ -56,16 +57,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   ClassSession? get _nextEligibleClass {
     final classes = _selectedDayClasses.where((session) {
-      if (!session.isEligibleFor(_student)) {
+      if (!session.isPublished || session.locationId != _student.locationId) {
         return false;
       }
-
-      if (!_isViewingToday) {
-        return true;
-      }
-
+      if (!_isViewingToday) return true;
       final academyNow = _academyNow;
-      return session.startMinutes > academyNow.hour * 60 + academyNow.minute;
+      return session.endMinutes > academyNow.hour * 60 + academyNow.minute;
     }).toList();
 
     if (classes.isEmpty) {
@@ -76,7 +73,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     final preferredGroups = _student.preferredClassGroupIds.toSet();
     return classes.firstWhere(
       (session) => preferredGroups.contains(session.bulkGroupId),
-      orElse: () => classes.first,
+      orElse: () => classes.firstWhere(
+        (session) => isTypicallyRecommendedFor(session, _student),
+        orElse: () => classes.first,
+      ),
     );
   }
 
@@ -251,9 +251,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _showClassDetails(ClassSession session) {
-    final isEligible = session.isEligibleFor(_student);
+    final isRecommended = isTypicallyRecommendedFor(session, _student);
     final isPreferred = _student.preferredClassGroupIds.contains(
       session.bulkGroupId,
+    );
+    final canSelect = canSetPreferredClass(_student, session);
+    final unavailableReason = preferredClassUnavailableReason(
+      profile: _student,
+      session: session,
     );
     final timeLabel = session.timeRangeLabel;
 
@@ -266,7 +271,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       ),
       builder: (context) {
         return SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -278,14 +283,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                       width: 48,
                       height: 48,
                       decoration: BoxDecoration(
-                        color: isEligible ? OtaColors.softRed : OtaColors.blush,
+                        color: isRecommended
+                            ? OtaColors.softRed
+                            : OtaColors.blush,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Icon(
-                        isEligible
+                        isRecommended
                             ? Icons.star_rounded
                             : Icons.info_outline_rounded,
-                        color: isEligible
+                        color: isRecommended
                             ? const Color(0xFFD9A441)
                             : OtaColors.mutedText,
                       ),
@@ -320,8 +327,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 const SizedBox(height: 22),
                 _DetailRow(
                   icon: Icons.verified_user_rounded,
-                  label: 'Belt Eligibility',
-                  value: session.eligibilityLabel,
+                  label: 'Typical Student Group',
+                  value: classGuidanceFor(session, _student),
                 ),
                 const SizedBox(height: 12),
                 _DetailRow(
@@ -339,7 +346,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: isEligible
+                    onPressed: canSelect
                         ? () {
                             Navigator.pop(context);
                             _changePreferredClass(session);
@@ -353,10 +360,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     label: Text(
                       isPreferred
                           ? 'Remove preferred class'
+                          : _student.preferredClassGroupIds.isNotEmpty
+                          ? 'Replace preferred class'
                           : 'Set as preferred class',
                     ),
                   ),
                 ),
+                if (!canSelect && unavailableReason != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    unavailableReason,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: OtaColors.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -420,6 +439,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       }
     }
   }
+}
+
+String? preferredClassUnavailableReason({
+  required StudentProfile profile,
+  required ClassSession session,
+}) {
+  if (!session.isPublished) return 'This class has not been published.';
+  if (session.locationId != profile.locationId) {
+    return 'This class belongs to another academy location.';
+  }
+  if (session.bulkGroupId.trim().isEmpty) {
+    return 'This class is missing a recurring class-group setting.';
+  }
+  if (!profile.isActive) return 'This profile is not available for changes.';
+  return null;
 }
 
 class _ScheduleContent extends StatelessWidget {
@@ -641,7 +675,7 @@ class _NextEligibleBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Next eligible class: ${nextClass!.className} • ${nextClass!.startLabel}',
+              'Next recommended class: ${nextClass!.className} • ${nextClass!.startLabel}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: OtaColors.white,
                 fontWeight: FontWeight.w800,
@@ -778,7 +812,7 @@ class _WeekClassRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isEligible = session.isEligibleFor(student);
+    final isEligible = isTypicallyRecommendedFor(session, student);
 
     return InkWell(
       onTap: onTap,
@@ -1072,7 +1106,7 @@ class _PositionedClassBlock extends StatelessWidget {
         (positionedEvent.column * (columnWidth + eventGap));
     final top = (session.startMinutes / 60) * hourHeight;
     final height = (session.durationMinutes / 60) * hourHeight;
-    final isEligible = session.isEligibleFor(student);
+    final isEligible = isTypicallyRecommendedFor(session, student);
     final isPast = classHasPassed(
       session: session,
       selectedDate: selectedDate,
@@ -1205,7 +1239,7 @@ class _ClassBlock extends StatelessWidget {
                     if (isNext && !isCompact) ...[
                       const SizedBox(height: 3),
                       Text(
-                        'Next eligible',
+                        'Next recommended',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
