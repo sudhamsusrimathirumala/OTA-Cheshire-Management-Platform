@@ -167,6 +167,31 @@ test('parent atomically creates one-location household profiles', async () => {
   }
 });
 
+test('parent onboarding may atomically retain self-profile defaults', async () => {
+  const db = auth('parent-defaults');
+  await assertSucceeds(createProfiles(db, {
+    uid: 'parent-defaults', email: 'parent-defaults@example.com', role: 'parent',
+    profileIds: ['defaults-child'],
+    studentProfileDefaults: {
+      dateOfBirth: new Date('1990-02-03T00:00:00Z'),
+      beltRank: 'Green', guardianEmail: 'contact@example.com',
+      stickerProgress: {current: 0, required: 0, nextRank: 'Green-Blue'},
+    },
+  }));
+  const user = (await getDoc(doc(db, 'users', 'parent-defaults'))).data();
+  assert.equal(user.studentProfileDefaults.beltRank, 'Green');
+  assert.equal(user.studentProfileDefaults.guardianEmail, 'contact@example.com');
+
+  await assertFails(createProfiles(auth('invalid-defaults'), {
+    uid: 'invalid-defaults', email: 'invalid-defaults@example.com', role: 'parent',
+    profileIds: ['invalid-defaults-child'],
+    studentProfileDefaults: {
+      dateOfBirth: new Date('1990-02-03T00:00:00Z'), beltRank: 'Not a belt',
+      stickerProgress: {current: 0, required: 0, nextRank: 'Invented'},
+    },
+  }));
+});
+
 test('account creation rejects partial, elevated, mismatched, and inactive-location writes', async () => {
   const db = auth('owner');
   await assertFails(setDoc(doc(db, 'users', 'owner'), {

@@ -229,6 +229,55 @@ void main() {
     expect(plan.user['locationId'], 'cheshire');
     expect(plan.profiles['child-profile']!['locationId'], 'cheshire');
     expect(plan.profiles['child-profile']!['isActive'], isTrue);
+    expect(plan.user['studentProfileDefaults'], {
+      'dateOfBirth': isA<Object>(),
+      'beltRank': 'White',
+      'stickerProgress': {
+        'current': 0,
+        'required': 0,
+        'nextRank': 'White-Yellow',
+      },
+    });
+  });
+
+  test('parent onboarding retains optional self-profile information', () {
+    final plan = buildProfileCreationPlan(
+      request: ProfileCreationRequest(
+        firstName: 'Parent',
+        lastName: 'Member',
+        dateOfBirth: DateTime(1990, 2, 3),
+        applicantBeltRank: 'Green',
+        guardianEmail: ' Contact@Example.com ',
+        role: ProfileAccountRole.parent,
+        locationId: 'cheshire',
+        additionalStudents: [
+          StudentProfileInput(
+            firstName: 'Child',
+            lastName: 'Member',
+            dateOfBirth: DateTime(2015, 1, 1),
+            beltRank: 'White',
+            guardianEmail: 'parent@example.com',
+          ),
+        ],
+      ),
+      identity: const AuthProfileIdentity(
+        uid: 'parent-uid',
+        email: 'parent@example.com',
+      ),
+      profileIds: const ['child-profile'],
+      timestamp: 'server-time',
+      today: DateTime(2026, 7, 16),
+    );
+
+    final defaults = plan.user['studentProfileDefaults']! as Map;
+    expect(defaults['dateOfBirth'], isA<Object>());
+    expect(defaults['beltRank'], 'Green');
+    expect(defaults['guardianEmail'], 'contact@example.com');
+    expect(defaults['stickerProgress'], {
+      'current': 0,
+      'required': 0,
+      'nextRank': 'Green-Blue',
+    });
   });
 
   test('sole active location is selected automatically', () {

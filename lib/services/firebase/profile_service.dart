@@ -82,8 +82,6 @@ class StudentProfileEditInput {
 
 class ParentSelfProfileInput {
   const ParentSelfProfileInput({
-    required this.firstName,
-    required this.lastName,
     required this.dateOfBirth,
     required this.beltRank,
     required this.stickerCurrent,
@@ -91,8 +89,6 @@ class ParentSelfProfileInput {
     this.guardianEmail,
   });
 
-  final String firstName;
-  final String lastName;
   final DateTime dateOfBirth;
   final String beltRank;
   final int stickerCurrent;
@@ -439,6 +435,7 @@ class FirestoreProfileService {
           profileRef,
           parentSelfProfileCreationData(
             input: input,
+            accountData: user!,
             parentUid: identity.uid,
             locationId: locationId,
             timestamp: timestamp,
@@ -659,6 +656,7 @@ Map<String, Object?> childProfileCreationData({
 
 Map<String, Object?> parentSelfProfileCreationData({
   required ParentSelfProfileInput input,
+  required Map<String, dynamic> accountData,
   required String parentUid,
   required String locationId,
   required Object timestamp,
@@ -682,8 +680,14 @@ Map<String, Object?> parentSelfProfileCreationData({
     'Guardian email',
   );
   final data = <String, Object?>{
-    'firstName': _requiredInput(input.firstName, 'First name'),
-    'lastName': _requiredInput(input.lastName, 'Last name'),
+    'firstName': _requiredInput(
+      _optionalString(accountData['firstName']) ?? '',
+      'First name',
+    ),
+    'lastName': _requiredInput(
+      _optionalString(accountData['lastName']) ?? '',
+      'Last name',
+    ),
     'dateOfBirth': Timestamp.fromDate(_dateOnly(input.dateOfBirth)),
     'beltRank': belt,
     'locationId': _requiredInput(locationId, 'Academy location'),
@@ -891,6 +895,11 @@ ProfileCreationPlan buildProfileCreationPlan({
   final phone = _optionalString(request.phoneNumber);
   final googleId = _optionalString(identity.googleAccountId);
   final selectedProfileId = profileIds.first;
+  final applicantBelt = _canonicalBelt(request.applicantBeltRank);
+  final applicantGuardianEmail = _optionalNormalizedEmail(
+    request.guardianEmail,
+    'Guardian email',
+  );
   return ProfileCreationPlan(
     selectedProfileId: selectedProfileId,
     profiles: profiles,
@@ -905,6 +914,17 @@ ProfileCreationPlan buildProfileCreationPlan({
       'selectedStudentProfileId': selectedProfileId,
       'phoneNumber': ?phone,
       'googleAccountId': ?googleId,
+      if (request.role == ProfileAccountRole.parent && !request.parentIsStudent)
+        'studentProfileDefaults': <String, Object?>{
+          'dateOfBirth': Timestamp.fromDate(_dateOnly(request.dateOfBirth)),
+          'beltRank': applicantBelt,
+          'guardianEmail': ?applicantGuardianEmail,
+          'stickerProgress': <String, Object?>{
+            'current': 0,
+            'required': 0,
+            'nextRank': nextRankForBelt(applicantBelt),
+          },
+        },
       'createdAt': timestamp,
       'updatedAt': timestamp,
     },

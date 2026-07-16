@@ -9,6 +9,7 @@ export async function createProfiles(db, {
   googleAccountId,
   parentIsStudent = false,
   omitGuardianEmail = false,
+  studentProfileDefaults,
 }) {
   const timestamp = serverTimestamp();
   const batch = writeBatch(db);
@@ -22,6 +23,7 @@ export async function createProfiles(db, {
     linkedStudentProfileIds: profileIds,
     selectedStudentProfileId: profileIds[0],
     ...(googleAccountId ? {googleAccountId} : {}),
+    ...(studentProfileDefaults ? {studentProfileDefaults} : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   });

@@ -61,6 +61,49 @@ UserAccount userAccountFromFirestoreData(
     googleAccountId: _optionalString(data['googleAccountId']),
     createdAt: _requiredDateTime(data['createdAt'], 'createdAt'),
     updatedAt: _requiredDateTime(data['updatedAt'], 'updatedAt'),
+    studentProfileDefaults: studentProfileDefaultsFromUserData(data),
+  );
+}
+
+StudentProfileDefaults? studentProfileDefaultsFromUserData(
+  Map<String, dynamic> data,
+) {
+  final canonical = data['studentProfileDefaults'];
+  final defaults = canonical is Map ? canonical : const <String, Object?>{};
+  final stickerValue = defaults['stickerProgress'] ?? data['stickerProgress'];
+  final sticker = stickerValue is Map
+      ? stickerValue
+      : const <String, Object?>{};
+  final dateOfBirth = _dateTime(
+    defaults['dateOfBirth'] ??
+        data['dateOfBirth'] ??
+        data['birthDate'] ??
+        data['applicantDateOfBirth'],
+  );
+  final beltRank = _optionalString(
+    defaults['beltRank'] ?? data['beltRank'] ?? data['applicantBeltRank'],
+  );
+  final guardianEmailValue = _optionalString(
+    defaults['guardianEmail'] ?? data['guardianEmail'],
+  );
+  final current = sticker['current'] is int ? sticker['current'] as int : 0;
+  final required = sticker['required'] is int ? sticker['required'] as int : 0;
+  final nextRank = _optionalString(sticker['nextRank']);
+  if (dateOfBirth == null &&
+      beltRank == null &&
+      guardianEmailValue == null &&
+      stickerValue == null) {
+    return null;
+  }
+  return StudentProfileDefaults(
+    dateOfBirth: dateOfBirth,
+    beltRank: beltRank,
+    guardianEmail: guardianEmailValue == null
+        ? null
+        : normalizeRequiredEmail(guardianEmailValue),
+    stickerCurrent: current < 0 ? 0 : current,
+    stickerRequired: required < 0 ? 0 : required,
+    nextRank: nextRank,
   );
 }
 
@@ -71,6 +114,7 @@ Map<String, Object?> userAccountWriteFields(
 }) {
   final phoneNumber = normalizeOptionalPhoneNumber(account.phoneNumber);
   final googleAccountId = _optionalString(account.googleAccountId);
+  final defaults = account.studentProfileDefaults;
   return <String, Object?>{
     'firstName': _requiredString(account.firstName, 'firstName'),
     'lastName': _requiredString(account.lastName, 'lastName'),
@@ -84,6 +128,19 @@ Map<String, Object?> userAccountWriteFields(
       'locationId': account.locationId.trim(),
     'selectedStudentProfileId': ?account.selectedStudentProfileId,
     'googleAccountId': ?googleAccountId,
+    if (defaults != null)
+      'studentProfileDefaults': <String, Object?>{
+        if (defaults.dateOfBirth != null)
+          'dateOfBirth': Timestamp.fromDate(defaults.dateOfBirth!),
+        if (defaults.beltRank != null) 'beltRank': defaults.beltRank,
+        if (defaults.guardianEmail != null)
+          'guardianEmail': normalizeRequiredEmail(defaults.guardianEmail!),
+        'stickerProgress': <String, Object?>{
+          'current': defaults.stickerCurrent,
+          'required': defaults.stickerRequired,
+          if (defaults.nextRank != null) 'nextRank': defaults.nextRank,
+        },
+      },
     if (isCreate) 'createdAt': Timestamp.fromDate(account.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };

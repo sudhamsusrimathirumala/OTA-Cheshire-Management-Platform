@@ -69,18 +69,24 @@ class AddChildScreen extends StatelessWidget {
 class AddParentStudentProfileScreen extends StatelessWidget {
   const AddParentStudentProfileScreen({
     required this.account,
-    required this.service,
+    this.service,
+    this.createProfile,
     super.key,
-  });
+  }) : assert(service != null || createProfile != null);
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final Future<String> Function(ParentSelfProfileInput input)? createProfile;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: OtaColors.blush,
     appBar: AppBar(title: const Text('Add my student profile')),
-    body: _ParentSelfProfileForm(account: account, service: service),
+    body: _ParentSelfProfileForm(
+      account: account,
+      service: service,
+      createProfile: createProfile,
+    ),
   );
 }
 
@@ -497,10 +503,15 @@ class _AddChildSheetState extends State<_AddChildSheet> {
 }
 
 class _ParentSelfProfileForm extends StatefulWidget {
-  const _ParentSelfProfileForm({required this.account, required this.service});
+  const _ParentSelfProfileForm({
+    required this.account,
+    this.service,
+    this.createProfile,
+  });
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final Future<String> Function(ParentSelfProfileInput input)? createProfile;
 
   @override
   State<_ParentSelfProfileForm> createState() => _ParentSelfProfileFormState();
@@ -508,31 +519,17 @@ class _ParentSelfProfileForm extends StatefulWidget {
 
 class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _firstName;
-  late final TextEditingController _lastName;
-  final _guardianEmail = TextEditingController();
-  final _current = TextEditingController(text: '0');
-  final _required = TextEditingController(text: '0');
   DateTime? _dateOfBirth;
-  String _belt = curriculumBeltOrder.first;
+  String? _belt;
   bool _saving = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    _firstName = TextEditingController(text: widget.account.firstName);
-    _lastName = TextEditingController(text: widget.account.lastName);
-  }
-
-  @override
-  void dispose() {
-    _firstName.dispose();
-    _lastName.dispose();
-    _guardianEmail.dispose();
-    _current.dispose();
-    _required.dispose();
-    super.dispose();
+    _dateOfBirth = widget.account.studentProfileDefaults?.dateOfBirth;
+    final savedBelt = widget.account.studentProfileDefaults?.beltRank;
+    _belt = curriculumBeltOrder.contains(savedBelt) ? savedBelt : null;
   }
 
   Future<void> _pickDate() async {
@@ -547,8 +544,12 @@ class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
 
   Future<void> _save() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    if (_dateOfBirth == null) {
-      setState(() => _error = 'Select your date of birth.');
+    if (_dateOfBirth == null || _belt == null) {
+      setState(
+        () => _error = _dateOfBirth == null
+            ? 'Select your date of birth.'
+            : 'Select your belt rank.',
+      );
       return;
     }
     setState(() {
@@ -556,15 +557,14 @@ class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
       _error = null;
     });
     try {
-      await widget.service.addParentSelfProfile(
+      final defaults = widget.account.studentProfileDefaults;
+      await (widget.createProfile ?? widget.service!.addParentSelfProfile)(
         ParentSelfProfileInput(
-          firstName: _firstName.text,
-          lastName: _lastName.text,
           dateOfBirth: _dateOfBirth!,
-          beltRank: _belt,
-          guardianEmail: _guardianEmail.text,
-          stickerCurrent: int.parse(_current.text),
-          stickerRequired: int.parse(_required.text),
+          beltRank: _belt!,
+          guardianEmail: defaults?.guardianEmail,
+          stickerCurrent: defaults?.stickerCurrent ?? 0,
+          stickerRequired: defaults?.stickerRequired ?? 0,
         ),
       );
       if (mounted) Navigator.pop(context, true);
@@ -585,62 +585,54 @@ class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
     saving: _saving,
     error: _error,
     onSave: _save,
+    actionLabel: 'Create My Student Profile',
     child: Form(
       key: _formKey,
       child: Column(
         children: [
-          _requiredField(_firstName, 'First name'),
-          _requiredField(_lastName, 'Last name'),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Date of birth'),
-            subtitle: Text(
-              _dateOfBirth == null ? 'Required' : _formatDate(_dateOfBirth!),
+          Text('Name: ${widget.account.displayName}'),
+          Text('Account email: ${widget.account.email}'),
+          Text('Phone: ${widget.account.phoneNumber ?? 'Not provided'}'),
+          Text('Academy location: ${widget.account.locationId}'),
+          if (_dateOfBirth != null)
+            Text('Date of birth: ${_formatDate(_dateOfBirth!)}'),
+          if (_belt != null) Text('Belt rank: $_belt'),
+          if (widget.account.studentProfileDefaults?.guardianEmail != null)
+            Text(
+              'Contact email: ${widget.account.studentProfileDefaults!.guardianEmail}',
             ),
-            trailing: const Icon(Icons.calendar_month_rounded),
-            onTap: _pickDate,
+          Text(
+            'Sticker progress: '
+            '${widget.account.studentProfileDefaults?.stickerCurrent ?? 0} / '
+            '${widget.account.studentProfileDefaults?.stickerRequired ?? 0}',
           ),
-          DropdownButtonFormField<String>(
-            initialValue: _belt,
-            decoration: const InputDecoration(
-              labelText: 'Belt rank',
-              border: OutlineInputBorder(),
+          if (_belt != null) Text('Next rank: ${nextRankForBelt(_belt!)}'),
+          const SizedBox(height: 16),
+          if (_dateOfBirth == null)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Date of birth'),
+              subtitle: const Text('Required'),
+              trailing: const Icon(Icons.calendar_month_rounded),
+              onTap: _pickDate,
             ),
-            items: [
-              for (final belt in curriculumBeltOrder)
-                DropdownMenuItem(value: belt, child: Text(belt)),
-            ],
-            onChanged: _saving
-                ? null
-                : (value) {
-                    if (value != null) setState(() => _belt = value);
-                  },
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _guardianEmail,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Guardian/contact email (optional)',
-              helperText:
-                  'Contact information only; this does not grant access.',
-              border: OutlineInputBorder(),
-            ),
-            validator: (value) => _emailValidator(value, required: false),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _stickerField(_current, 'Current stickers')),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _stickerField(
-                  _required,
-                  'Stickers required for next rank',
-                ),
+          if (_belt == null)
+            DropdownButtonFormField<String>(
+              initialValue: _belt,
+              decoration: const InputDecoration(
+                labelText: 'Belt rank',
+                border: OutlineInputBorder(),
               ),
-            ],
-          ),
+              items: [
+                for (final belt in curriculumBeltOrder)
+                  DropdownMenuItem(value: belt, child: Text(belt)),
+              ],
+              validator: (value) =>
+                  value == null ? 'Belt rank is required.' : null,
+              onChanged: _saving
+                  ? null
+                  : (value) => setState(() => _belt = value),
+            ),
         ],
       ),
     ),
@@ -654,6 +646,7 @@ class _SheetFrame extends StatelessWidget {
     required this.saving,
     required this.error,
     required this.onSave,
+    this.actionLabel = 'Save changes',
   });
 
   final String title;
@@ -661,6 +654,7 @@ class _SheetFrame extends StatelessWidget {
   final bool saving;
   final String? error;
   final VoidCallback onSave;
+  final String actionLabel;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -695,7 +689,7 @@ class _SheetFrame extends StatelessWidget {
                     dimension: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Save changes'),
+                : Text(actionLabel),
           ),
         ],
       ),

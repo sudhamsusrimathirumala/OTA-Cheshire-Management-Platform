@@ -126,6 +126,22 @@ service cloud.firestore {
           data.stickerProgress.nextRank == expectedNextRank(data.beltRank);
     }
 
+    function validStudentProfileDefaults(data) {
+      return data is map &&
+          data.keys().hasOnly([
+            'dateOfBirth', 'beltRank', 'guardianEmail', 'stickerProgress'
+          ]) &&
+          data.keys().hasAll(['dateOfBirth', 'beltRank', 'stickerProgress']) &&
+          data.dateOfBirth is timestamp &&
+          canonicalBelt(data.beltRank) &&
+          (!data.keys().hasAny(['guardianEmail']) ||
+           (data.guardianEmail is string && data.guardianEmail.size() > 3)) &&
+          validStickerProgress({
+            'beltRank': data.beltRank,
+            'stickerProgress': data.stickerProgress
+          });
+    }
+
     function selectedProfileOwnedByUser() {
       return activeUser() &&
           currentUser().role in ['student', 'parent'] &&
@@ -211,6 +227,7 @@ service cloud.firestore {
             'firstName', 'lastName', 'email', 'role', 'isActive',
             'locationId', 'linkedStudentProfileIds',
             'selectedStudentProfileId', 'phoneNumber', 'googleAccountId',
+            'studentProfileDefaults',
             'createdAt', 'updatedAt'
           ]) &&
           data.keys().hasAll([
@@ -230,6 +247,9 @@ service cloud.firestore {
             (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
           (!data.keys().hasAny(['googleAccountId']) ||
             data.googleAccountId in googleIdentities()) &&
+          (!data.keys().hasAny(['studentProfileDefaults']) ||
+            (data.role == 'parent' &&
+             validStudentProfileDefaults(data.studentProfileDefaults))) &&
           data.createdAt == request.time && data.updatedAt == request.time &&
           allInitialProfilesExist(data.linkedStudentProfileIds) &&
           allInitialProfilesMatch(uid, data.linkedStudentProfileIds, data);

@@ -285,13 +285,12 @@ void main() {
   test('parent self profile is linked without creating another account', () {
     final data = parentSelfProfileCreationData(
       input: ParentSelfProfileInput(
-        firstName: 'Parent',
-        lastName: 'Student',
         dateOfBirth: DateTime(1990, 1, 2),
         beltRank: 'Green',
         stickerCurrent: 7,
         stickerRequired: 3,
       ),
+      accountData: const {'firstName': 'Parent', 'lastName': 'Student'},
       parentUid: 'parent-uid',
       locationId: 'cheshire',
       timestamp: 'server-time',

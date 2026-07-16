@@ -81,6 +81,66 @@ void main() {
       expect(fields, isNot(contains('phoneNumber')));
     });
 
+    test('canonical student defaults are parsed', () {
+      final defaults = studentProfileDefaultsFromUserData({
+        'studentProfileDefaults': {
+          'dateOfBirth': Timestamp.fromDate(DateTime(1990, 2, 3)),
+          'beltRank': 'Green',
+          'guardianEmail': ' Contact@Example.com ',
+          'stickerProgress': {
+            'current': 4,
+            'required': 7,
+            'nextRank': 'Green-Blue',
+          },
+        },
+      });
+      expect(defaults!.dateOfBirth, DateTime(1990, 2, 3));
+      expect(defaults.beltRank, 'Green');
+      expect(defaults.guardianEmail, 'contact@example.com');
+      expect(defaults.stickerCurrent, 4);
+      expect(defaults.stickerRequired, 7);
+      expect(defaults.nextRank, 'Green-Blue');
+    });
+
+    test('legacy defaults are read without overriding canonical values', () {
+      final defaults = studentProfileDefaultsFromUserData({
+        'studentProfileDefaults': {
+          'dateOfBirth': DateTime(1991, 4, 5),
+          'beltRank': 'Blue',
+          'stickerProgress': {
+            'current': 2,
+            'required': 8,
+            'nextRank': 'Blue-Red',
+          },
+        },
+        'applicantDateOfBirth': DateTime(1980),
+        'applicantBeltRank': 'White',
+        'guardianEmail': 'legacy@example.com',
+        'stickerProgress': {'current': 99, 'required': 99},
+      });
+      expect(defaults!.dateOfBirth, DateTime(1991, 4, 5));
+      expect(defaults.beltRank, 'Blue');
+      expect(defaults.guardianEmail, 'legacy@example.com');
+      expect(defaults.stickerCurrent, 2);
+      expect(defaults.stickerRequired, 8);
+    });
+
+    test('supported top-level legacy defaults are parsed', () {
+      final defaults = studentProfileDefaultsFromUserData({
+        'birthDate': DateTime(1985, 6, 7),
+        'beltRank': 'Red',
+        'guardianEmail': 'legacy@example.com',
+        'stickerProgress': {
+          'current': 1,
+          'required': 3,
+          'nextRank': 'Red-Black',
+        },
+      });
+      expect(defaults!.dateOfBirth, DateTime(1985, 6, 7));
+      expect(defaults.beltRank, 'Red');
+      expect(defaults.guardianEmail, 'legacy@example.com');
+    });
+
     test('Google provider UID is used and never derived from email', () {
       final google = providerIdentityFromValues(
         firebaseUid: 'firebase-uid',

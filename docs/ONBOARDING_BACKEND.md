@@ -39,6 +39,27 @@ After the batch succeeds, the app shows **Your account is ready**, the academy
 location, created profiles, **Continue to Dashboard**, and **Sign out**. The
 user then has immediate academy access.
 
+### Parent self-profile defaults
+
+When a parent does not create a personal student profile during onboarding,
+the already-collected account-holder birth date and belt are retained in the
+optional `users/{uid}.studentProfileDefaults` map. An optional contact email
+and initialized sticker progress are stored there as well. Account name,
+account email, phone number, and `locationId` remain canonical user fields and
+are not duplicated in the defaults.
+
+These defaults are form data only: they do not grant profile access and are
+not a student profile. When the parent later chooses **Add my student
+profile**, the app reuses the account fields and defaults, asks only for a
+genuinely missing birth date or belt, and atomically creates one self-linked
+profile while appending its ID to the existing user document. Parents who
+create their own profile during onboarding do not receive a duplicate defaults
+map because their self-linked profile is immediately canonical.
+
+Reads also recognize the former top-level birth-date, belt, contact-email, and
+sticker-progress field names for compatibility. Canonical nested defaults take
+priority, and normal reads never rewrite or migrate legacy records.
+
 ## Active-access checks
 
 A student or parent may access academy data only when:

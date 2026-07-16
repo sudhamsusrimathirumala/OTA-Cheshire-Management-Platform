@@ -1,5 +1,23 @@
 enum UserAccountRole { student, parent, admin, superAdmin }
 
+class StudentProfileDefaults {
+  const StudentProfileDefaults({
+    this.dateOfBirth,
+    this.beltRank,
+    this.guardianEmail,
+    this.stickerCurrent = 0,
+    this.stickerRequired = 0,
+    this.nextRank,
+  });
+
+  final DateTime? dateOfBirth;
+  final String? beltRank;
+  final String? guardianEmail;
+  final int stickerCurrent;
+  final int stickerRequired;
+  final String? nextRank;
+}
+
 class UserAccount {
   const UserAccount({
     required this.id,
@@ -15,6 +33,7 @@ class UserAccount {
     this.locationId = '',
     this.selectedStudentProfileId,
     this.googleAccountId,
+    this.studentProfileDefaults,
   });
 
   final String id;
@@ -30,6 +49,7 @@ class UserAccount {
   final String locationId;
   final String? selectedStudentProfileId;
   final String? googleAccountId;
+  final StudentProfileDefaults? studentProfileDefaults;
 
   String get displayName => '$firstName $lastName'.trim();
 
