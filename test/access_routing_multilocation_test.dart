@@ -53,6 +53,20 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.manageProfiles,
+          stage: SessionStage.member,
+        ),
+        isTrue,
+      );
+      expect(
+        isRouteAuthorized(
+          routeName: OtaRoutes.manageProfiles,
+          stage: SessionStage.admin,
+        ),
+        isFalse,
+      );
     });
 
     test('losing active access invalidates protected stacks', () {

@@ -12,6 +12,7 @@ import 'screens/admin/admin_students_screen.dart';
 import 'screens/curriculum_screen.dart';
 import 'screens/events_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/manage_profiles_screen.dart';
 import 'screens/notifications_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/resources_screen.dart';
@@ -112,6 +113,7 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
     OtaRoutes.curriculum => (_) => const CurriculumScreen(),
     OtaRoutes.notifications => (_) => const NotificationsScreen(),
     OtaRoutes.profile => (_) => const ProfileScreen(),
+    OtaRoutes.manageProfiles => (_) => const ManageProfilesScreen(),
     OtaRoutes.login => (_) => const LoginScreen(),
     OtaRoutes.signup => (_) => const SignupScreen(),
     OtaRoutes.adminDashboard => (_) => const AdminDashboardScreen(),

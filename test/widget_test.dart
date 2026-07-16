@@ -25,6 +25,7 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_students_sc
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/events_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/manage_profiles_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/resource_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/resources_screen.dart';
@@ -37,6 +38,7 @@ import 'package:ota_cheshire_management_platform/services/firebase/firebase_admi
 import 'package:ota_cheshire_management_platform/services/firebase/admin_location_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/notification_read_exception.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 import 'package:ota_cheshire_management_platform/services/mock_app_data_service.dart';
@@ -279,7 +281,7 @@ void main() {
     await tester.ensureVisible(find.text('Level 3'));
 
     expect(find.text('Level 3'), findsWidgets);
-    expect(find.textContaining('Next eligible class:'), findsOneWidget);
+    expect(find.textContaining('Next recommended class:'), findsOneWidget);
   });
 
   testWidgets('schedule defaults to Day and keeps Week optional', (
@@ -1672,7 +1674,7 @@ void main() {
     expect(visible.map((resource) => resource.id), ['published']);
   });
 
-  test('dashboard next class never falls back to an ineligible class', () {
+  test('dashboard class recommendation remains advisory', () {
     final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
     final ineligibleClass = mondayClasses.firstWhere(
       (session) => session.className == 'Little Tiger (Age 3-5)',
@@ -1690,7 +1692,7 @@ void main() {
         currentWeekday: DateTime.sunday,
         currentMinutes: 0,
       ),
-      isNull,
+      same(ineligibleClass),
     );
     expect(
       nextEligibleClassFromSchedule(
@@ -2637,6 +2639,30 @@ void main() {
     expect(find.text('0 unread announcements'), findsOneWidget);
   });
 
+  testWidgets('failed notification write restores optimistic unread state', (
+    tester,
+  ) async {
+    final service = _NotificationReadTestService(failWrites: true);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+
+    final firstUnread = service.notifications.firstWhere(
+      (item) => !item.isRead,
+    );
+    final initialUnread = service.notifications
+        .where((item) => !item.isRead)
+        .length;
+    await tester.tap(find.text(firstUnread.title));
+    await tester.pumpAndSettle();
+
+    expect(
+      service.notifications.where((item) => !item.isRead).length,
+      initialUnread,
+    );
+    expect(find.textContaining('not available yet'), findsOneWidget);
+  });
+
   testWidgets('profile screen displays student and account settings', (
     tester,
   ) async {
@@ -2661,6 +2687,44 @@ void main() {
 
     expect(find.text('Settings & Actions'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
+  });
+
+  testWidgets('profile management opens as a dedicated full screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const ProfileScreen(managementAvailableOverride: true),
+        routes: {OtaRoutes.manageProfiles: (_) => const ManageProfilesScreen()},
+      ),
+    );
+
+    final action = find.text('Manage Account & Student Profiles');
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+    await tester.tap(action);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ManageProfilesScreen), findsOneWidget);
+    expect(find.text('Account Information'), findsOneWidget);
+    expect(find.text('Student Profiles'), findsOneWidget);
+    expect(find.text('Selected'), findsOneWidget);
+  });
+
+  testWidgets('profile management fits a narrow phone and lists profiles', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: ManageProfilesScreen()));
+    expect(find.text('Account Information'), findsOneWidget);
+    for (final profile in appDataService.linkedStudentProfiles) {
+      expect(find.text(profile.name), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
   });
 
   test('event writes use only General Resource registration fields', () {
@@ -2923,7 +2987,7 @@ class _CurriculumTestService extends MockAppDataService {
 }
 
 class _NotificationReadTestService extends MockAppDataService {
-  _NotificationReadTestService()
+  _NotificationReadTestService({this.failWrites = false})
     : _notifications = [
         for (final item in const MockAppDataService().notifications) item,
       ];
@@ -2931,6 +2995,7 @@ class _NotificationReadTestService extends MockAppDataService {
   List<NotificationItem> _notifications;
   final ChangeNotifier _notifier = ChangeNotifier();
   final Set<String> markedIds = {};
+  final bool failWrites;
   int markAllCount = 0;
 
   @override
@@ -2945,12 +3010,22 @@ class _NotificationReadTestService extends MockAppDataService {
 
   @override
   Future<void> markNotificationRead(String announcementId) async {
+    final previous = _notifications;
     markedIds.add(announcementId);
     _notifications = [
       for (final item in _notifications)
         _notificationWithRead(item, item.id == announcementId || item.isRead),
     ];
     _notifier.notifyListeners();
+    if (failWrites) {
+      _notifications = previous;
+      _notifier.notifyListeners();
+      throw const NotificationReadException(
+        NotificationReadError.permissionDenied,
+        'permission-denied',
+        'Notification read state is not available yet. Please try again later.',
+      );
+    }
   }
 
   @override

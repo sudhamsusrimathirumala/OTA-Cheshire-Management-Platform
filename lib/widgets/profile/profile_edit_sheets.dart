@@ -6,6 +6,84 @@ import '../../models/user_account.dart';
 import '../../services/firebase/profile_service.dart';
 import '../../theme/ota_colors.dart';
 
+class AccountEditScreen extends StatelessWidget {
+  const AccountEditScreen({
+    required this.account,
+    required this.service,
+    super.key,
+  });
+
+  final UserAccount account;
+  final FirestoreProfileService service;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: OtaColors.blush,
+    appBar: AppBar(title: const Text('Edit account information')),
+    body: _AccountEditSheet(account: account, service: service),
+  );
+}
+
+class StudentProfileEditScreen extends StatelessWidget {
+  const StudentProfileEditScreen({
+    required this.student,
+    required this.service,
+    required this.guardianEmailRequired,
+    super.key,
+  });
+
+  final StudentProfile student;
+  final FirestoreProfileService service;
+  final bool guardianEmailRequired;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: OtaColors.blush,
+    appBar: AppBar(title: const Text('Edit student profile')),
+    body: _StudentEditSheet(
+      student: student,
+      service: service,
+      guardianEmailRequired: guardianEmailRequired,
+    ),
+  );
+}
+
+class AddChildScreen extends StatelessWidget {
+  const AddChildScreen({
+    required this.account,
+    required this.service,
+    super.key,
+  });
+
+  final UserAccount account;
+  final FirestoreProfileService service;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: OtaColors.blush,
+    appBar: AppBar(title: const Text('Add child')),
+    body: _AddChildSheet(account: account, service: service),
+  );
+}
+
+class AddParentStudentProfileScreen extends StatelessWidget {
+  const AddParentStudentProfileScreen({
+    required this.account,
+    required this.service,
+    super.key,
+  });
+
+  final UserAccount account;
+  final FirestoreProfileService service;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: OtaColors.blush,
+    appBar: AppBar(title: const Text('Add my student profile')),
+    body: _ParentSelfProfileForm(account: account, service: service),
+  );
+}
+
 Future<bool> showAccountEditSheet(
   BuildContext context, {
   required UserAccount account,
@@ -411,6 +489,157 @@ class _AddChildSheetState extends State<_AddChildSheet> {
               border: OutlineInputBorder(),
             ),
             validator: (value) => _emailValidator(value, required: true),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _ParentSelfProfileForm extends StatefulWidget {
+  const _ParentSelfProfileForm({required this.account, required this.service});
+
+  final UserAccount account;
+  final FirestoreProfileService service;
+
+  @override
+  State<_ParentSelfProfileForm> createState() => _ParentSelfProfileFormState();
+}
+
+class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _firstName;
+  late final TextEditingController _lastName;
+  final _guardianEmail = TextEditingController();
+  final _current = TextEditingController(text: '0');
+  final _required = TextEditingController(text: '0');
+  DateTime? _dateOfBirth;
+  String _belt = curriculumBeltOrder.first;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _firstName = TextEditingController(text: widget.account.firstName);
+    _lastName = TextEditingController(text: widget.account.lastName);
+  }
+
+  @override
+  void dispose() {
+    _firstName.dispose();
+    _lastName.dispose();
+    _guardianEmail.dispose();
+    _current.dispose();
+    _required.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _dateOfBirth ?? DateTime(1990),
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now(),
+    );
+    if (date != null && mounted) setState(() => _dateOfBirth = date);
+  }
+
+  Future<void> _save() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_dateOfBirth == null) {
+      setState(() => _error = 'Select your date of birth.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.service.addParentSelfProfile(
+        ParentSelfProfileInput(
+          firstName: _firstName.text,
+          lastName: _lastName.text,
+          dateOfBirth: _dateOfBirth!,
+          beltRank: _belt,
+          guardianEmail: _guardianEmail.text,
+          stickerCurrent: int.parse(_current.text),
+          stickerRequired: int.parse(_required.text),
+        ),
+      );
+      if (mounted) Navigator.pop(context, true);
+    } on ProfileServiceException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Unable to add your student profile.');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _SheetFrame(
+    title: 'Student profile information',
+    saving: _saving,
+    error: _error,
+    onSave: _save,
+    child: Form(
+      key: _formKey,
+      child: Column(
+        children: [
+          _requiredField(_firstName, 'First name'),
+          _requiredField(_lastName, 'Last name'),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Date of birth'),
+            subtitle: Text(
+              _dateOfBirth == null ? 'Required' : _formatDate(_dateOfBirth!),
+            ),
+            trailing: const Icon(Icons.calendar_month_rounded),
+            onTap: _pickDate,
+          ),
+          DropdownButtonFormField<String>(
+            initialValue: _belt,
+            decoration: const InputDecoration(
+              labelText: 'Belt rank',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              for (final belt in curriculumBeltOrder)
+                DropdownMenuItem(value: belt, child: Text(belt)),
+            ],
+            onChanged: _saving
+                ? null
+                : (value) {
+                    if (value != null) setState(() => _belt = value);
+                  },
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _guardianEmail,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Guardian/contact email (optional)',
+              helperText:
+                  'Contact information only; this does not grant access.',
+              border: OutlineInputBorder(),
+            ),
+            validator: (value) => _emailValidator(value, required: false),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _stickerField(_current, 'Current stickers')),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _stickerField(
+                  _required,
+                  'Stickers required for next rank',
+                ),
+              ),
+            ],
           ),
         ],
       ),

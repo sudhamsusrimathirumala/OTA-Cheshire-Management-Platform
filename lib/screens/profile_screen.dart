@@ -13,10 +13,11 @@ import '../services/firebase/profile_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
-import '../widgets/profile/profile_edit_sheets.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({this.managementAvailableOverride, super.key});
+
+  final bool? managementAvailableOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -53,6 +54,8 @@ class ProfileScreen extends StatelessWidget {
                             _SettingsActionsSection(
                               student: student,
                               account: account,
+                              managementAvailableOverride:
+                                  managementAvailableOverride,
                             ),
                           ],
                         ),
@@ -291,13 +294,19 @@ class _AcademySection extends StatelessWidget {
 }
 
 class _SettingsActionsSection extends StatelessWidget {
-  const _SettingsActionsSection({required this.student, required this.account});
+  const _SettingsActionsSection({
+    required this.student,
+    required this.account,
+    required this.managementAvailableOverride,
+  });
   final StudentProfile student;
   final UserAccount account;
+  final bool? managementAvailableOverride;
 
   @override
   Widget build(BuildContext context) {
     final hasFirebase = Firebase.apps.isNotEmpty;
+    final managementAvailable = managementAvailableOverride ?? hasFirebase;
     final profileCount = hasFirebase
         ? firebaseSessionController.profiles.length
         : appDataService.linkedStudentProfiles.length;
@@ -306,30 +315,11 @@ class _SettingsActionsSection extends StatelessWidget {
       children: [
         ProfileActionRow(
           icon: Icons.manage_accounts_rounded,
-          label: 'Edit Account',
-          onTap: hasFirebase ? () => _editAccount(context) : null,
+          label: 'Manage Account & Student Profiles',
+          onTap: managementAvailable
+              ? () => Navigator.of(context).pushNamed(OtaRoutes.manageProfiles)
+              : null,
         ),
-        ProfileActionRow(
-          icon: Icons.edit_rounded,
-          label: 'Edit Student Profile',
-          onTap: hasFirebase ? () => _editStudent(context) : null,
-        ),
-        if (account.role == UserAccountRole.parent)
-          ProfileActionRow(
-            icon: Icons.person_add_alt_1_rounded,
-            label: 'Add Child',
-            value:
-                '${account.linkedStudentProfileIds.length}/${FirestoreProfileService.maximumAdditionalStudents + 1}',
-            onTap: hasFirebase ? () => _addChild(context) : null,
-          ),
-        if (account.role == UserAccountRole.parent &&
-            student.linkedUserId != account.id)
-          ProfileActionRow(
-            icon: Icons.person_remove_alt_1_rounded,
-            label: 'Remove from account',
-            isDestructive: true,
-            onTap: hasFirebase ? () => _removeChild(context) : null,
-          ),
         ProfileActionRow(
           icon: Icons.switch_account_rounded,
           label: 'Switch Profile',
@@ -422,80 +412,6 @@ class _SettingsActionsSection extends StatelessWidget {
       Navigator.of(context).pop();
       _showError(context, 'Unable to switch profiles. Please try again.');
     }
-  }
-
-  Future<void> _editAccount(BuildContext context) async {
-    final changed = await showAccountEditSheet(
-      context,
-      account: account,
-      service: firebaseSessionController.profileService,
-    );
-    if (changed && context.mounted) _showSuccess(context, 'Account updated.');
-  }
-
-  Future<void> _editStudent(BuildContext context) async {
-    final changed = await showStudentEditSheet(
-      context,
-      student: student,
-      service: firebaseSessionController.profileService,
-      guardianEmailRequired: student.linkedUserId == null,
-    );
-    if (changed && context.mounted) {
-      _showSuccess(context, 'Student profile updated.');
-    }
-  }
-
-  Future<void> _addChild(BuildContext context) async {
-    final added = await showAddChildSheet(
-      context,
-      account: account,
-      service: firebaseSessionController.profileService,
-    );
-    if (added && context.mounted) {
-      _showSuccess(context, 'Child added to your account.');
-    }
-  }
-
-  Future<void> _removeChild(BuildContext context) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove ${student.name} from account?'),
-        content: const Text(
-          'This student will no longer appear in the parent account. Academy history will be retained and is not permanently deleted.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove from account'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    try {
-      await firebaseSessionController.profileService.removeChild(student.id);
-      if (!context.mounted) return;
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(OtaRoutes.dashboard, (_) => false);
-    } on ProfileServiceException catch (error) {
-      if (context.mounted) _showError(context, error.message);
-    } catch (_) {
-      if (context.mounted) {
-        _showError(context, 'Unable to remove this child from the account.');
-      }
-    }
-  }
-
-  void _showSuccess(BuildContext context, String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _showError(BuildContext context, String message) {

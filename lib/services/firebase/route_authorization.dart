@@ -10,6 +10,7 @@ RouteAccess accessForRoute(String? routeName) {
     OtaRoutes.login ||
     OtaRoutes.signup => RouteAccess.public,
     OtaRoutes.profile => RouteAccess.authenticated,
+    OtaRoutes.manageProfiles => RouteAccess.student,
     OtaRoutes.dashboard ||
     OtaRoutes.schedule ||
     OtaRoutes.events ||
