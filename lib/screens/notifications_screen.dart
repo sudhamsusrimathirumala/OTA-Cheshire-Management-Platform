@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/notification_item.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/firebase/notification_read_exception.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/notifications/notification_card.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -114,19 +115,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _openNotification(NotificationItem notification) async {
-    if (!notification.isRead) {
-      try {
-        await appDataService.markNotificationRead(notification.id);
-      } catch (_) {
-        if (mounted) _showReadError();
-      }
-    }
-    if (!mounted) return;
-    await Navigator.of(context).push(
+    final detail = Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => NotificationDetailScreen(notification: notification),
       ),
     );
+    if (!notification.isRead) {
+      try {
+        await appDataService.markNotificationRead(notification.id);
+      } on NotificationReadException catch (error) {
+        if (mounted) _showReadError(error.message);
+      } catch (_) {
+        if (mounted) _showReadError();
+      }
+    }
+    await detail;
   }
 
   Future<void> _markAllRead() async {
@@ -134,6 +137,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     setState(() => _markingAll = true);
     try {
       await appDataService.markAllNotificationsRead();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All visible notifications marked read.'),
+          ),
+        );
+      }
+    } on NotificationReadException catch (error) {
+      if (mounted) _showReadError(error.message);
     } catch (_) {
       if (mounted) _showReadError();
     } finally {
@@ -141,12 +153,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  void _showReadError() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Unable to update notification read state. Try again.'),
-      ),
-    );
+  void _showReadError([
+    String message = 'Unable to update notification read state. Try again.',
+  ]) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 

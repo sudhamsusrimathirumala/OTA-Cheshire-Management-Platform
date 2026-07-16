@@ -16,6 +16,7 @@ import '../../models/user_account.dart';
 import '../debug_view_controller.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
+import 'notification_read_exception.dart';
 import 'admin_location_controller.dart';
 import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
@@ -79,6 +80,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _superAdminContentInitialized = false;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
   Set<String> _notificationReadIds = const <String>{};
+  String? _notificationReadsUid;
+  bool _markAllNotificationsInProgress = false;
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
   bool _isAnnouncementsLoading = true;
@@ -207,6 +210,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _schedule = const <int, List<ClassSession>>{};
     _notifications = const <NotificationItem>[];
     _notificationReadIds = const <String>{};
+    _notificationReadsUid = null;
     _adminAnnouncements = const <AcademyAnnouncement>[];
     _events = const <AcademyEvent>[];
     _resources = const <AcademyResource>[];
@@ -641,6 +645,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _listenToNotificationReads(FirebaseFirestore firestore, String uid) {
+    _notificationReadsUid = uid;
     _notificationReadsSubscription = firestore
         .collection(FirestoreCollections.users)
         .doc(uid)
@@ -900,49 +905,121 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   Future<void> markNotificationRead(String announcementId) async {
-    if (_developmentViewActive || announcementId.trim().isEmpty) return;
-    final uid = firebaseSessionController.authUser?.uid;
-    final firestore = _firestore;
-    if (uid == null || firestore == null) {
-      throw StateError('Notification read state is unavailable.');
+    if (_developmentViewActive) return;
+    final id = announcementId.trim();
+    if (id.isEmpty) {
+      throw const NotificationReadException(
+        NotificationReadError.invalidArgument,
+        'invalid-argument',
+        'This notification could not be updated. Please refresh and try again.',
+      );
     }
-    await firestore
-        .collection(FirestoreCollections.users)
-        .doc(uid)
-        .collection('notificationReads')
-        .doc(announcementId)
-        .set({'readAt': FieldValue.serverTimestamp()});
+    final (uid, firestore) = _notificationWriteContext();
+    final previous = _notificationReadIds;
+    _applyNotificationReadIds({...previous, id});
+    try {
+      await firestore
+          .collection(FirestoreCollections.users)
+          .doc(uid)
+          .collection('notificationReads')
+          .doc(id)
+          .set({'readAt': FieldValue.serverTimestamp()});
+    } on FirebaseException catch (error) {
+      _applyNotificationReadIds(previous);
+      _debugNotificationWriteError('mark-one', error, true);
+      throw classifyNotificationReadException(error);
+    } catch (_) {
+      _applyNotificationReadIds(previous);
+      rethrow;
+    }
   }
 
   @override
   Future<void> markAllNotificationsRead() async {
     if (_developmentViewActive) return;
+    if (_markAllNotificationsInProgress) return;
     final unreadIds = _notifications
         .where((item) => !item.isRead)
         .map((item) => item.id)
         .toList(growable: false);
     if (unreadIds.isEmpty) return;
-    final uid = firebaseSessionController.authUser?.uid;
-    final firestore = _firestore;
-    if (uid == null || firestore == null) {
-      throw StateError('Notification read state is unavailable.');
-    }
-    const batchSize = 450;
-    for (var start = 0; start < unreadIds.length; start += batchSize) {
-      final end = (start + batchSize).clamp(0, unreadIds.length);
-      final batch = firestore.batch();
-      for (final id in unreadIds.sublist(start, end)) {
-        batch.set(
-          firestore
-              .collection(FirestoreCollections.users)
-              .doc(uid)
-              .collection('notificationReads')
-              .doc(id),
-          {'readAt': FieldValue.serverTimestamp()},
-        );
+    final (uid, firestore) = _notificationWriteContext();
+    final previous = _notificationReadIds;
+    _markAllNotificationsInProgress = true;
+    _applyNotificationReadIds({...previous, ...unreadIds});
+    try {
+      const batchSize = 450;
+      for (var start = 0; start < unreadIds.length; start += batchSize) {
+        final end = (start + batchSize).clamp(0, unreadIds.length);
+        final batch = firestore.batch();
+        for (final id in unreadIds.sublist(start, end)) {
+          batch.set(
+            firestore
+                .collection(FirestoreCollections.users)
+                .doc(uid)
+                .collection('notificationReads')
+                .doc(id),
+            {'readAt': FieldValue.serverTimestamp()},
+          );
+        }
+        await batch.commit();
       }
-      await batch.commit();
+    } on FirebaseException catch (error) {
+      _applyNotificationReadIds(previous);
+      _debugNotificationWriteError('mark-all', error, true);
+      throw classifyNotificationReadException(error);
+    } catch (_) {
+      _applyNotificationReadIds(previous);
+      rethrow;
+    } finally {
+      _markAllNotificationsInProgress = false;
     }
+  }
+
+  (String, FirebaseFirestore) _notificationWriteContext() {
+    final session = firebaseSessionController;
+    final uid = session.authUser?.uid;
+    final account = session.account;
+    final firestore = _firestore;
+    if (uid == null ||
+        firestore == null ||
+        session.stage != SessionStage.member ||
+        account == null ||
+        account.id != uid ||
+        !account.isActive ||
+        _notificationReadsUid != uid) {
+      throw const NotificationReadException(
+        NotificationReadError.unauthenticated,
+        'unauthenticated',
+        'Please sign in again to update notification read state.',
+      );
+    }
+    return (uid, firestore);
+  }
+
+  void _applyNotificationReadIds(Set<String> ids) {
+    _notificationReadIds = Set<String>.unmodifiable(ids);
+    final announcements = _latestAnnouncementsSnapshot;
+    if (announcements != null) {
+      _notifications = _announcementsFromSnapshot(announcements);
+    }
+    notifyListeners();
+  }
+
+  void _debugNotificationWriteError(
+    String operation,
+    FirebaseException error,
+    bool hasAuthenticatedUid,
+  ) {
+    if (!kDebugMode) return;
+    final projectId = Firebase.apps.isEmpty
+        ? 'unavailable'
+        : Firebase.app().options.projectId;
+    debugPrint(
+      'notification-read operation=$operation code=${error.code} '
+      'project=$projectId authenticated=$hasAuthenticatedUid '
+      'path=users/{uid}/notificationReads/{announcementId}',
+    );
   }
 
   @override
@@ -1019,9 +1096,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       className: className,
       classTypeId:
           _stringValue(data['classTypeId']) ?? _classTypeIdFor(className),
-      bulkGroupId:
-          _stringValue(data['bulkGroupId']) ??
-          '${_stringValue(data['classTypeId']) ?? _classTypeIdFor(className)}-standard',
+      bulkGroupId: _stringValue(data['bulkGroupId']) ?? '',
       locationId: _stringValue(data['locationId']) ?? '',
       startTime: startTime,
       endTime: endTime,
