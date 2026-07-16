@@ -259,11 +259,14 @@ publication history are preserved on edits.
 
 ## Relationships and Integrity
 
-- `users.linkedStudentProfileIds` and student
-  `guardianUserIds`/`linkedUserId`
-  form bidirectional account/profile relationships.
-- A student/parent account and every linked profile use one matching
-  `locationId`.
+- `users.linkedStudentProfileIds` is the authorization boundary for basic
+  student-profile edits and preferred-class changes. The account and profile
+  must also be active and share one `locationId`.
+- Student `guardianUserIds` and `linkedUserId` retain household relationship
+  meaning but do not independently grant or deny basic linked-profile edit
+  access. This role-neutral rule avoids reintroducing approval-style barriers
+  through legacy relationship metadata or selected-profile state.
+- An account and every profile it may edit use one matching `locationId`.
 - Event resource IDs must resolve to same-location General Resources. The
   primary registration resource must be included in `linkedResourceIds`.
 - Every `locationId` must resolve to `locations`.

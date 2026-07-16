@@ -217,12 +217,23 @@ older students attending independently can manage their own account. The
 review flow also added substantial UI, routing, Firestore Rules,
 administrative, and test complexity without enough benefit for this release.
 
-The active design retains Firebase Authentication, role restrictions,
-`isActive` account/profile controls, location isolation, and Firestore Rules.
-The earlier workflow may be reconsidered if real expansion or identity-review
-needs justify it. This workflow is retained here as project design history. It
-is not part of the current runtime, Firestore schema, security rules, or user
-experience.
+The active design retains Firebase Authentication, `isActive` account/profile
+controls, location isolation, linked-profile authorization, administrative
+role restrictions, and Firestore Rules. Basic student-profile edits and
+preferred-class changes no longer depend on account role, guardian metadata,
+linked-user metadata, or which linked profile is currently selected. An active
+authenticated account may update an active same-location profile only when its
+ID is present in that account's `linkedStudentProfileIds`.
+
+Originally, basic profile authorization layered parent/student roles,
+`guardianUserIds`, `linkedUserId`, and selected-profile state on top of the
+account/profile link. The current design treats the explicit linked-profile ID
+as the access boundary and keeps ownership, activation, location, and protected
+fields enforced separately. This follows the same simplification used when the
+approval process was removed: barriers that did not improve the release's
+security boundary added user friction and unnecessary Rules, client, and test
+complexity. The earlier workflows may be reconsidered if real expansion or
+identity-review needs justify them; they are not part of the current runtime.
 
 ## Testing and Validation
 

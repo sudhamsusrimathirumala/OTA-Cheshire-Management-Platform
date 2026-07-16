@@ -170,6 +170,32 @@ verification needs emerge. This workflow is retained here as project design
 history. It is not part of the current runtime, Firestore schema, security
 rules, or user experience.
 
+### Linked-profile authorization simplification
+
+The removal of approval review established a broader design direction: avoid
+authorization barriers that duplicate an already explicit access boundary
+without adding meaningful protection. Basic student-profile editing and
+preferred-class updates now follow that direction.
+
+Previously, a linked profile could still be blocked by parent/student role,
+`guardianUserIds`, `linkedUserId`, or selected-profile checks. Those fields
+describe household relationships and current UI context, but they are not the
+basic edit-access boundary. Legacy or incomplete relationship metadata could
+therefore deny a legitimate same-account edit.
+
+Now, access is role-neutral. Firebase Authentication must identify an existing
+active account; the active profile ID must appear in
+`linkedStudentProfileIds`; and the account and profile must have the same
+`locationId`. Profiles not linked to the account remain inaccessible. Normal
+edits still restrict the exact fields that may change, and preferred-class
+writes remain limited to the preference list and server timestamp. Class
+existence, active state, location, and recurring group are still validated.
+
+This removes redundant barriers in the same way the approval process was
+removed: it simplifies the application and Rules while retaining the concrete
+account-to-profile link, activation, location isolation, and protected-field
+boundaries.
+
 ## Development-Only Tools
 
 Database utilities are isolated from `lib/main.dart` and normal navigation.

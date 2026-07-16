@@ -376,4 +376,61 @@ void main() {
       throwsA(isA<ProfileServiceException>()),
     );
   });
+
+  test('active same-location linked profile access is role neutral', () {
+    final user = <String, dynamic>{
+      'role': 'legacy-role',
+      'isActive': true,
+      'locationId': 'cheshire',
+      'linkedStudentProfileIds': <String>['profile-1', 'profile-2'],
+      'selectedStudentProfileId': 'profile-1',
+    };
+    final profile = <String, dynamic>{
+      'isActive': true,
+      'locationId': 'cheshire',
+      'linkedUserId': 'unrelated-legacy-user',
+      'guardianUserIds': <String>['unrelated-legacy-guardian'],
+    };
+
+    expect(
+      accountManagesStoredProfile(
+        user: user,
+        profileId: 'profile-2',
+        profile: profile,
+      ),
+      isTrue,
+    );
+    expect(
+      accountManagesStoredProfile(
+        user: user,
+        profileId: 'unlinked-profile',
+        profile: profile,
+      ),
+      isFalse,
+    );
+    expect(
+      accountManagesStoredProfile(
+        user: {...user, 'locationId': 'other'},
+        profileId: 'profile-2',
+        profile: profile,
+      ),
+      isFalse,
+    );
+    expect(
+      accountManagesStoredProfile(
+        user: {...user, 'isActive': false},
+        profileId: 'profile-2',
+        profile: profile,
+      ),
+      isFalse,
+    );
+    expect(
+      accountManagesStoredProfile(
+        user: user,
+        profileId: 'profile-2',
+        profile: {...profile, 'isActive': false},
+      ),
+      isFalse,
+    );
+  });
 }

@@ -64,26 +64,15 @@ service cloud.firestore {
     }
 
     function managesProfile(profileId) {
-      return hasUser() &&
-          currentUser().role in ['student', 'parent'] &&
+      return activeUser() &&
           profileId in currentUser().linkedStudentProfileIds;
     }
 
     function userManagesProfile(profileId, profileData) {
       return activeUser() &&
-          currentUser().role in ['student', 'parent'] &&
           profileId in currentUser().linkedStudentProfileIds &&
           profileData.isActive == true &&
-          profileData.locationId == currentUser().locationId &&
-          profileData.guardianUserIds is list &&
-          ((currentUser().role == 'parent' &&
-            ((profileData.get('linkedUserId', '') == '' &&
-              request.auth.uid in profileData.guardianUserIds) ||
-             (profileData.get('linkedUserId', '') == request.auth.uid &&
-              profileData.guardianUserIds.size() == 0))) ||
-           (currentUser().role == 'student' &&
-            profileData.get('linkedUserId', '') == request.auth.uid &&
-            profileData.guardianUserIds.size() == 0));
+          profileData.locationId == currentUser().locationId;
     }
 
     function canonicalBelt(belt) {
@@ -365,7 +354,6 @@ service cloud.firestore {
       return userManagesProfile(profileId, resource.data) &&
           resource.data.isActive == true &&
           resource.data.locationId == currentUser().locationId &&
-          currentUser().selectedStudentProfileId == profileId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'preferredClassGroupIds', 'updatedAt'
           ]) &&

@@ -235,11 +235,20 @@ test('managed profile edits allow canonical fields and reject escalation', async
   }));
 });
 
-test('parent edits selected and nonselected linked profiles through exact relationships', async () => {
+test('linked profile edits ignore selection and legacy relationship fields', async () => {
   await seedAccount({
     uid: 'parent',
     profileIds: ['selected-child', 'other-child'],
     selectedProfileId: 'selected-child',
+  });
+  await env.withSecurityRulesDisabled(async (context) => {
+    const seedDb = context.firestore();
+    await updateDoc(doc(seedDb, 'studentProfiles', 'selected-child'), {
+      guardianUserIds: [], linkedUserId: 'legacy-linked-user',
+    });
+    await updateDoc(doc(seedDb, 'studentProfiles', 'other-child'), {
+      guardianUserIds: ['legacy-guardian'], linkedUserId: 'legacy-linked-user',
+    });
   });
   const db = auth('parent');
   await assertSucceeds(updateManagedProfile(db, 'selected-child'));
@@ -258,15 +267,23 @@ test('parent edits selected and nonselected linked profiles through exact relati
   });
 });
 
-test('parent edits a linked self profile but invalid management is denied', async () => {
-  await seedAccount({uid: 'parent-self', selfManaged: true});
+test('student edits linked profile while invalid linked access is denied', async () => {
+  await seedAccount({uid: 'student-account', role: 'student'});
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'student-account-profile'),
+      {linkedUserId: 'legacy-user', guardianUserIds: ['legacy-guardian']},
+    );
+  });
   await assertSucceeds(updateManagedProfile(
-    auth('parent-self'), 'parent-self-profile', {guardianEmail: 'self@example.com'},
+    auth('student-account'), 'student-account-profile',
+    {guardianEmail: 'student@example.com'},
   ));
 
   await seedAccount({uid: 'other-parent'});
   await assertFails(updateManagedProfile(
-    auth('other-parent'), 'parent-self-profile', {guardianEmail: 'other@example.com'},
+    auth('other-parent'), 'student-account-profile',
+    {guardianEmail: 'other@example.com'},
   ));
 
   await seedAccount({uid: 'wrong-location-edit', profileLocationId: 'other'});
@@ -277,8 +294,14 @@ test('parent edits a linked self profile but invalid management is denied', asyn
   await assertFails(updateManagedProfile(
     auth('inactive-edit'), 'inactive-edit-profile',
   ));
+  await seedAccount({uid: 'inactive-account-edit', isActive: false});
+  await assertFails(updateManagedProfile(
+    auth('inactive-account-edit'), 'inactive-account-edit-profile',
+  ));
 
-  const selfRef = doc(auth('parent-self'), 'studentProfiles', 'parent-self-profile');
+  const selfRef = doc(
+    auth('student-account'), 'studentProfiles', 'student-account-profile',
+  );
   await assertFails(updateDoc(selfRef, {
     linkedUserId: 'other-parent', updatedAt: serverTimestamp(),
   }));
@@ -356,7 +379,7 @@ test('preference-only updates accept legacy profile data and reject other change
   ));
 });
 
-test('parent preference updates require the selected exact profile relationship', async () => {
+test('linked profile preference updates do not require current selection', async () => {
   await seedAccount({
     uid: 'family',
     profileIds: ['selected-child', 'nonselected-child'],
@@ -370,11 +393,17 @@ test('parent preference updates require the selected exact profile relationship'
     db, 'selected-child', 'teen-adult-standard',
   ));
   await assertSucceeds(updatePreferredClass(db, 'selected-child', null));
-  await assertFails(updatePreferredClass(
+  await assertSucceeds(updatePreferredClass(
     db, 'nonselected-child', 'level-2-standard',
   ));
 
   await seedAccount({uid: 'family-self', selfManaged: true});
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'family-self-profile'),
+      {linkedUserId: 'legacy-user', guardianUserIds: ['legacy-guardian']},
+    );
+  });
   await assertSucceeds(updatePreferredClass(
     auth('family-self'), 'family-self-profile', 'level-3-standard',
   ));

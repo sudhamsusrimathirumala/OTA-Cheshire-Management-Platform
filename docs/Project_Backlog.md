@@ -51,7 +51,7 @@ cleanup and schema-update work is not listed as active work.
 
 ### Student Management
 
-- [x] Add validated parent/self-managed student profile editing.
+- [x] Add role-neutral active same-location linked-profile editing.
 - [x] Add parent child-profile creation and retained-history removal.
 - [ ] Define a fuller belt progression and promotion-history workflow.
 
