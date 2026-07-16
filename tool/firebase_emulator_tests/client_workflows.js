@@ -60,3 +60,18 @@ export async function selectProfile(db, uid, profileId) {
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function markNotificationRead(db, uid, announcementId) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'users', uid, 'notificationReads', announcementId), {
+    readAt: serverTimestamp(),
+  });
+  await batch.commit();
+}
+
+export async function updatePreferredClass(db, profileId, bulkGroupId) {
+  await updateDoc(doc(db, 'studentProfiles', profileId), {
+    preferredClassGroupIds: bulkGroupId ? [bulkGroupId] : [],
+    updatedAt: serverTimestamp(),
+  });
+}

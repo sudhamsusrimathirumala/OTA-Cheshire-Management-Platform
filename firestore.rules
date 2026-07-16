@@ -317,7 +317,7 @@ service cloud.firestore {
       return userManagesProfile(profileId, resource.data) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'firstName', 'lastName', 'dateOfBirth', 'beltRank',
-            'guardianEmail', 'preferredClassGroupIds', 'stickerProgress',
+            'guardianEmail', 'stickerProgress',
             'updatedAt'
           ]) &&
           request.resource.data.firstName is string &&
@@ -329,6 +329,18 @@ service cloud.firestore {
           validGuardianEmail(request.resource.data) &&
           validPreferredClasses(request.resource.data) &&
           validStickerProgress(request.resource.data) &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validPreferredClassUpdate(profileId) {
+      return userManagesProfile(profileId, resource.data) &&
+          resource.data.isActive == true &&
+          resource.data.locationId == currentUser().locationId &&
+          currentUser().selectedStudentProfileId == profileId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'preferredClassGroupIds', 'updatedAt'
+          ]) &&
+          validPreferredClasses(request.resource.data) &&
           request.resource.data.updatedAt == request.time;
     }
 
@@ -431,6 +443,100 @@ service cloud.firestore {
           data.createdAt == request.time && data.updatedAt == request.time;
     }
 
+    function activeLinkedSelfProfile(profileId) {
+      return exists(profilePath(profileId)) &&
+          get(profilePath(profileId)).data.isActive == true &&
+          get(profilePath(profileId)).data.get('linkedUserId', '') ==
+              request.auth.uid;
+    }
+
+    function hasActiveLinkedSelfProfile(ids) {
+      return activeLinkedSelfProfile(ids[0]) ||
+          (ids.size() > 1 && activeLinkedSelfProfile(ids[1])) ||
+          (ids.size() > 2 && activeLinkedSelfProfile(ids[2])) ||
+          (ids.size() > 3 && activeLinkedSelfProfile(ids[3])) ||
+          (ids.size() > 4 && activeLinkedSelfProfile(ids[4])) ||
+          (ids.size() > 5 && activeLinkedSelfProfile(ids[5])) ||
+          (ids.size() > 6 && activeLinkedSelfProfile(ids[6])) ||
+          (ids.size() > 7 && activeLinkedSelfProfile(ids[7])) ||
+          (ids.size() > 8 && activeLinkedSelfProfile(ids[8])) ||
+          (ids.size() > 9 && activeLinkedSelfProfile(ids[9])) ||
+          (ids.size() > 10 && activeLinkedSelfProfile(ids[10]));
+    }
+
+    function validParentSelfProfileCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds) &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianUserIds', 'linkedUserId', 'preferredClassGroupIds',
+            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
+            'createdAt', 'updatedAt'
+          ]) &&
+          data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
+          validGuardianEmail(data) &&
+          data.guardianUserIds.size() == 0 &&
+          data.linkedUserId == request.auth.uid &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.isActive == true &&
+          data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
+    function validParentManagedProfileCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      let selfProfile = data.get('linkedUserId', '') == request.auth.uid;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          (!selfProfile ||
+           !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds)) &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianUserIds', 'preferredClassGroupIds', 'stickerProgress',
+            'promotionHistory', 'testingNotes', 'isActive', 'createdAt',
+            'updatedAt'
+          ]) &&
+          data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
+          validGuardianEmail(data) &&
+          data.guardianUserIds == (selfProfile ? [] : [request.auth.uid]) &&
+          (selfProfile || !data.keys().hasAny(['linkedUserId'])) &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          (selfProfile ||
+           (data.stickerProgress.current == 0 &&
+            data.stickerProgress.required == 0)) &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.isActive == true &&
+          data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
     function validParentChildDeactivation(profileId) {
       let afterUser = getAfter(userPath(request.auth.uid)).data;
       return activeUser() && currentUser().role == 'parent' &&
@@ -491,8 +597,8 @@ service cloud.firestore {
             resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
           ((request.auth.uid == uid &&
-            (validOwnContactUpdate() || validOwnAccountUpdate() ||
-             validParentFamilyUpdate())) ||
+            (validParentFamilyUpdate() || validOwnContactUpdate() ||
+             validOwnAccountUpdate())) ||
            validAdminAccountActivation());
       allow delete: if superAdmin();
 
@@ -507,8 +613,8 @@ service cloud.firestore {
 
     match /studentProfiles/{profileId} {
       allow create: if signedIn() &&
-          (validInitialProfile(profileId, request.resource.data) ||
-           validParentChildCreate(profileId, request.resource.data));
+          (validParentManagedProfileCreate(profileId, request.resource.data) ||
+           validInitialProfile(profileId, request.resource.data));
       allow read: if signedIn() &&
           (managesProfile(profileId) ||
            superAdmin() ||
@@ -516,6 +622,7 @@ service cloud.firestore {
             resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
           (validManagedProfileUpdate(profileId) ||
+           validPreferredClassUpdate(profileId) ||
            validParentChildDeactivation(profileId) ||
            validAdminProfileUpdate());
       allow delete: if superAdmin();

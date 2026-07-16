@@ -8,6 +8,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -18,7 +19,12 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import {createProfiles, selectProfile} from './client_workflows.js';
+import {
+  createProfiles,
+  markNotificationRead,
+  selectProfile,
+  updatePreferredClass,
+} from './client_workflows.js';
 
 const projectId = process.env.GCLOUD_PROJECT ?? 'demo-ota-active-access';
 let env;
@@ -201,10 +207,12 @@ test('managed profile edits allow canonical fields and reject escalation', async
   const profileRef = doc(db, 'studentProfiles', 'parent-profile');
   await assertSucceeds(updateDoc(profileRef, {
     firstName: 'Updated', beltRank: 'Yellow',
-    preferredClassGroupIds: ['level-2-standard'],
     stickerProgress: {current: 7, required: 3, nextRank: 'Yellow-Green'},
     updatedAt: serverTimestamp(),
   }));
+  await assertSucceeds(updatePreferredClass(
+    db, 'parent-profile', 'level-2-standard',
+  ));
   await assertSucceeds(updateDoc(doc(db, 'users', 'parent'), {
     firstName: 'Updated', phoneNumber: '555-0100',
     updatedAt: serverTimestamp(),
@@ -224,6 +232,56 @@ test('managed profile edits allow canonical fields and reject escalation', async
   await assertFails(updateDoc(doc(auth('other'), 'studentProfiles', 'parent-profile'), {
     preferredClassGroupIds: ['other-group'], updatedAt: serverTimestamp(),
   }));
+});
+
+test('preference-only updates accept legacy profile data and reject other changes', async () => {
+  await seedAccount({uid: 'parent'});
+  await seedAccount({uid: 'other'});
+  const db = auth('parent');
+  const profileRef = doc(db, 'studentProfiles', 'parent-profile');
+  await assertSucceeds(updatePreferredClass(db, 'parent-profile', 'level-4-standard'));
+  await assertSucceeds(updatePreferredClass(db, 'parent-profile', null));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'parent-profile'),
+      {stickerProgress: {current: 0, required: 0, nextRank: 'Legacy rank'}},
+    );
+  });
+  await assertSucceeds(updatePreferredClass(db, 'parent-profile', 'level-2-standard'));
+  await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: ['level-3-standard'], beltRank: 'Yellow',
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: ['level-3-standard'],
+    stickerProgress: {current: 1, required: 1, nextRank: 'White-Yellow'},
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: ['level-3-standard'], guardianUserIds: ['other'],
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updatePreferredClass(
+    auth('other'), 'parent-profile', 'level-3-standard',
+  ));
+
+  await seedAccount({uid: 'disabled-preference', isActive: false});
+  await assertFails(updatePreferredClass(
+    auth('disabled-preference'), 'disabled-preference-profile', 'level-1-standard',
+  ));
+  await seedAccount({uid: 'inactive-preference', profileActive: false});
+  await assertFails(updatePreferredClass(
+    auth('inactive-preference'), 'inactive-preference-profile', 'level-1-standard',
+  ));
+  await seedAccount({
+    uid: 'wrong-location-preference', profileLocationId: 'other',
+  });
+  await assertFails(updatePreferredClass(
+    auth('wrong-location-preference'),
+    'wrong-location-preference-profile',
+    'level-1-standard',
+  ));
 });
 
 test('parent adds and removes a child only through atomic family writes', async () => {
@@ -272,12 +330,54 @@ test('parent adds and removes a child only through atomic family writes', async 
   await assertFails(finalBatch.commit());
 });
 
-test('notification read state is private to the authenticated account', async () => {
+test('parent atomically adds one linked self student profile', async () => {
+  await seedAccount({uid: 'parent'});
+  const db = auth('parent');
+  const userRef = doc(db, 'users', 'parent');
+  const selfRef = doc(db, 'studentProfiles', 'parent-self');
+  let batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile', 'parent-self'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(selfRef, {
+    firstName: 'Account', lastName: 'Parent',
+    dateOfBirth: new Date('1990-01-02T00:00:00Z'), beltRank: 'Green',
+    locationId: 'cheshire', guardianUserIds: [], linkedUserId: 'parent',
+    preferredClassGroupIds: [],
+    stickerProgress: {current: 0, required: 0, nextRank: 'Green-Blue'},
+    promotionHistory: [], testingNotes: [], isActive: true,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile', 'parent-self', 'duplicate-self'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(doc(db, 'studentProfiles', 'duplicate-self'), {
+    firstName: 'Duplicate', lastName: 'Parent',
+    dateOfBirth: new Date('1990-01-02T00:00:00Z'), beltRank: 'White',
+    locationId: 'cheshire', guardianUserIds: [], linkedUserId: 'parent',
+    preferredClassGroupIds: [],
+    stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
+    promotionHistory: [], testingNotes: [], isActive: true,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await assertFails(batch.commit());
+});
+
+test('notification read state uses the exact private nested client path', async () => {
   await seedAccount({uid: 'reader'});
   await seedAccount({uid: 'other'});
   const ownRef = doc(auth('reader'), 'users', 'reader', 'notificationReads', 'notice');
-  await assertSucceeds(setDoc(ownRef, {readAt: serverTimestamp()}));
+  await assertSucceeds(markNotificationRead(auth('reader'), 'reader', 'notice'));
   await assertSucceeds(getDoc(ownRef));
+  await assertSucceeds(updateDoc(ownRef, {readAt: serverTimestamp()}));
+  await assertSucceeds(getDocs(
+    collection(auth('reader'), 'users', 'reader', 'notificationReads'),
+  ));
   await assertFails(getDoc(
     doc(auth('other'), 'users', 'reader', 'notificationReads', 'notice'),
   ));
@@ -289,6 +389,20 @@ test('notification read state is private to the authenticated account', async ()
     doc(auth('reader'), 'users', 'reader', 'notificationReads', 'bad'),
     {readAt: serverTimestamp(), extra: true},
   ));
+  await assertFails(getDoc(
+    doc(env.unauthenticatedContext().firestore(),
+      'users', 'reader', 'notificationReads', 'notice'),
+  ));
+
+  const batchDb = auth('reader');
+  const batch = writeBatch(batchDb);
+  for (const id of ['notice-2', 'notice-3']) {
+    batch.set(doc(batchDb, 'users', 'reader', 'notificationReads', id), {
+      readAt: serverTimestamp(),
+    });
+  }
+  await assertSucceeds(batch.commit());
+  await assertSucceeds(deleteDoc(ownRef));
 });
 
 test('active matching account reads only published student content', async () => {
