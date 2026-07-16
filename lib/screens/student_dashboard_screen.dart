@@ -223,8 +223,8 @@ class _DashboardHeader extends StatelessWidget {
       student.locationId,
     );
     final subtitle = account.role == UserAccountRole.parent
-        ? 'Viewing ${student.name} â€¢ ${student.belt} Belt'
-        : 'Your student profile â€¢ ${student.belt} Belt';
+        ? 'Viewing ${student.name} \u2022 ${student.belt} Belt'
+        : 'Your student profile \u2022 ${student.belt} Belt';
     return Material(
       color: Colors.transparent,
       child: InkWell(

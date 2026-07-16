@@ -71,11 +71,19 @@ service cloud.firestore {
 
     function userManagesProfile(profileId, profileData) {
       return activeUser() &&
+          currentUser().role in ['student', 'parent'] &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          profileData.isActive == true &&
+          profileData.locationId == currentUser().locationId &&
+          profileData.guardianUserIds is list &&
           ((currentUser().role == 'parent' &&
-            profileId in currentUser().linkedStudentProfileIds) ||
+            ((profileData.get('linkedUserId', '') == '' &&
+              request.auth.uid in profileData.guardianUserIds) ||
+             (profileData.get('linkedUserId', '') == request.auth.uid &&
+              profileData.guardianUserIds.size() == 0))) ||
            (currentUser().role == 'student' &&
-            profileId in currentUser().linkedStudentProfileIds &&
-            profileData.get('linkedUserId', '') == request.auth.uid));
+            profileData.get('linkedUserId', '') == request.auth.uid &&
+            profileData.guardianUserIds.size() == 0));
     }
 
     function canonicalBelt(belt) {
@@ -313,22 +321,43 @@ service cloud.firestore {
           request.resource.data.updatedAt == request.time;
     }
 
+    function validManagedStickerUpdate() {
+      let stickerChanged = request.resource.data.stickerProgress
+          .diff(resource.data.stickerProgress).affectedKeys();
+      return request.resource.data.stickerProgress is map &&
+          resource.data.stickerProgress is map &&
+          stickerChanged.hasOnly(['current', 'required', 'nextRank']) &&
+          request.resource.data.stickerProgress.current is int &&
+          request.resource.data.stickerProgress.current >= 0 &&
+          request.resource.data.stickerProgress.required is int &&
+          request.resource.data.stickerProgress.required >= 0 &&
+          (!stickerChanged.hasAny(['nextRank']) ||
+           request.resource.data.stickerProgress.nextRank ==
+               expectedNextRank(request.resource.data.beltRank));
+    }
+
     function validManagedProfileUpdate(profileId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
       return userManagesProfile(profileId, resource.data) &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          changed.hasOnly([
             'firstName', 'lastName', 'dateOfBirth', 'beltRank',
             'guardianEmail', 'stickerProgress',
             'updatedAt'
           ]) &&
-          request.resource.data.firstName is string &&
-          request.resource.data.firstName.size() > 0 &&
-          request.resource.data.lastName is string &&
-          request.resource.data.lastName.size() > 0 &&
-          request.resource.data.dateOfBirth is timestamp &&
-          canonicalBelt(request.resource.data.beltRank) &&
-          validGuardianEmail(request.resource.data) &&
-          validPreferredClasses(request.resource.data) &&
-          validStickerProgress(request.resource.data) &&
+          (!changed.hasAny(['firstName']) ||
+           (request.resource.data.firstName is string &&
+            request.resource.data.firstName.size() > 0)) &&
+          (!changed.hasAny(['lastName']) ||
+           (request.resource.data.lastName is string &&
+            request.resource.data.lastName.size() > 0)) &&
+          (!changed.hasAny(['dateOfBirth']) ||
+           request.resource.data.dateOfBirth is timestamp) &&
+          (!changed.hasAny(['beltRank']) ||
+           canonicalBelt(request.resource.data.beltRank)) &&
+          (!changed.hasAny(['guardianEmail']) ||
+           validGuardianEmail(request.resource.data)) &&
+          (!changed.hasAny(['stickerProgress']) ||
+           validManagedStickerUpdate()) &&
           request.resource.data.updatedAt == request.time;
     }
 

@@ -190,7 +190,8 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
 
     expect(find.textContaining(', OTA'), findsOneWidget);
-    expect(find.text('Viewing Sudhamsu â€¢ Red-Black Belt'), findsOneWidget);
+    expect(find.text('Viewing Sudhamsu \u2022 Red-Black Belt'), findsOneWidget);
+    expect(find.textContaining('â€¢'), findsNothing);
     expect(find.text('Teen & Black Belt Class'), findsOneWidget);
     expect(find.text('Black'), findsOneWidget);
     expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
@@ -214,6 +215,22 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('dashboard uses the intended separator for student accounts', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService(role: UserAccountRole.student);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+
+    expect(
+      find.text('Your student profile \u2022 Red-Black Belt'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Ã¢â‚¬Â¢'), findsNothing);
+  });
+
   testWidgets('dashboard profile menu updates the selected student', (
     tester,
   ) async {
@@ -235,7 +252,7 @@ void main() {
 
     expect(service.selectedId, 'student_maya');
     expect(
-      find.text('Viewing Maya Patel â€¢ Yellow-Green Belt'),
+      find.text('Viewing Maya Patel \u2022 Yellow-Green Belt'),
       findsOneWidget,
     );
   });
@@ -1383,7 +1400,7 @@ void main() {
       key: 'dashboard-events-back',
       origin: const StudentDashboardScreen(),
       openLabel: 'Events',
-      originLabel: 'Viewing Sudhamsu â€¢ Red-Black Belt',
+      originLabel: 'Viewing Sudhamsu \u2022 Red-Black Belt',
     );
     await verifyCaller(
       key: 'resources-events-back',
@@ -3039,10 +3056,11 @@ class _NotificationReadTestService extends MockAppDataService {
 }
 
 class _DashboardProfileTestService extends MockAppDataService {
-  _DashboardProfileTestService()
+  _DashboardProfileTestService({this.role = UserAccountRole.parent})
     : profiles = [sampleStudentProfiles[0], sampleStudentProfiles[1]];
 
   final List<Student> profiles;
+  final UserAccountRole role;
   final ChangeNotifier _notifier = ChangeNotifier();
   String selectedId = 'student_sudhamsu';
 
@@ -3066,7 +3084,7 @@ class _DashboardProfileTestService extends MockAppDataService {
     firstName: 'OTA',
     lastName: 'Parent',
     email: 'parent@example.com',
-    role: UserAccountRole.parent,
+    role: role,
     linkedStudentProfileIds: profiles.map((profile) => profile.id).toList(),
     selectedStudentProfileId: selectedId,
     locationId: 'ota-cheshire',

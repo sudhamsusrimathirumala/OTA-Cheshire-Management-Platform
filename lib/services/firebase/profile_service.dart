@@ -294,17 +294,27 @@ class FirestoreProfileService {
                     .collection(FirestoreCollections.classSessions)
                     .doc(session.id),
               )).data();
-        final linked = _stringList(user?['linkedStudentProfileIds']);
-        if (user == null ||
-            user['isActive'] != true ||
-            user['selectedStudentProfileId'] != profile.id ||
-            !linked.contains(profile.id) ||
-            storedProfile?['isActive'] != true ||
-            storedProfile?['locationId'] != user['locationId'] ||
-            storedProfile?['locationId'] != profile.locationId) {
+        if (!_accountManagesStoredProfile(
+          uid: identity.uid,
+          user: user,
+          profileId: profile.id,
+          profile: storedProfile,
+        )) {
           throw const ProfileServiceException(
             ProfileServiceError.permissionDenied,
-            'This preference can only be changed for the selected student.',
+            'This student profile is not managed by your account.',
+          );
+        }
+        if (user?['selectedStudentProfileId'] != profile.id) {
+          throw const ProfileServiceException(
+            ProfileServiceError.invalidData,
+            'Select this student profile before changing its preferred class.',
+          );
+        }
+        if (storedProfile?['locationId'] != profile.locationId) {
+          throw const ProfileServiceException(
+            ProfileServiceError.invalidData,
+            'The selected student profile location is out of date.',
           );
         }
         if (session != null) {
@@ -316,7 +326,7 @@ class FirestoreProfileService {
               storedGroup != session.bulkGroupId) {
             throw const ProfileServiceException(
               ProfileServiceError.invalidData,
-              'This class is not currently available as a preferred class.',
+              'The selected class record is unavailable or no longer active.',
             );
           }
         }
@@ -541,17 +551,12 @@ class FirestoreProfileService {
             .doc(input.profileId);
         final user = (await transaction.get(userRef)).data();
         final profile = (await transaction.get(profileRef)).data();
-        final linked = _stringList(user?['linkedStudentProfileIds']);
-        final role = user?['role'];
-        final isParentManaged =
-            role == ProfileAccountRole.parent.name &&
-            linked.contains(input.profileId);
-        final isSelfManaged =
-            role == ProfileAccountRole.student.name &&
-            profile?['linkedUserId'] == identity.uid &&
-            linked.contains(input.profileId);
-        if ((!isParentManaged && !isSelfManaged) ||
-            profile?['locationId'] != user?['locationId']) {
+        if (!_accountManagesStoredProfile(
+          uid: identity.uid,
+          user: user,
+          profileId: input.profileId,
+          profile: profile,
+        )) {
           throw const ProfileServiceException(
             ProfileServiceError.permissionDenied,
             'You cannot edit this student profile.',
@@ -563,7 +568,10 @@ class FirestoreProfileService {
             'Date of birth cannot be in the future.',
           );
         }
-        if (isSelfManaged && _ageOn(input.dateOfBirth, DateTime.now()) < 16) {
+        final isSelfManaged = profile?['linkedUserId'] == identity.uid;
+        if (user?['role'] == ProfileAccountRole.student.name &&
+            isSelfManaged &&
+            _ageOn(input.dateOfBirth, DateTime.now()) < 16) {
           throw const ProfileServiceException(
             ProfileServiceError.invalidAge,
             'A self-managed student must be at least 16.',
@@ -585,6 +593,30 @@ class FirestoreProfileService {
       throw mapProfileFirebaseException(error);
     }
   }
+}
+
+bool _accountManagesStoredProfile({
+  required String uid,
+  required Map<String, dynamic>? user,
+  required String profileId,
+  required Map<String, dynamic>? profile,
+}) {
+  if (user == null ||
+      profile == null ||
+      user['isActive'] != true ||
+      profile['isActive'] != true ||
+      profile['locationId'] != user['locationId'] ||
+      !_stringList(user['linkedStudentProfileIds']).contains(profileId)) {
+    return false;
+  }
+  final role = user['role'];
+  final linkedUserId = _optionalString(profile['linkedUserId']);
+  final guardians = _stringList(profile['guardianUserIds']);
+  final isSelfRelationship = linkedUserId == uid && guardians.isEmpty;
+  if (role == ProfileAccountRole.student.name) return isSelfRelationship;
+  if (role != ProfileAccountRole.parent.name) return false;
+  return isSelfRelationship ||
+      (linkedUserId == null && guardians.contains(uid));
 }
 
 bool canSetPreferredClass(StudentProfile profile, ClassSession session) =>

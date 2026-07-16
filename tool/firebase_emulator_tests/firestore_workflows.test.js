@@ -23,6 +23,7 @@ import {
   createProfiles,
   markNotificationRead,
   selectProfile,
+  updateManagedProfile,
   updatePreferredClass,
 } from './client_workflows.js';
 
@@ -234,6 +235,77 @@ test('managed profile edits allow canonical fields and reject escalation', async
   }));
 });
 
+test('parent edits selected and nonselected linked profiles through exact relationships', async () => {
+  await seedAccount({
+    uid: 'parent',
+    profileIds: ['selected-child', 'other-child'],
+    selectedProfileId: 'selected-child',
+  });
+  const db = auth('parent');
+  await assertSucceeds(updateManagedProfile(db, 'selected-child'));
+  await assertSucceeds(updateManagedProfile(db, 'other-child', {
+    firstName: 'Other', guardianEmail: 'guardian@example.com',
+    beltRank: 'Blue',
+    stickerProgress: {current: 4, required: 5, nextRank: 'Blue-Red'},
+  }));
+
+  const other = (await getDoc(doc(db, 'studentProfiles', 'other-child'))).data();
+  assert.equal(other.firstName, 'Other');
+  assert.equal(other.guardianEmail, 'guardian@example.com');
+  assert.equal(other.beltRank, 'Blue');
+  assert.deepEqual(other.stickerProgress, {
+    current: 4, required: 5, nextRank: 'Blue-Red',
+  });
+});
+
+test('parent edits a linked self profile but invalid management is denied', async () => {
+  await seedAccount({uid: 'parent-self', selfManaged: true});
+  await assertSucceeds(updateManagedProfile(
+    auth('parent-self'), 'parent-self-profile', {guardianEmail: 'self@example.com'},
+  ));
+
+  await seedAccount({uid: 'other-parent'});
+  await assertFails(updateManagedProfile(
+    auth('other-parent'), 'parent-self-profile', {guardianEmail: 'other@example.com'},
+  ));
+
+  await seedAccount({uid: 'wrong-location-edit', profileLocationId: 'other'});
+  await assertFails(updateManagedProfile(
+    auth('wrong-location-edit'), 'wrong-location-edit-profile',
+  ));
+  await seedAccount({uid: 'inactive-edit', profileActive: false});
+  await assertFails(updateManagedProfile(
+    auth('inactive-edit'), 'inactive-edit-profile',
+  ));
+
+  const selfRef = doc(auth('parent-self'), 'studentProfiles', 'parent-self-profile');
+  await assertFails(updateDoc(selfRef, {
+    linkedUserId: 'other-parent', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(selfRef, {
+    isActive: false, updatedAt: serverTimestamp(),
+  }));
+});
+
+test('unchanged legacy profile fields do not block a supported edit', async () => {
+  await seedAccount({uid: 'legacy-parent'});
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'legacy-parent-profile'),
+      {
+        preferredClassGroupIds: 'legacy-group',
+        promotionHistory: 'legacy-history',
+        testingNotes: null,
+        stickerProgress: {current: 0, required: 0, nextRank: 'Legacy rank'},
+      },
+    );
+  });
+  await assertSucceeds(updateDoc(
+    doc(auth('legacy-parent'), 'studentProfiles', 'legacy-parent-profile'),
+    {firstName: 'Legacy Updated', updatedAt: serverTimestamp()},
+  ));
+});
+
 test('preference-only updates accept legacy profile data and reject other changes', async () => {
   await seedAccount({uid: 'parent'});
   await seedAccount({uid: 'other'});
@@ -281,6 +353,30 @@ test('preference-only updates accept legacy profile data and reject other change
     auth('wrong-location-preference'),
     'wrong-location-preference-profile',
     'level-1-standard',
+  ));
+});
+
+test('parent preference updates require the selected exact profile relationship', async () => {
+  await seedAccount({
+    uid: 'family',
+    profileIds: ['selected-child', 'nonselected-child'],
+    selectedProfileId: 'selected-child',
+  });
+  const db = auth('family');
+  await assertSucceeds(updatePreferredClass(
+    db, 'selected-child', 'level-1-standard',
+  ));
+  await assertSucceeds(updatePreferredClass(
+    db, 'selected-child', 'teen-adult-standard',
+  ));
+  await assertSucceeds(updatePreferredClass(db, 'selected-child', null));
+  await assertFails(updatePreferredClass(
+    db, 'nonselected-child', 'level-2-standard',
+  ));
+
+  await seedAccount({uid: 'family-self', selfManaged: true});
+  await assertSucceeds(updatePreferredClass(
+    auth('family-self'), 'family-self-profile', 'level-3-standard',
   ));
 });
 

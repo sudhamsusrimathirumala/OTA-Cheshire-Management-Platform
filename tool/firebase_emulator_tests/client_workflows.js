@@ -75,3 +75,18 @@ export async function updatePreferredClass(db, profileId, bulkGroupId) {
     updatedAt: serverTimestamp(),
   });
 }
+
+export async function updateManagedProfile(db, profileId, overrides = {}) {
+  await updateDoc(doc(db, 'studentProfiles', profileId), {
+    firstName: 'Updated',
+    lastName: 'Student',
+    dateOfBirth: new Date('2010-01-02T00:00:00Z'),
+    guardianEmail: 'parent@example.com',
+    beltRank: 'Yellow',
+    stickerProgress: {
+      current: 2, required: 3, nextRank: 'Yellow-Green',
+    },
+    ...overrides,
+    updatedAt: serverTimestamp(),
+  });
+}
