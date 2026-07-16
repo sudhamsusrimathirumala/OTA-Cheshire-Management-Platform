@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../data/sample_curriculum.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
+import '../../models/class_session.dart';
+import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/profile_service.dart';
 import '../../theme/ota_colors.dart';
 
@@ -27,14 +29,19 @@ class AccountEditScreen extends StatelessWidget {
 class StudentProfileEditScreen extends StatelessWidget {
   const StudentProfileEditScreen({
     required this.student,
-    required this.service,
+    this.service,
     required this.guardianEmailRequired,
+    this.schedule,
+    this.updatePreferredClass,
     super.key,
-  });
+  }) : assert(service != null || updatePreferredClass != null);
 
   final StudentProfile student;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
   final bool guardianEmailRequired;
+  final Map<int, List<ClassSession>>? schedule;
+  final Future<void> Function(StudentProfile, ClassSession?)?
+  updatePreferredClass;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -44,6 +51,8 @@ class StudentProfileEditScreen extends StatelessWidget {
       student: student,
       service: service,
       guardianEmailRequired: guardianEmailRequired,
+      schedule: schedule ?? appDataService.schedule,
+      updatePreferredClass: updatePreferredClass,
     ),
   );
 }
@@ -117,6 +126,7 @@ Future<bool> showStudentEditSheet(
         student: student,
         service: service,
         guardianEmailRequired: guardianEmailRequired,
+        schedule: appDataService.schedule,
       ),
     ) ??
     false;
@@ -221,13 +231,18 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
 class _StudentEditSheet extends StatefulWidget {
   const _StudentEditSheet({
     required this.student,
-    required this.service,
+    this.service,
     required this.guardianEmailRequired,
+    required this.schedule,
+    this.updatePreferredClass,
   });
 
   final StudentProfile student;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
   final bool guardianEmailRequired;
+  final Map<int, List<ClassSession>> schedule;
+  final Future<void> Function(StudentProfile, ClassSession?)?
+  updatePreferredClass;
 
   @override
   State<_StudentEditSheet> createState() => _StudentEditSheetState();
@@ -244,6 +259,9 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
   late String _belt;
   bool _saving = false;
   String? _error;
+  late List<String> _preferredGroupIds;
+  String? _selectedPreferredGroupId;
+  bool _savingPreference = false;
 
   @override
   void initState() {
@@ -258,6 +276,8 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
     _belt = curriculumBeltOrder.contains(student.belt)
         ? student.belt
         : curriculumBeltOrder.first;
+    _preferredGroupIds = [...student.preferredClassGroupIds];
+    _selectedPreferredGroupId = _preferredGroupIds.firstOrNull;
   }
 
   @override
@@ -287,7 +307,7 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
       _error = null;
     });
     try {
-      await widget.service.updateManagedProfile(
+      await widget.service!.updateManagedProfile(
         StudentProfileEditInput(
           profileId: widget.student.id,
           firstName: _firstName.text,
@@ -306,6 +326,47 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
       if (mounted) setState(() => _error = 'Unable to update this student.');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _savePreferredClass(ClassSession? session) async {
+    final previous = [..._preferredGroupIds];
+    setState(() {
+      _savingPreference = true;
+      _error = null;
+      _preferredGroupIds = session == null
+          ? <String>[]
+          : <String>[session.bulkGroupId];
+      _selectedPreferredGroupId = session?.bulkGroupId;
+    });
+    try {
+      final callback = widget.updatePreferredClass;
+      if (callback != null) {
+        await callback(widget.student, session);
+      } else {
+        await widget.service!.updatePreferredClass(
+          profile: widget.student,
+          session: session,
+        );
+      }
+    } on ProfileServiceException catch (error) {
+      if (mounted) {
+        setState(() {
+          _preferredGroupIds = previous;
+          _selectedPreferredGroupId = previous.firstOrNull;
+          _error = error.message;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _preferredGroupIds = previous;
+          _selectedPreferredGroupId = previous.firstOrNull;
+          _error = 'Unable to update the preferred class.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _savingPreference = false);
     }
   }
 
@@ -370,6 +431,50 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
               ),
             ],
           ),
+          const SizedBox(height: 20),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Preferred Class',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final option in preferredClassOptions(
+            widget.schedule,
+            widget.student.locationId,
+          ))
+            ListTile(
+              title: Text(option.session.className),
+              subtitle: Text(option.scheduleSummary),
+              leading: Icon(
+                _selectedPreferredGroupId == option.session.bulkGroupId
+                    ? Icons.favorite_rounded
+                    : Icons.favorite_border_rounded,
+              ),
+              trailing: _selectedPreferredGroupId == option.session.bulkGroupId
+                  ? const Text('Selected')
+                  : TextButton(
+                      onPressed: _savingPreference
+                          ? null
+                          : () => _savePreferredClass(option.session),
+                      child: Text(
+                        _selectedPreferredGroupId == null
+                            ? 'Set preferred class'
+                            : 'Replace preferred class',
+                      ),
+                    ),
+            ),
+          if (_selectedPreferredGroupId != null)
+            OutlinedButton.icon(
+              onPressed: _savingPreference
+                  ? null
+                  : () => _savePreferredClass(null),
+              icon: const Icon(Icons.heart_broken_rounded),
+              label: const Text('Remove preferred class'),
+            ),
         ],
       ),
     ),
@@ -735,5 +840,60 @@ String? _emailValidator(String? value, {required bool required}) {
       ? null
       : 'Enter a valid email.';
 }
+
+class PreferredClassOption {
+  const PreferredClassOption({
+    required this.session,
+    required this.scheduleSummary,
+  });
+
+  final ClassSession session;
+  final String scheduleSummary;
+}
+
+List<PreferredClassOption> preferredClassOptions(
+  Map<int, List<ClassSession>> schedule,
+  String locationId,
+) {
+  final occurrences = <String, List<(int, ClassSession)>>{};
+  for (final entry in schedule.entries) {
+    for (final session in entry.value) {
+      if (!session.isPublished ||
+          session.locationId != locationId ||
+          session.bulkGroupId.trim().isEmpty) {
+        continue;
+      }
+      occurrences
+          .putIfAbsent(session.bulkGroupId, () => <(int, ClassSession)>[])
+          .add((entry.key, session));
+    }
+  }
+  final options = occurrences.values.map((items) {
+    items.sort((a, b) {
+      final day = a.$1.compareTo(b.$1);
+      return day != 0 ? day : a.$2.startMinutes.compareTo(b.$2.startMinutes);
+    });
+    return PreferredClassOption(
+      session: items.first.$2,
+      scheduleSummary: items
+          .map((item) => '${_weekdayLabel(item.$1)} ${item.$2.timeRangeLabel}')
+          .join(' • '),
+    );
+  }).toList();
+  options.sort((a, b) => a.session.className.compareTo(b.session.className));
+  return options;
+}
+
+String _weekdayLabel(int weekday) =>
+    const {
+      DateTime.monday: 'Mon',
+      DateTime.tuesday: 'Tue',
+      DateTime.wednesday: 'Wed',
+      DateTime.thursday: 'Thu',
+      DateTime.friday: 'Fri',
+      DateTime.saturday: 'Sat',
+      DateTime.sunday: 'Sun',
+    }[weekday] ??
+    'Day $weekday';
 
 String _formatDate(DateTime date) => '${date.month}/${date.day}/${date.year}';

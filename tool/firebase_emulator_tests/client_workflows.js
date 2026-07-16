@@ -1,4 +1,4 @@
-import {doc, serverTimestamp, updateDoc, writeBatch} from 'firebase/firestore';
+import {deleteDoc, doc, serverTimestamp, updateDoc, writeBatch} from 'firebase/firestore';
 
 export async function createProfiles(db, {
   uid,
@@ -69,6 +69,10 @@ export async function markNotificationRead(db, uid, announcementId) {
     readAt: serverTimestamp(),
   });
   await batch.commit();
+}
+
+export async function markNotificationUnread(db, uid, announcementId) {
+  await deleteDoc(doc(db, 'users', uid, 'notificationReads', announcementId));
 }
 
 export async function updatePreferredClass(db, profileId, bulkGroupId) {

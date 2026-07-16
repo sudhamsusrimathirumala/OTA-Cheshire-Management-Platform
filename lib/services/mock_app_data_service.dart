@@ -16,16 +16,11 @@ import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import 'app_data_service.dart';
 
-class MockAppDataService implements AppDataService {
-  const MockAppDataService({this.accountOverride});
+class MockAppDataService extends ChangeNotifier implements AppDataService {
+  MockAppDataService({this.accountOverride});
 
   final UserAccount? accountOverride;
-
-  @override
-  void addListener(VoidCallback listener) {}
-
-  @override
-  void removeListener(VoidCallback listener) {}
+  final Map<String, bool> _notificationReadOverrides = <String, bool>{};
 
   @override
   UserAccount get currentUserAccount => accountOverride ?? sampleUserAccount;
@@ -153,14 +148,42 @@ class MockAppDataService implements AppDataService {
           (notification) =>
               notification.locationId == selectedStudentProfile.locationId,
         )
+        .map(
+          (item) => NotificationItem(
+            id: item.id,
+            locationId: item.locationId,
+            title: item.title,
+            summary: item.summary,
+            body: item.body,
+            timestamp: item.timestamp,
+            isRead: _notificationReadOverrides[item.id] ?? item.isRead,
+            category: item.category,
+            priority: item.priority,
+            requiresAction: item.requiresAction,
+          ),
+        )
         .toList(growable: false);
   }
 
   @override
-  Future<void> markNotificationRead(String announcementId) async {}
+  Future<void> markNotificationRead(String announcementId) async {
+    _notificationReadOverrides[announcementId] = true;
+    notifyListeners();
+  }
 
   @override
-  Future<void> markAllNotificationsRead() async {}
+  Future<void> markNotificationUnread(String announcementId) async {
+    _notificationReadOverrides[announcementId] = false;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    for (final item in notifications) {
+      _notificationReadOverrides[item.id] = true;
+    }
+    notifyListeners();
+  }
 
   @override
   List<AcademyAnnouncement> get adminAnnouncements {

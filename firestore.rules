@@ -411,8 +411,8 @@ service cloud.firestore {
       let before = get(profilePath(profileId)).data;
       let after = getAfter(profilePath(profileId)).data;
       return profileId in remainingIds ||
-          (before.get('linkedUserId', '') == '' &&
-           uid in before.guardianUserIds &&
+          (before.isActive == true &&
+           before.locationId == locationId &&
            after.isActive == false &&
            after.locationId == locationId &&
            after.get('linkedUserId', '') == before.get('linkedUserId', '') &&
@@ -574,13 +574,16 @@ service cloud.firestore {
           data.createdAt == request.time && data.updatedAt == request.time;
     }
 
-    function validParentChildDeactivation(profileId) {
+    function validParentLinkedProfileDeactivation(profileId) {
       let afterUser = getAfter(userPath(request.auth.uid)).data;
       return activeUser() && currentUser().role == 'parent' &&
           profileId in currentUser().linkedStudentProfileIds &&
-          resource.data.get('linkedUserId', '') == '' &&
-          request.auth.uid in resource.data.guardianUserIds &&
+          resource.data.isActive == true &&
+          resource.data.locationId == currentUser().locationId &&
           !(profileId in afterUser.linkedStudentProfileIds) &&
+          afterUser.linkedStudentProfileIds.size() >= 1 &&
+          afterUser.selectedStudentProfileId in
+              afterUser.linkedStudentProfileIds &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'isActive', 'updatedAt'
           ]) &&
@@ -660,7 +663,7 @@ service cloud.firestore {
       allow update: if signedIn() &&
           (validManagedProfileUpdate(profileId) ||
            validPreferredClassUpdate(profileId) ||
-           validParentChildDeactivation(profileId) ||
+           validParentLinkedProfileDeactivation(profileId) ||
            validAdminProfileUpdate());
       allow delete: if superAdmin();
     }

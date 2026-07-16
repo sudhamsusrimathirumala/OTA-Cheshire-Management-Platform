@@ -455,7 +455,7 @@ class FirestoreProfileService {
     }
   }
 
-  Future<String?> removeChild(String profileId) async {
+  Future<String?> removeLinkedProfile(String profileId) async {
     final identity = authProfileIdentity(_auth.currentUser);
     try {
       return await _firestore.runTransaction((transaction) async {
@@ -469,12 +469,13 @@ class FirestoreProfileService {
         final profile = (await transaction.get(profileRef)).data();
         final linked = _stringList(user?['linkedStudentProfileIds']);
         if (user?['role'] != ProfileAccountRole.parent.name ||
+            user?['isActive'] != true ||
             !linked.contains(profileId) ||
-            profile?['linkedUserId'] == identity.uid ||
-            !_stringList(profile?['guardianUserIds']).contains(identity.uid)) {
+            profile?['isActive'] != true ||
+            profile?['locationId'] != user?['locationId']) {
           throw const ProfileServiceException(
             ProfileServiceError.permissionDenied,
-            'This student cannot be removed from your account.',
+            'This student profile cannot be removed from your account.',
           );
         }
         final remainingIds = linked.where((id) => id != profileId).toList();

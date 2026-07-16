@@ -1,50 +1,110 @@
 import 'package:flutter/material.dart';
 
 import '../models/notification_item.dart';
+import '../services/app_data_service_provider.dart';
+import '../services/firebase/notification_read_exception.dart';
 import '../theme/ota_colors.dart';
 import '../utils/notification_formatters.dart';
 
-class NotificationDetailScreen extends StatelessWidget {
+class NotificationDetailScreen extends StatefulWidget {
   const NotificationDetailScreen({required this.notification, super.key});
 
   final NotificationItem notification;
 
   @override
+  State<NotificationDetailScreen> createState() =>
+      _NotificationDetailScreenState();
+}
+
+class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
+  bool _updating = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      appBar: AppBar(
-        backgroundColor: OtaColors.blush,
-        foregroundColor: OtaColors.ink,
-        elevation: 0,
-        title: const Text('Notification Detail'),
-      ),
-      body: SafeArea(
-        top: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _NotificationHeroCard(notification: notification),
-                        const SizedBox(height: 16),
-                        _NotificationMessageCard(notification: notification),
-                      ],
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, _) {
+        final notification = appDataService.notifications
+            .where((item) => item.id == widget.notification.id)
+            .firstOrNull;
+        final current = notification ?? widget.notification;
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          appBar: AppBar(
+            backgroundColor: OtaColors.blush,
+            foregroundColor: OtaColors.ink,
+            elevation: 0,
+            title: const Text('Notification Detail'),
+          ),
+          body: SafeArea(
+            top: false,
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _NotificationHeroCard(notification: current),
+                            const SizedBox(height: 16),
+                            _NotificationMessageCard(notification: current),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: _updating
+                                  ? null
+                                  : () => _setReadState(current),
+                              icon: Icon(
+                                current.isRead
+                                    ? Icons.mark_email_unread_rounded
+                                    : Icons.mark_email_read_rounded,
+                              ),
+                              label: Text(
+                                current.isRead
+                                    ? 'Mark as unread'
+                                    : 'Mark as read',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
+  }
+
+  Future<void> _setReadState(NotificationItem notification) async {
+    setState(() => _updating = true);
+    try {
+      if (notification.isRead) {
+        await appDataService.markNotificationUnread(notification.id);
+      } else {
+        await appDataService.markNotificationRead(notification.id);
+      }
+    } on NotificationReadException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update notification state.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
   }
 }
 

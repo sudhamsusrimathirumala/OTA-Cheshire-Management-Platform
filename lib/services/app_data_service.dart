@@ -61,6 +61,8 @@ abstract class AppDataService implements Listenable {
 
   Future<void> markNotificationRead(String announcementId);
 
+  Future<void> markNotificationUnread(String announcementId);
+
   Future<void> markAllNotificationsRead();
 
   List<AcademyAnnouncement> get adminAnnouncements;

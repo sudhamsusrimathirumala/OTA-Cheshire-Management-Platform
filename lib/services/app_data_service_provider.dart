@@ -22,7 +22,7 @@ void initializeFirebaseAppDataService() {
 
 void initializeMockAppDataServiceForTests() {
   assert(() {
-    appDataService = const MockAppDataService();
+    appDataService = MockAppDataService();
     adminLocationController = AdminLocationController.forTesting(
       role: UserAccountRole.admin,
       locations: const [AdminLocationController.debugLocation],

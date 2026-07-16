@@ -80,11 +80,12 @@ class ManageProfilesScreen extends StatelessWidget {
                               : () => _switchProfile(context, profile.id),
                           onRemove:
                               account.role == UserAccountRole.parent &&
-                                  profile.linkedUserId != account.id
-                              ? () => _removeChild(
+                                  profiles.length > 1
+                              ? () => _removeLinkedProfile(
                                   context,
                                   profile,
-                                  wasSelected: profile.id == selectedId,
+                                  isSelfProfile:
+                                      profile.linkedUserId == account.id,
                                 )
                               : null,
                         ),
@@ -218,17 +219,23 @@ class ManageProfilesScreen extends StatelessWidget {
     }
   }
 
-  Future<void> _removeChild(
+  Future<void> _removeLinkedProfile(
     BuildContext context,
     StudentProfile profile, {
-    required bool wasSelected,
+    required bool isSelfProfile,
   }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove ${profile.name} from account?'),
-        content: const Text(
-          'This child will stop appearing in the parent account and the profile will become inactive. Academy history is retained and no data is permanently erased.',
+        title: Text(
+          isSelfProfile
+              ? 'Remove your student profile?'
+              : 'Remove ${profile.name} from account?',
+        ),
+        content: Text(
+          isSelfProfile
+              ? 'Your parent account and linked child profiles will remain active. Your student profile will become inactive, and academy history will be retained.'
+              : 'This child will stop appearing in the parent account and the profile will become inactive. Academy history is retained and no data is permanently erased.',
         ),
         actions: [
           TextButton(
@@ -246,16 +253,17 @@ class ManageProfilesScreen extends StatelessWidget {
     if (!context.mounted) return;
     _showLoading(context);
     try {
-      await firebaseSessionController.profileService.removeChild(profile.id);
+      await firebaseSessionController.profileService.removeLinkedProfile(
+        profile.id,
+      );
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      if (wasSelected) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil(OtaRoutes.dashboard, (_) => false);
-      } else {
-        _success(context, 'Child removed from this account.');
-      }
+      _success(
+        context,
+        isSelfProfile
+            ? 'Your student profile was removed.'
+            : 'Student removed from this account.',
+      );
     } on ProfileServiceException catch (error) {
       if (!context.mounted) return;
       Navigator.of(context).pop();
@@ -263,7 +271,7 @@ class ManageProfilesScreen extends StatelessWidget {
     } catch (_) {
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      _error(context, 'Unable to remove this child from the account.');
+      _error(context, 'Unable to remove this student profile.');
     }
   }
 

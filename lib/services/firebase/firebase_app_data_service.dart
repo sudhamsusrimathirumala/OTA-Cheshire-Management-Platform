@@ -34,12 +34,42 @@ const _debugAdminAccount = UserAccount(
   locationId: LocationTimeService.otaCheshireLocationId,
 );
 
+@visibleForTesting
+String firebaseSessionDataFingerprint({
+  required UserAccount? account,
+  required Iterable<StudentProfile> profiles,
+  required StudentProfile? selectedProfile,
+}) {
+  final profileParts = profiles.map(
+    (profile) => [
+      profile.id,
+      profile.updatedAt?.microsecondsSinceEpoch ?? 0,
+      profile.name,
+      profile.beltRank,
+      profile.stickerCount,
+      profile.stickersRequired,
+      profile.preferredClassGroupIds.join(','),
+      profile.isActive,
+    ].join('|'),
+  );
+  return [
+    account?.id ?? '',
+    account?.updatedAt?.microsecondsSinceEpoch ?? 0,
+    account?.displayName ?? '',
+    account?.phoneNumber ?? '',
+    account?.selectedStudentProfileId ?? '',
+    account?.linkedStudentProfileIds.join(',') ?? '',
+    selectedProfile?.id ?? '',
+    ...profileParts,
+  ].join('\u0000');
+}
+
 class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   FirebaseAppDataService({
     required this._adminLocations,
     FirebaseFirestore? firestore,
     AppDataService? fallbackService,
-  }) : _fallbackService = fallbackService ?? const MockAppDataService() {
+  }) : _fallbackService = fallbackService ?? MockAppDataService() {
     _firestore = firestore;
     firebaseSessionController.addListener(_handleSessionChanged);
     _adminLocations.addListener(_handleAdminLocationsChanged);
@@ -98,6 +128,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   DebugViewMode _developmentViewMode = DebugViewMode.none;
   String? _listeningLocationId;
   bool _listeningAsSuperAdmin = false;
+  String _sessionDataFingerprint = '';
 
   bool get _developmentViewActive =>
       kDebugMode && _developmentViewMode != DebugViewMode.none;
@@ -128,6 +159,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         : session.stage == SessionStage.member
         ? profile?.locationId
         : null;
+    final sessionFingerprint = firebaseSessionDataFingerprint(
+      account: account,
+      profiles: session.profiles,
+      selectedProfile: profile,
+    );
     if (!superAdmin && (locationId == null || locationId.isEmpty)) {
       _stopFirestoreListeners();
       if (_developmentViewActive) {
@@ -138,11 +174,19 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     }
     if (_listeningLocationId == locationId &&
         _listeningAsSuperAdmin == superAdmin) {
+      if (_sessionDataFingerprint == sessionFingerprint) return;
+      _sessionDataFingerprint = sessionFingerprint;
+      final announcements = _latestAnnouncementsSnapshot;
+      if (announcements != null && session.stage == SessionStage.member) {
+        _notifications = _announcementsFromSnapshot(announcements);
+      }
+      notifyListeners();
       return;
     }
     _stopFirestoreListeners();
     _listeningLocationId = locationId;
     _listeningAsSuperAdmin = superAdmin;
+    _sessionDataFingerprint = sessionFingerprint;
     _listenToFirestore(locationId: locationId, superAdmin: superAdmin);
   }
 
@@ -202,6 +246,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminUsersSubscription = null;
     _listeningLocationId = null;
     _listeningAsSuperAdmin = false;
+    _sessionDataFingerprint = '';
     _clearData();
     notifyListeners();
   }
@@ -905,7 +950,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   Future<void> markNotificationRead(String announcementId) async {
-    if (_developmentViewActive) return;
+    if (_developmentViewActive) {
+      _setDevelopmentNotificationRead(announcementId, true);
+      return;
+    }
     final id = announcementId.trim();
     if (id.isEmpty) {
       throw const NotificationReadException(
@@ -932,6 +980,62 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _applyNotificationReadIds(previous);
       rethrow;
     }
+  }
+
+  @override
+  Future<void> markNotificationUnread(String announcementId) async {
+    if (_developmentViewActive) {
+      _setDevelopmentNotificationRead(announcementId, false);
+      return;
+    }
+    final id = announcementId.trim();
+    if (id.isEmpty) {
+      throw const NotificationReadException(
+        NotificationReadError.invalidArgument,
+        'invalid-argument',
+        'This notification could not be updated. Please refresh and try again.',
+      );
+    }
+    final (uid, firestore) = _notificationWriteContext();
+    final previous = _notificationReadIds;
+    _applyNotificationReadIds(previous.where((value) => value != id).toSet());
+    try {
+      await firestore
+          .collection(FirestoreCollections.users)
+          .doc(uid)
+          .collection('notificationReads')
+          .doc(id)
+          .delete();
+    } on FirebaseException catch (error) {
+      _applyNotificationReadIds(previous);
+      _debugNotificationWriteError('mark-unread', error, true);
+      throw classifyNotificationReadException(error);
+    } catch (_) {
+      _applyNotificationReadIds(previous);
+      rethrow;
+    }
+  }
+
+  void _setDevelopmentNotificationRead(String announcementId, bool isRead) {
+    _notifications = _notifications
+        .map(
+          (item) => item.id == announcementId
+              ? NotificationItem(
+                  id: item.id,
+                  locationId: item.locationId,
+                  title: item.title,
+                  summary: item.summary,
+                  body: item.body,
+                  timestamp: item.timestamp,
+                  isRead: isRead,
+                  category: item.category,
+                  priority: item.priority,
+                  requiresAction: item.requiresAction,
+                )
+              : item,
+        )
+        .toList(growable: false);
+    notifyListeners();
   }
 
   @override

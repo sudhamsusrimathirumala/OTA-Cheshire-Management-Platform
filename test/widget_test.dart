@@ -552,7 +552,7 @@ void main() {
       timeZoneId: 'America/New_York',
       isActive: true,
     );
-    appDataService = const _AdminStudentsTestService(
+    appDataService = _AdminStudentsTestService(
       errorMessage: 'Unable to load student profiles from Firestore.',
     );
     adminLocationController = AdminLocationController.forTesting(
@@ -1198,7 +1198,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: EventsScreen(
-          dataService: const MockAppDataService(),
+          dataService: MockAppDataService(),
           now: DateTime.utc(2026, 7, 12, 16),
         ),
       ),
@@ -1401,7 +1401,7 @@ void main() {
           home: origin,
           routes: {
             OtaRoutes.events: (_) => EventsScreen(
-              dataService: const MockAppDataService(),
+              dataService: MockAppDataService(),
               now: DateTime.utc(2026, 7, 12, 16),
             ),
           },
@@ -3101,7 +3101,7 @@ class _CurriculumTestService extends MockAppDataService {
 class _NotificationReadTestService extends MockAppDataService {
   _NotificationReadTestService({this.failWrites = false})
     : _notifications = [
-        for (final item in const MockAppDataService().notifications) item,
+        for (final item in MockAppDataService().notifications) item,
       ];
 
   List<NotificationItem> _notifications;
@@ -3254,7 +3254,7 @@ AcademyResource _testResource({
 }
 
 class _EventsTestService extends MockAppDataService {
-  const _EventsTestService({required this.events});
+  _EventsTestService({required this.events});
 
   @override
   final List<AcademyEvent> events;
@@ -3299,7 +3299,7 @@ class _ScheduleStateTestService extends MockAppDataService {
 }
 
 class _DashboardStateTestService extends MockAppDataService {
-  const _DashboardStateTestService({required this.student});
+  _DashboardStateTestService({required this.student});
 
   final Student student;
 
@@ -3381,7 +3381,7 @@ class _StudentNavigationTestApp extends StatelessWidget {
 }
 
 class _AdminStudentsTestService extends MockAppDataService {
-  const _AdminStudentsTestService({
+  _AdminStudentsTestService({
     this.profiles = const [],
     this.users = const [],
     this.errorMessage,

@@ -22,6 +22,7 @@ import {
 import {
   createProfiles,
   markNotificationRead,
+  markNotificationUnread,
   selectProfile,
   updateManagedProfile,
   updatePreferredClass,
@@ -516,6 +517,38 @@ test('parent atomically adds one linked self student profile', async () => {
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   });
   await assertFails(batch.commit());
+
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile'],
+    selectedStudentProfileId: 'parent-profile',
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(selfRef, {isActive: false, updatedAt: serverTimestamp()});
+  await assertSucceeds(batch.commit());
+  await env.withSecurityRulesDisabled(async (context) => {
+    const removed = await getDoc(
+      doc(context.firestore(), 'studentProfiles', 'parent-self'),
+    );
+    assert.equal(removed.data().isActive, false);
+  });
+
+  const replacementRef = doc(db, 'studentProfiles', 'parent-self-replacement');
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: ['parent-profile', 'parent-self-replacement'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(replacementRef, {
+    firstName: 'Account', lastName: 'Parent',
+    dateOfBirth: new Date('1990-01-02T00:00:00Z'), beltRank: 'Green',
+    locationId: 'cheshire', guardianUserIds: [], linkedUserId: 'parent',
+    preferredClassGroupIds: [],
+    stickerProgress: {current: 0, required: 0, nextRank: 'Green-Blue'},
+    promotionHistory: [], testingNotes: [], isActive: true,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
 });
 
 test('notification read state uses the exact private nested client path', async () => {
@@ -552,7 +585,9 @@ test('notification read state uses the exact private nested client path', async 
     });
   }
   await assertSucceeds(batch.commit());
-  await assertSucceeds(deleteDoc(ownRef));
+  await assertSucceeds(markNotificationUnread(auth('reader'), 'reader', 'notice'));
+  assert.equal((await getDoc(ownRef)).exists(), false);
+  await assertFails(markNotificationUnread(auth('other'), 'reader', 'notice-2'));
 });
 
 test('active matching account reads only published student content', async () => {
