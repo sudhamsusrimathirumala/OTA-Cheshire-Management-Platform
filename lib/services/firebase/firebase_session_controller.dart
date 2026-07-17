@@ -11,6 +11,7 @@ import '../firestore/firestore_collections.dart';
 import 'firebase_app_data_service.dart';
 import 'firebase_authentication_service.dart';
 import 'firebase_identity_contract.dart';
+import 'linked_profile_reconciler.dart';
 import 'profile_service.dart';
 
 enum SessionStage {
@@ -59,6 +60,8 @@ class FirebaseSessionController extends ChangeNotifier {
   int _sessionGeneration = 0;
   int _profilesGeneration = 0;
   int _locationGeneration = 0;
+  String? _profilesLinkedFingerprint;
+  String? _profileRecoveryFingerprint;
   bool _disposed = false;
 
   bool get hasActiveAcademyAccess => stage == SessionStage.member;
@@ -166,6 +169,14 @@ class FirebaseSessionController extends ChangeNotifier {
     try {
       account = userAccountFromFirestoreData(snapshot.id, data);
     } catch (_) {
+      if (shouldRetainAccountForPendingSnapshot(
+        hasPendingWrites: snapshot.metadata.hasPendingWrites,
+        hasValidAccount: account != null,
+      )) {
+        errorMessage = null;
+        notifyListeners();
+        return;
+      }
       _setError('Your account record is incomplete or invalid.');
       return;
     }
@@ -203,6 +214,15 @@ class FirebaseSessionController extends ChangeNotifier {
     }
     if (loadedAccount.linkedStudentProfileIds.isEmpty) {
       _setError('Your account has no linked student profiles.');
+      return;
+    }
+    final linkedFingerprint = loadedAccount.linkedStudentProfileIds.join(
+      '\u0000',
+    );
+    if (_profilesSubscription != null &&
+        _profilesLinkedFingerprint == linkedFingerprint) {
+      errorMessage = null;
+      notifyListeners();
       return;
     }
     unawaited(
@@ -269,6 +289,8 @@ class FirebaseSessionController extends ChangeNotifier {
     ++_profilesGeneration;
     final previous = _profilesSubscription;
     _profilesSubscription = null;
+    _profilesLinkedFingerprint = null;
+    _profileRecoveryFingerprint = null;
     profiles = const [];
     selectedProfile = null;
     await previous?.cancel();
@@ -291,6 +313,8 @@ class FirebaseSessionController extends ChangeNotifier {
     final previousProfiles = _profilesSubscription;
     final previousLocation = _locationSubscription;
     _profilesSubscription = null;
+    _profilesLinkedFingerprint = null;
+    _profileRecoveryFingerprint = null;
     _locationSubscription = null;
     await Future.wait<void>([
       if (previousProfiles != null) previousProfiles.cancel(),
@@ -303,10 +327,11 @@ class FirebaseSessionController extends ChangeNotifier {
       return;
     }
     final linkedFingerprint = linkedIds.join('\u0000');
+    _profilesLinkedFingerprint = linkedFingerprint;
     _profilesSubscription = _database
         .collection(FirestoreCollections.studentProfiles)
         .where(FieldPath.documentId, whereIn: linkedIds)
-        .snapshots()
+        .snapshots(includeMetadataChanges: true)
         .listen(
           (snapshot) {
             if (_isCurrentProfiles(
@@ -314,7 +339,14 @@ class FirebaseSessionController extends ChangeNotifier {
               generation,
               linkedFingerprint,
             )) {
-              _handleProfilesSnapshot(snapshot, sessionGeneration, generation);
+              unawaited(
+                _handleProfilesSnapshot(
+                  snapshot,
+                  sessionGeneration,
+                  generation,
+                  linkedFingerprint,
+                ),
+              );
             }
           },
           onError: (_) {
@@ -329,11 +361,12 @@ class FirebaseSessionController extends ChangeNotifier {
         );
   }
 
-  void _handleProfilesSnapshot(
+  Future<void> _handleProfilesSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
     int sessionGeneration,
     int profilesGeneration,
-  ) {
+    String linkedFingerprint,
+  ) async {
     try {
       final loaded = snapshot.docs
           .map(
@@ -341,23 +374,61 @@ class FirebaseSessionController extends ChangeNotifier {
                 studentProfileFromFirestoreData(document.id, document.data()),
           )
           .whereType<StudentProfile>()
-          .toList();
+          .toList(growable: false);
       final linkedIds = account!.linkedStudentProfileIds;
-      loaded.sort(
-        (a, b) => linkedIds.indexOf(a.id).compareTo(linkedIds.indexOf(b.id)),
+      final loadedIds = loaded.map((profile) => profile.id).toList()..sort();
+      final recoveryFingerprint = [
+        linkedFingerprint,
+        ...loadedIds,
+      ].join('\u0001');
+      if (!snapshot.metadata.isFromCache &&
+          loaded.length != linkedIds.length &&
+          _profileRecoveryFingerprint == recoveryFingerprint) {
+        return;
+      }
+      if (!snapshot.metadata.isFromCache && loaded.length != linkedIds.length) {
+        _profileRecoveryFingerprint = recoveryFingerprint;
+      }
+      final resolution = await reconcileLinkedProfiles(
+        expectedIds: linkedIds,
+        snapshotProfiles: loaded,
+        isFromCache: snapshot.metadata.isFromCache,
+        loadMissingFromServer: _loadProfilesFromServer,
       );
-      if (loaded.length != linkedIds.length) {
+      if (!_isCurrentProfiles(
+        sessionGeneration,
+        profilesGeneration,
+        linkedFingerprint,
+      )) {
+        return;
+      }
+      if (resolution.status == LinkedProfileResolutionStatus.transitional) {
+        stage = sessionStageDuringProfileReconciliation(
+          current: stage,
+          hasEstablishedProfiles: profiles.isNotEmpty,
+        );
+        errorMessage = null;
+        notifyListeners();
+        return;
+      }
+      if (resolution.status == LinkedProfileResolutionStatus.missing) {
         _setError('One or more linked student profiles could not be loaded.');
         return;
       }
-      profiles = List.unmodifiable(loaded);
+      if (resolution.status == LinkedProfileResolutionStatus.unreadable) {
+        _setError('Unable to load linked student profiles.');
+        return;
+      }
+      _profileRecoveryFingerprint = null;
+      final reconciledProfiles = resolution.profiles;
+      profiles = reconciledProfiles;
       final selectedId = account!.selectedStudentProfileId;
-      selectedProfile = loaded
+      selectedProfile = reconciledProfiles
           .where((profile) => profile.id == selectedId)
           .firstOrNull;
       if (selectedProfile == null) {
-        unawaited(profileService.selectProfile(loaded.first.id));
-        selectedProfile = loaded.first;
+        unawaited(profileService.selectProfile(reconciledProfiles.first.id));
+        selectedProfile = reconciledProfiles.first;
       }
       unawaited(
         _evaluateSelectedProfile(sessionGeneration, profilesGeneration),
@@ -365,6 +436,27 @@ class FirebaseSessionController extends ChangeNotifier {
     } catch (_) {
       _setError('A linked student profile is incomplete or invalid.');
     }
+  }
+
+  Future<List<StudentProfile>> _loadProfilesFromServer(
+    List<String> profileIds,
+  ) async {
+    final snapshots = await Future.wait(
+      profileIds.map(
+        (id) => _database
+            .collection(FirestoreCollections.studentProfiles)
+            .doc(id)
+            .get(const GetOptions(source: Source.server)),
+      ),
+    );
+    return snapshots
+        .where((snapshot) => snapshot.exists && snapshot.data() != null)
+        .map(
+          (snapshot) =>
+              studentProfileFromFirestoreData(snapshot.id, snapshot.data()!),
+        )
+        .whereType<StudentProfile>()
+        .toList(growable: false);
   }
 
   Future<void> _evaluateSelectedProfile(
@@ -462,6 +554,8 @@ class FirebaseSessionController extends ChangeNotifier {
     final profiles = _profilesSubscription;
     final location = _locationSubscription;
     _profilesSubscription = null;
+    _profilesLinkedFingerprint = null;
+    _profileRecoveryFingerprint = null;
     _locationSubscription = null;
     unawaited(
       Future.wait<void>([
@@ -480,6 +574,8 @@ class FirebaseSessionController extends ChangeNotifier {
     final location = _locationSubscription;
     _userSubscription = null;
     _profilesSubscription = null;
+    _profilesLinkedFingerprint = null;
+    _profileRecoveryFingerprint = null;
     _locationSubscription = null;
     selectedLocationName = null;
     await Future.wait<void>([
@@ -564,11 +660,27 @@ bool listenerCallbackIsCurrent({
 }
 
 @visibleForTesting
+bool shouldRetainAccountForPendingSnapshot({
+  required bool hasPendingWrites,
+  required bool hasValidAccount,
+}) => hasPendingWrites && hasValidAccount;
+
+@visibleForTesting
 SessionStage sessionStageDuringAccessRefresh({
   required SessionStage current,
   required SessionStage established,
 }) {
   return current == established ? established : SessionStage.loading;
+}
+
+@visibleForTesting
+SessionStage sessionStageDuringProfileReconciliation({
+  required SessionStage current,
+  required bool hasEstablishedProfiles,
+}) {
+  return current == SessionStage.member && hasEstablishedProfiles
+      ? SessionStage.member
+      : SessionStage.loading;
 }
 
 @visibleForTesting

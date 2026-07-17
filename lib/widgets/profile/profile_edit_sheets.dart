@@ -8,21 +8,32 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/profile_service.dart';
 import '../../theme/ota_colors.dart';
 
+typedef AccountContactUpdater =
+    Future<void> Function(AccountContactInput input);
+typedef ChildProfileCreator =
+    Future<String> Function(StudentProfileInput input);
+
 class AccountEditScreen extends StatelessWidget {
   const AccountEditScreen({
     required this.account,
-    required this.service,
+    this.service,
+    this.updateAccountContact,
     super.key,
-  });
+  }) : assert(service != null || updateAccountContact != null);
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final AccountContactUpdater? updateAccountContact;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: OtaColors.blush,
     appBar: AppBar(title: const Text('Edit account information')),
-    body: _AccountEditSheet(account: account, service: service),
+    body: _AccountEditSheet(
+      account: account,
+      service: service,
+      updateAccountContact: updateAccountContact,
+    ),
   );
 }
 
@@ -60,18 +71,24 @@ class StudentProfileEditScreen extends StatelessWidget {
 class AddChildScreen extends StatelessWidget {
   const AddChildScreen({
     required this.account,
-    required this.service,
+    this.service,
+    this.createChild,
     super.key,
-  });
+  }) : assert(service != null || createChild != null);
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final ChildProfileCreator? createChild;
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: OtaColors.blush,
     appBar: AppBar(title: const Text('Add child')),
-    body: _AddChildSheet(account: account, service: service),
+    body: _AddChildSheet(
+      account: account,
+      service: service,
+      createChild: createChild,
+    ),
   );
 }
 
@@ -145,10 +162,15 @@ Future<bool> showAddChildSheet(
     false;
 
 class _AccountEditSheet extends StatefulWidget {
-  const _AccountEditSheet({required this.account, required this.service});
+  const _AccountEditSheet({
+    required this.account,
+    this.service,
+    this.updateAccountContact,
+  }) : assert(service != null || updateAccountContact != null);
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final AccountContactUpdater? updateAccountContact;
 
   @override
   State<_AccountEditSheet> createState() => _AccountEditSheetState();
@@ -179,26 +201,41 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final navigator = Navigator.of(context);
+    final editRoute = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      await widget.service.updateAccountContact(
-        AccountContactInput(
-          firstName: _firstName.text,
-          lastName: _lastName.text,
-          phoneNumber: _phone.text,
-        ),
+      final input = AccountContactInput(
+        firstName: _firstName.text,
+        lastName: _lastName.text,
+        phoneNumber: _phone.text,
       );
-      if (mounted) Navigator.pop(context, true);
+      await (widget.updateAccountContact?.call(input) ??
+          widget.service!.updateAccountContact(input));
+      if (!mounted || editRoute?.isCurrent != true || !navigator.canPop()) {
+        return;
+      }
+      navigator.pop(true);
+      return;
     } on ProfileServiceException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = error.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Unable to update the account.');
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Unable to update the account.';
+        });
+      }
     }
   }
 
@@ -482,10 +519,12 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
 }
 
 class _AddChildSheet extends StatefulWidget {
-  const _AddChildSheet({required this.account, required this.service});
+  const _AddChildSheet({required this.account, this.service, this.createChild})
+    : assert(service != null || createChild != null);
 
   final UserAccount account;
-  final FirestoreProfileService service;
+  final FirestoreProfileService? service;
+  final ChildProfileCreator? createChild;
 
   @override
   State<_AddChildSheet> createState() => _AddChildSheetState();
@@ -526,32 +565,47 @@ class _AddChildSheetState extends State<_AddChildSheet> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_dateOfBirth == null) {
       setState(() => _error = 'Select the child\'s date of birth.');
       return;
     }
+    final navigator = Navigator.of(context);
+    final addChildRoute = ModalRoute.of(context);
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      await widget.service.addChild(
-        StudentProfileInput(
-          firstName: _firstName.text,
-          lastName: _lastName.text,
-          dateOfBirth: _dateOfBirth!,
-          beltRank: _belt,
-          guardianEmail: _guardianEmail.text,
-        ),
+      final input = StudentProfileInput(
+        firstName: _firstName.text,
+        lastName: _lastName.text,
+        dateOfBirth: _dateOfBirth!,
+        beltRank: _belt,
+        guardianEmail: _guardianEmail.text,
       );
-      if (mounted) Navigator.pop(context, true);
+      await (widget.createChild?.call(input) ??
+          widget.service!.addChild(input));
+      if (!mounted || addChildRoute?.isCurrent != true || !navigator.canPop()) {
+        return;
+      }
+      navigator.pop(true);
+      return;
     } on ProfileServiceException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = error.message;
+        });
+      }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Unable to add this child.');
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _error = 'Unable to add this child.';
+        });
+      }
     }
   }
 

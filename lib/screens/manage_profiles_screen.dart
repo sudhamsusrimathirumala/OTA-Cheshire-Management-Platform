@@ -13,9 +13,16 @@ import '../theme/ota_colors.dart';
 import '../widgets/profile/profile_edit_sheets.dart';
 
 class ManageProfilesScreen extends StatelessWidget {
-  const ManageProfilesScreen({this.selectProfile, super.key});
+  const ManageProfilesScreen({
+    this.selectProfile,
+    this.updateAccountContact,
+    this.createChild,
+    super.key,
+  });
 
   final Future<void> Function(String profileId)? selectProfile;
+  final AccountContactUpdater? updateAccountContact;
+  final ChildProfileCreator? createChild;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -139,7 +146,10 @@ class ManageProfilesScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => AccountEditScreen(
           account: account,
-          service: firebaseSessionController.profileService,
+          service: updateAccountContact == null
+              ? firebaseSessionController.profileService
+              : null,
+          updateAccountContact: updateAccountContact,
         ),
       ),
     );
@@ -171,7 +181,10 @@ class ManageProfilesScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => AddChildScreen(
           account: account,
-          service: firebaseSessionController.profileService,
+          service: createChild == null
+              ? firebaseSessionController.profileService
+              : null,
+          createChild: createChild,
         ),
       ),
     );
