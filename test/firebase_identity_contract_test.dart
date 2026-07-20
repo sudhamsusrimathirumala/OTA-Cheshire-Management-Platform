@@ -58,27 +58,29 @@ void main() {
       );
     });
 
-    test('phone normalization omits blanks and trims values', () {
-      expect(normalizeOptionalPhoneNumber('  '), isNull);
-      expect(normalizeOptionalPhoneNumber(' 203-555-0100 '), '203-555-0100');
+    test('legacy phone fields parse but are never written', () {
+      final account = userAccountFromFirestoreData('firebase-uid', {
+        'firstName': 'Ada',
+        'lastName': 'Lovelace',
+        'email': ' ADA@example.com ',
+        'role': 'parent',
+        'isActive': true,
+        'locationId': 'ota-cheshire',
+        'linkedStudentProfileIds': <String>[],
+        'phoneNumber': ' 203-555-0100 ',
+        'createdAt': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
+      });
 
-      final fields = userAccountWriteFields(
-        UserAccount(
-          id: 'firebase-uid',
-          firstName: 'Ada',
-          lastName: 'Lovelace',
-          email: ' ADA@example.com ',
-          role: UserAccountRole.parent,
-          isActive: true,
-          locationId: 'ota-cheshire',
-          linkedStudentProfileIds: const [],
-          phoneNumber: ' ',
-        ),
+      final createFields = userAccountWriteFields(
+        account,
         now: now,
         isCreate: true,
       );
-      expect(fields['email'], 'ada@example.com');
-      expect(fields, isNot(contains('phoneNumber')));
+      final updateFields = userAccountWriteFields(account, now: now);
+      expect(createFields['email'], 'ada@example.com');
+      expect(createFields, isNot(contains('phoneNumber')));
+      expect(updateFields, isNot(contains('phoneNumber')));
     });
 
     test('canonical student defaults are parsed', () {
@@ -167,7 +169,7 @@ void main() {
       expect(passwordOnly.googleAccountId, isNull);
     });
 
-    test('user migration preserves valid contacts and is idempotent', () {
+    test('user migration leaves legacy phone fields untouched', () {
       final original = <String, dynamic>{
         'firstName': 'Ada',
         'lastName': 'Lovelace',
@@ -190,7 +192,7 @@ void main() {
       expect(updates['firstName'], 'Ada');
       expect(updates['lastName'], 'Lovelace');
       expect(updates['email'], 'ada@example.com');
-      expect(updates['phoneNumber'], '203-555-0100');
+      expect(updates, isNot(contains('phoneNumber')));
       expect(updates['googleAccountId'], 'google-uid');
     });
   });
@@ -433,7 +435,6 @@ void main() {
       studentProfilesMissingGuardianEmail: 3,
       usersNormalizedOrBackfilled: 4,
       usersMissingRequiredEmail: 5,
-      userPhoneNumbersPreserved: 6,
       googleAccountIdsPreservedOrNormalized: 7,
       classTypeIdsNormalized: 8,
       bulkGroupIdsAdded: 9,

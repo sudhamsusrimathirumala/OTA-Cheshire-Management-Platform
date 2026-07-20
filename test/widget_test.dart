@@ -493,7 +493,6 @@ void main() {
       firstName: 'Alex',
       lastName: 'Parent',
       email: 'parent@example.com',
-      phoneNumber: '203-555-0123',
       role: UserAccountRole.parent,
       locationId: cheshire.id,
       linkedStudentProfileIds: const ['child-a', 'child-b'],
@@ -519,7 +518,7 @@ void main() {
 
     expect(find.text('Account holder or parent'), findsOneWidget);
     expect(find.text('parent@example.com'), findsOneWidget);
-    expect(find.text('203-555-0123'), findsOneWidget);
+    expect(find.textContaining('Phone'), findsNothing);
     expect(find.text('Child B'), findsWidgets);
     expect(find.text('Approve'), findsNothing);
     expect(find.text('Reject'), findsNothing);

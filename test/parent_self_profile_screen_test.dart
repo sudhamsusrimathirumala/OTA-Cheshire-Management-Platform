@@ -10,7 +10,6 @@ void main() {
     firstName: 'Parent',
     lastName: 'Member',
     email: 'parent@example.com',
-    phoneNumber: '203-555-0100',
     role: UserAccountRole.parent,
     linkedStudentProfileIds: const ['child-profile'],
     locationId: 'cheshire',
@@ -51,7 +50,7 @@ void main() {
 
     expect(find.text('Name: Parent Member'), findsOneWidget);
     expect(find.text('Account email: parent@example.com'), findsOneWidget);
-    expect(find.text('Phone: 203-555-0100'), findsOneWidget);
+    expect(find.textContaining('Phone'), findsNothing);
     expect(find.text('Academy location: cheshire'), findsOneWidget);
     expect(find.text('Belt rank: Green'), findsOneWidget);
     expect(find.byType(TextFormField), findsNothing);

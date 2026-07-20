@@ -51,9 +51,11 @@ Required fields:
 - `createdAt`: Timestamp
 - `updatedAt`: Timestamp
 
-Optional fields are `phoneNumber` and `googleAccountId`. Blank phone numbers are omitted
-or deleted. `googleAccountId` comes only from the `google.com` entry in Firebase
-`User.providerData`; it is never derived from email.
+The app no longer collects, displays, or writes phone numbers. A legacy
+`phoneNumber` field may still exist in older documents; the app ignores it and
+leaves it untouched. The optional `googleAccountId` field comes only from the
+`google.com` entry in Firebase `User.providerData`; it is never derived from
+email.
 
 During public initial creation, `role` is only `student` or `parent`,
 `isActive` is true, `selectedStudentProfileId` is required and linked, and

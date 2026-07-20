@@ -42,6 +42,7 @@ void main() {
     expect(plan.user['locationId'], 'cheshire');
     expect(plan.user['linkedStudentProfileIds'], ['profile-1']);
     expect(plan.user['selectedStudentProfileId'], 'profile-1');
+    expect(plan.user, isNot(contains('phoneNumber')));
     final profile = plan.profiles['profile-1']!;
     expect(profile['linkedUserId'], 'auth-user');
     expect(profile['guardianEmail'], 'guardian@example.com');
@@ -210,6 +211,20 @@ void main() {
     );
     expect(error.error, ProfileServiceError.permissionDenied);
     expect(error.message, isNot(contains('permission-denied')));
+  });
+
+  test('account contact updates never write or delete phone data', () {
+    final data = accountContactUpdateData(
+      const AccountContactInput(firstName: ' Ada ', lastName: ' Lovelace '),
+      timestamp: 'server-time',
+    );
+
+    expect(data, {
+      'firstName': 'Ada',
+      'lastName': 'Lovelace',
+      'updatedAt': 'server-time',
+    });
+    expect(data, isNot(contains('phoneNumber')));
   });
 
   test('preferred class payload stores zero or one stable group', () {

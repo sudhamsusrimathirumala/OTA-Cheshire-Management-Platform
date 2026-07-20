@@ -143,7 +143,6 @@ Map<String, Object?> _userAccountData(UserAccount account) {
     if (account.locationId.isNotEmpty) 'locationId': account.locationId,
     'isActive': account.isActive,
     'linkedStudentProfileIds': account.linkedStudentProfileIds,
-    if (account.phoneNumber != null) 'phoneNumber': account.phoneNumber,
     if (account.selectedStudentProfileId != null)
       'selectedStudentProfileId': account.selectedStudentProfileId,
     if (account.googleAccountId != null)

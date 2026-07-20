@@ -37,6 +37,7 @@ void main() {
 
     await tester.tap(find.widgetWithText(TextButton, 'Edit').first);
     await tester.pumpAndSettle();
+    expect(find.textContaining('Phone'), findsNothing);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'First name'),
       'Updated',
@@ -214,7 +215,6 @@ class _MutableProfileDataService extends MockAppDataService {
       linkedStudentProfileIds: _account.linkedStudentProfileIds,
       createdAt: _account.createdAt,
       updatedAt: DateTime.now(),
-      phoneNumber: input.phoneNumber,
       locationId: _account.locationId,
       selectedStudentProfileId: _account.selectedStudentProfileId,
     );
@@ -248,7 +248,6 @@ class _MutableProfileDataService extends MockAppDataService {
       ],
       createdAt: _account.createdAt,
       updatedAt: DateTime.now(),
-      phoneNumber: _account.phoneNumber,
       locationId: _account.locationId,
       selectedStudentProfileId: _account.selectedStudentProfileId,
     );

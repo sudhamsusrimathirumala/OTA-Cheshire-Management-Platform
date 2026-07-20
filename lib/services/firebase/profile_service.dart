@@ -47,15 +47,10 @@ class StudentProfileInput {
 }
 
 class AccountContactInput {
-  const AccountContactInput({
-    required this.firstName,
-    required this.lastName,
-    this.phoneNumber,
-  });
+  const AccountContactInput({required this.firstName, required this.lastName});
 
   final String firstName;
   final String lastName;
-  final String? phoneNumber;
 }
 
 class StudentProfileEditInput {
@@ -104,7 +99,6 @@ class ProfileCreationRequest {
     required this.applicantBeltRank,
     required this.role,
     required this.locationId,
-    this.phoneNumber,
     this.guardianEmail,
     this.parentIsStudent = false,
     this.additionalStudents = const <StudentProfileInput>[],
@@ -114,7 +108,6 @@ class ProfileCreationRequest {
   final String lastName;
   final DateTime dateOfBirth;
   final String applicantBeltRank;
-  final String? phoneNumber;
   final ProfileAccountRole role;
   final String locationId;
   final String? guardianEmail;
@@ -714,14 +707,9 @@ Map<String, Object?> accountContactUpdateData(
   AccountContactInput input, {
   required Object timestamp,
 }) {
-  final phone = _optionalString(input.phoneNumber);
   return {
     'firstName': _requiredInput(input.firstName, 'First name'),
     'lastName': _requiredInput(input.lastName, 'Last name'),
-    if (phone != null)
-      'phoneNumber': phone
-    else
-      'phoneNumber': FieldValue.delete(),
     'updatedAt': timestamp,
   };
 }
@@ -893,7 +881,6 @@ ProfileCreationPlan buildProfileCreationPlan({
       'updatedAt': timestamp,
     };
   }
-  final phone = _optionalString(request.phoneNumber);
   final googleId = _optionalString(identity.googleAccountId);
   final selectedProfileId = profileIds.first;
   final applicantBelt = _canonicalBelt(request.applicantBeltRank);
@@ -913,7 +900,6 @@ ProfileCreationPlan buildProfileCreationPlan({
       'locationId': locationId,
       'linkedStudentProfileIds': profileIds,
       'selectedStudentProfileId': selectedProfileId,
-      'phoneNumber': ?phone,
       'googleAccountId': ?googleId,
       if (request.role == ProfileAccountRole.parent && !request.parentIsStudent)
         'studentProfileDefaults': <String, Object?>{

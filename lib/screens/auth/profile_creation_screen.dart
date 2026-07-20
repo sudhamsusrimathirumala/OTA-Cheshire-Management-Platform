@@ -29,7 +29,6 @@ class ProfileCreationScreen extends StatefulWidget {
 class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
-  final _phone = TextEditingController();
   final _guardianEmail = TextEditingController();
   final _formKeys = List.generate(3, (_) => GlobalKey<FormState>());
   final _children = <_ChildFields>[];
@@ -97,7 +96,6 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   void dispose() {
     _firstName.dispose();
     _lastName.dispose();
-    _phone.dispose();
     _guardianEmail.dispose();
     for (final child in _children) {
       child.dispose();
@@ -224,20 +222,18 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         lastName: _lastName.text,
         dateOfBirth: applicantBirthDate,
         applicantBeltRank: _beltRank,
-        phoneNumber: _phone.text,
         role: _role,
         locationId: location.id,
         guardianEmail: _guardianEmail.text,
         parentIsStudent: _parentIsStudent,
         additionalStudents: additionalStudents,
       );
-      await (widget.createProfiles?.call(request) ??
-          firebaseSessionController.profileService.createProfiles(request));
-      final onProfilesCreated = widget.onProfilesCreated;
-      if (onProfilesCreated != null) {
-        onProfilesCreated();
+      final createProfiles = widget.createProfiles;
+      if (createProfiles != null) {
+        await createProfiles(request);
+        widget.onProfilesCreated?.call();
       } else {
-        firebaseSessionController.markProfilesCreated();
+        await firebaseSessionController.createProfiles(request);
       }
     } on ProfileServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -373,11 +369,6 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
                                           setState(() => _beltRank = value);
                                         }
                                       },
-                                    ),
-                                    _field(
-                                      _phone,
-                                      'Phone number (optional)',
-                                      required: false,
                                     ),
                                   ],
                                 ),

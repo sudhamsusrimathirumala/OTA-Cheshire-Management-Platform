@@ -33,6 +33,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    expect(find.textContaining('Phone'), findsNothing);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'First name').first,
       'Parent',
@@ -227,6 +228,7 @@ void main() {
     expect(plan.profiles['child-profile']!['firstName'], 'Child');
     expect(plan.profiles['child-profile']!['guardianUserIds'], ['parent-uid']);
     expect(plan.user['locationId'], 'cheshire');
+    expect(plan.user, isNot(contains('phoneNumber')));
     expect(plan.profiles['child-profile']!['locationId'], 'cheshire');
     expect(plan.profiles['child-profile']!['isActive'], isTrue);
     expect(plan.user['studentProfileDefaults'], {

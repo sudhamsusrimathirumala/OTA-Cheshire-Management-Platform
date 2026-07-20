@@ -56,7 +56,6 @@ String firebaseSessionDataFingerprint({
     account?.id ?? '',
     account?.updatedAt?.microsecondsSinceEpoch ?? 0,
     account?.displayName ?? '',
-    account?.phoneNumber ?? '',
     account?.selectedStudentProfileId ?? '',
     account?.linkedStudentProfileIds.join(',') ?? '',
     selectedProfile?.id ?? '',

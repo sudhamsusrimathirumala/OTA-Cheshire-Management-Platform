@@ -424,10 +424,6 @@ class _StudentDetailSheet extends StatelessWidget {
               if (account != null) ...[
                 _DetailRow(label: 'Name', value: account.displayName),
                 _DetailRow(label: 'Email', value: account.email),
-                _DetailRow(
-                  label: 'Phone',
-                  value: account.phoneNumber ?? 'Not provided',
-                ),
                 _DetailRow(label: 'Role', value: account.roleLabel),
               ] else ...[
                 _DetailRow(

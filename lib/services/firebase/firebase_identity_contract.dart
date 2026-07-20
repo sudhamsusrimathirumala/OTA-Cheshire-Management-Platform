@@ -18,11 +18,6 @@ String normalizeRequiredEmail(String value) {
   return normalized;
 }
 
-String? normalizeOptionalPhoneNumber(String? value) {
-  final normalized = value?.trim();
-  return normalized == null || normalized.isEmpty ? null : normalized;
-}
-
 UserAccountRole parseUserAccountRole(Object? value) {
   return switch (value) {
     'student' => UserAccountRole.student,
@@ -53,9 +48,6 @@ UserAccount userAccountFromFirestoreData(
     role: role,
     isActive: _requiredBool(data['isActive'], 'isActive'),
     linkedStudentProfileIds: _stringList(data['linkedStudentProfileIds']),
-    phoneNumber: normalizeOptionalPhoneNumber(
-      _optionalString(data['phoneNumber']),
-    ),
     locationId: locationId,
     selectedStudentProfileId: _optionalString(data['selectedStudentProfileId']),
     googleAccountId: _optionalString(data['googleAccountId']),
@@ -112,7 +104,6 @@ Map<String, Object?> userAccountWriteFields(
   required DateTime now,
   bool isCreate = false,
 }) {
-  final phoneNumber = normalizeOptionalPhoneNumber(account.phoneNumber);
   final googleAccountId = _optionalString(account.googleAccountId);
   final defaults = account.studentProfileDefaults;
   return <String, Object?>{
@@ -122,8 +113,6 @@ Map<String, Object?> userAccountWriteFields(
     'role': account.role.name,
     'isActive': account.isActive,
     'linkedStudentProfileIds': account.linkedStudentProfileIds,
-    'phoneNumber': ?phoneNumber,
-    if (!isCreate && phoneNumber == null) 'phoneNumber': FieldValue.delete(),
     if (account.locationId.trim().isNotEmpty)
       'locationId': account.locationId.trim(),
     'selectedStudentProfileId': ?account.selectedStudentProfileId,

@@ -62,6 +62,7 @@ class FirebaseSessionController extends ChangeNotifier {
   int _locationGeneration = 0;
   String? _profilesLinkedFingerprint;
   String? _profileRecoveryFingerprint;
+  bool _profileCreationInProgress = false;
   bool _disposed = false;
 
   bool get hasActiveAcademyAccess => stage == SessionStage.member;
@@ -100,9 +101,20 @@ class FirebaseSessionController extends ChangeNotifier {
     await _replaceAuthUser(null);
   }
 
-  void markProfilesCreated() {
+  Future<void> createProfiles(ProfileCreationRequest request) async {
+    _profileCreationInProgress = true;
+    try {
+      await profileService.createProfiles(request);
+    } finally {
+      _profileCreationInProgress = false;
+    }
     justCreatedProfiles = true;
-    notifyListeners();
+    final user = authUser;
+    if (user == null) {
+      notifyListeners();
+      return;
+    }
+    await _replaceAuthUser(user);
   }
 
   void dismissCreatedConfirmation() {
@@ -157,6 +169,14 @@ class FirebaseSessionController extends ChangeNotifier {
   ) {
     final data = snapshot.data();
     if (data == null) {
+      if (shouldHoldProfileSetupDuringCreation(
+        creationInProgress: _profileCreationInProgress,
+        current: stage,
+      )) {
+        errorMessage = null;
+        notifyListeners();
+        return;
+      }
       account = null;
       profiles = const [];
       selectedProfile = null;
@@ -172,6 +192,7 @@ class FirebaseSessionController extends ChangeNotifier {
       if (shouldRetainAccountForPendingSnapshot(
         hasPendingWrites: snapshot.metadata.hasPendingWrites,
         hasValidAccount: account != null,
+        profileCreationInProgress: _profileCreationInProgress,
       )) {
         errorMessage = null;
         notifyListeners();
@@ -403,19 +424,40 @@ class FirebaseSessionController extends ChangeNotifier {
         return;
       }
       if (resolution.status == LinkedProfileResolutionStatus.transitional) {
-        stage = sessionStageDuringProfileReconciliation(
+        if (!shouldHoldProfileSetupDuringCreation(
+          creationInProgress: _profileCreationInProgress,
           current: stage,
-          hasEstablishedProfiles: profiles.isNotEmpty,
-        );
+        )) {
+          stage = sessionStageDuringProfileReconciliation(
+            current: stage,
+            hasEstablishedProfiles: profiles.isNotEmpty,
+          );
+        }
         errorMessage = null;
         notifyListeners();
         return;
       }
       if (resolution.status == LinkedProfileResolutionStatus.missing) {
+        if (shouldHoldProfileSetupDuringCreation(
+          creationInProgress: _profileCreationInProgress,
+          current: stage,
+        )) {
+          errorMessage = null;
+          notifyListeners();
+          return;
+        }
         _setError('One or more linked student profiles could not be loaded.');
         return;
       }
       if (resolution.status == LinkedProfileResolutionStatus.unreadable) {
+        if (shouldHoldProfileSetupDuringCreation(
+          creationInProgress: _profileCreationInProgress,
+          current: stage,
+        )) {
+          errorMessage = null;
+          notifyListeners();
+          return;
+        }
         _setError('Unable to load linked student profiles.');
         return;
       }
@@ -429,6 +471,14 @@ class FirebaseSessionController extends ChangeNotifier {
       if (selectedProfile == null) {
         unawaited(profileService.selectProfile(reconciledProfiles.first.id));
         selectedProfile = reconciledProfiles.first;
+      }
+      if (shouldHoldProfileSetupDuringCreation(
+        creationInProgress: _profileCreationInProgress,
+        current: stage,
+      )) {
+        errorMessage = null;
+        notifyListeners();
+        return;
       }
       unawaited(
         _evaluateSelectedProfile(sessionGeneration, profilesGeneration),
@@ -663,7 +713,14 @@ bool listenerCallbackIsCurrent({
 bool shouldRetainAccountForPendingSnapshot({
   required bool hasPendingWrites,
   required bool hasValidAccount,
-}) => hasPendingWrites && hasValidAccount;
+  bool profileCreationInProgress = false,
+}) => hasPendingWrites && (hasValidAccount || profileCreationInProgress);
+
+@visibleForTesting
+bool shouldHoldProfileSetupDuringCreation({
+  required bool creationInProgress,
+  required SessionStage current,
+}) => creationInProgress && current == SessionStage.needsProfiles;
 
 @visibleForTesting
 SessionStage sessionStageDuringAccessRefresh({

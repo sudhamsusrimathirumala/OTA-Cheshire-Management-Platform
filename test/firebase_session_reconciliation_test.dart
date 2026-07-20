@@ -119,6 +119,38 @@ void main() {
       ),
       isFalse,
     );
+    expect(
+      shouldRetainAccountForPendingSnapshot(
+        hasPendingWrites: true,
+        hasValidAccount: false,
+        profileCreationInProgress: true,
+      ),
+      isTrue,
+    );
+  });
+
+  test('profile setup stays mounted while account creation is pending', () {
+    expect(
+      shouldHoldProfileSetupDuringCreation(
+        creationInProgress: true,
+        current: SessionStage.needsProfiles,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldHoldProfileSetupDuringCreation(
+        creationInProgress: false,
+        current: SessionStage.needsProfiles,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldHoldProfileSetupDuringCreation(
+        creationInProgress: true,
+        current: SessionStage.member,
+      ),
+      isFalse,
+    );
   });
 }
 

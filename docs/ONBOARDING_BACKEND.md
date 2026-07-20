@@ -45,8 +45,8 @@ When a parent does not create a personal student profile during onboarding,
 the already-collected account-holder birth date and belt are retained in the
 optional `users/{uid}.studentProfileDefaults` map. An optional contact email
 and initialized sticker progress are stored there as well. Account name,
-account email, phone number, and `locationId` remain canonical user fields and
-are not duplicated in the defaults.
+account email, and `locationId` remain canonical user fields and are not
+duplicated in the defaults.
 
 These defaults are form data only: they do not grant profile access and are
 not a student profile. When the parent later chooses **Add my student

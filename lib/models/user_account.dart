@@ -29,7 +29,6 @@ class UserAccount {
     required this.linkedStudentProfileIds,
     this.createdAt,
     this.updatedAt,
-    this.phoneNumber,
     this.locationId = '',
     this.selectedStudentProfileId,
     this.googleAccountId,
@@ -45,7 +44,6 @@ class UserAccount {
   final List<String> linkedStudentProfileIds;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-  final String? phoneNumber;
   final String locationId;
   final String? selectedStudentProfileId;
   final String? googleAccountId;

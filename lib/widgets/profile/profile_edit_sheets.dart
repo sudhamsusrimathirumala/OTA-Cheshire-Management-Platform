@@ -180,7 +180,6 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _firstName;
   late final TextEditingController _lastName;
-  late final TextEditingController _phone;
   bool _saving = false;
   String? _error;
 
@@ -189,14 +188,12 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
     super.initState();
     _firstName = TextEditingController(text: widget.account.firstName);
     _lastName = TextEditingController(text: widget.account.lastName);
-    _phone = TextEditingController(text: widget.account.phoneNumber);
   }
 
   @override
   void dispose() {
     _firstName.dispose();
     _lastName.dispose();
-    _phone.dispose();
     super.dispose();
   }
 
@@ -213,7 +210,6 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
       final input = AccountContactInput(
         firstName: _firstName.text,
         lastName: _lastName.text,
-        phoneNumber: _phone.text,
       );
       await (widget.updateAccountContact?.call(input) ??
           widget.service!.updateAccountContact(input));
@@ -251,14 +247,6 @@ class _AccountEditSheetState extends State<_AccountEditSheet> {
         children: [
           _requiredField(_firstName, 'First name'),
           _requiredField(_lastName, 'Last name'),
-          TextFormField(
-            controller: _phone,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Phone number (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
         ],
       ),
     ),
@@ -751,7 +739,6 @@ class _ParentSelfProfileFormState extends State<_ParentSelfProfileForm> {
         children: [
           Text('Name: ${widget.account.displayName}'),
           Text('Account email: ${widget.account.email}'),
-          Text('Phone: ${widget.account.phoneNumber ?? 'Not provided'}'),
           Text('Academy location: ${widget.account.locationId}'),
           if (_dateOfBirth != null)
             Text('Date of birth: ${_formatDate(_dateOfBirth!)}'),

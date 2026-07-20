@@ -335,7 +335,6 @@ class _AccountInformationCard extends StatelessWidget {
         const SizedBox(height: 10),
         _InfoLine('Account holder', account.displayName),
         _InfoLine('Email', account.email),
-        _InfoLine('Phone', account.phoneNumber ?? 'Not provided'),
         _InfoLine('Role', account.roleLabel),
         _InfoLine(
           'Academy location',
