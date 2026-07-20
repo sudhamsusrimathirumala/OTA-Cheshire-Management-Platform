@@ -12,10 +12,16 @@ import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.emailSignIn, this.googleSignIn});
+  const LoginScreen({
+    super.key,
+    this.emailSignIn,
+    this.googleSignIn,
+    this.passwordReset,
+  });
 
   final Future<Object?> Function(String email, String password)? emailSignIn;
   final Future<Object?> Function()? googleSignIn;
+  final Future<void> Function(String email)? passwordReset;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -28,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
   bool _loading = false;
   String? _error;
+  bool _submitted = false;
 
   @override
   void dispose() {
@@ -37,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signIn() async {
+    setState(() => _submitted = true);
     if (!_formKey.currentState!.validate()) return;
     await _run(
       () =>
@@ -77,35 +85,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _showPasswordReset() async {
-    final controller = TextEditingController(text: _email.text);
     final email = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset password'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Email',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Send reset email'),
-          ),
-        ],
-      ),
+      builder: (context) => _PasswordResetDialog(initialEmail: _email.text),
     );
-    controller.dispose();
     if (email == null || email.isEmpty || !mounted) return;
     try {
-      await firebaseSessionController.authentication.sendPasswordReset(email);
+      await (widget.passwordReset?.call(email) ??
+          firebaseSessionController.authentication.sendPasswordReset(email));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -129,6 +116,9 @@ class _LoginScreenState extends State<LoginScreen> {
             constraints: const BoxConstraints(maxWidth: 520),
             child: Form(
               key: _formKey,
+              autovalidateMode: _submitted
+                  ? AutovalidateMode.onUserInteraction
+                  : AutovalidateMode.disabled,
               child: AutofillGroup(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -151,13 +141,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
-                      validator: (value) =>
-                          value != null &&
-                              RegExp(
-                                r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                              ).hasMatch(value.trim())
-                          ? null
-                          : 'Enter a valid email address.',
+                      validator: _emailValidator,
+                      onChanged: (_) => _clearServerError(),
                     ),
                     const SizedBox(height: 16),
                     OtaAuthTextField(
@@ -169,6 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       validator: (value) => value == null || value.isEmpty
                           ? 'Enter your password.'
                           : null,
+                      onChanged: (_) => _clearServerError(),
                       onFieldSubmitted: (_) => _loading ? null : _signIn(),
                       suffixIcon: IconButton(
                         tooltip: _obscurePassword
@@ -234,4 +220,67 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  void _clearServerError() {
+    if (_error != null) setState(() => _error = null);
+  }
+}
+
+String? _emailValidator(String? value) =>
+    value != null &&
+        RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value.trim())
+    ? null
+    : 'Enter a valid email address.';
+
+class _PasswordResetDialog extends StatefulWidget {
+  const _PasswordResetDialog({required this.initialEmail});
+
+  final String initialEmail;
+
+  @override
+  State<_PasswordResetDialog> createState() => _PasswordResetDialogState();
+}
+
+class _PasswordResetDialogState extends State<_PasswordResetDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialEmail,
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Form(
+    key: _formKey,
+    child: AlertDialog(
+      title: const Text('Reset password'),
+      content: TextFormField(
+        controller: _controller,
+        keyboardType: TextInputType.emailAddress,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        validator: _emailValidator,
+        decoration: const InputDecoration(
+          labelText: 'Email',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!(_formKey.currentState?.validate() ?? false)) return;
+            Navigator.pop(context, _controller.text.trim().toLowerCase());
+          },
+          child: const Text('Send reset email'),
+        ),
+      ],
+    ),
+  );
 }

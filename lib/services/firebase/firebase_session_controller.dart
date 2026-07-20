@@ -50,6 +50,7 @@ class FirebaseSessionController extends ChangeNotifier {
   String? selectedLocationName;
   String? errorMessage;
   bool justCreatedProfiles = false;
+  Future<void> Function()? signOutCleanup;
   bool _started = false;
   StreamSubscription<User?>? _authSubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userSubscription;
@@ -97,6 +98,11 @@ class FirebaseSessionController extends ChangeNotifier {
     ++_locationGeneration;
     stage = SessionStage.loading;
     notifyListeners();
+    try {
+      await signOutCleanup?.call();
+    } catch (_) {
+      // Best-effort device cleanup must not block authentication sign-out.
+    }
     await authentication.signOut();
     await _replaceAuthUser(null);
   }

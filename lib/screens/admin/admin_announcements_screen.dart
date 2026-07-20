@@ -9,6 +9,7 @@ import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 import '../../widgets/admin/admin_location_selector.dart';
+import '../../widgets/unsaved_changes_guard.dart';
 
 enum _AnnouncementFilter { all, draft, published, archived, important }
 
@@ -120,6 +121,8 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     final result = await showModalBottomSheet<_AnnouncementFormResult>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       useSafeArea: true,
       backgroundColor: OtaColors.white,
       shape: const RoundedRectangleBorder(
@@ -642,6 +645,9 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   final _targetClassTypeIds = <String>{};
   final _targetStudentProfileIds = <String>{};
   String? _validationMessage;
+  late final String _initialFingerprint;
+  final _closeController = UnsavedChangesController();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -668,6 +674,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _targetStudentProfileIds.addAll(
       announcement?.source.targetStudentProfileIds ?? const <String>[],
     );
+    _initialFingerprint = _formFingerprint;
   }
 
   @override
@@ -690,168 +697,175 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
         ? 'Update Published Announcement'
         : 'Publish Announcement';
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SheetHeader(
-              title: isEditing ? 'Edit Announcement' : 'Create Announcement',
-              subtitle:
-                  'Drafts and published announcements write to Firestore.',
-            ),
-            const SizedBox(height: 14),
-            _AdminTextField(controller: _titleController, label: 'Title'),
-            const SizedBox(height: 10),
-            _AdminTextField(controller: _summaryController, label: 'Summary'),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _bodyController,
-              label: 'Full message/body',
-              maxLines: 4,
-            ),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 620;
-                final fields = [
-                  DropdownButtonFormField<NotificationCategory>(
-                    initialValue: _category,
-                    decoration: _fieldDecoration('Category'),
-                    items: [
-                      for (final category in NotificationCategory.values)
-                        DropdownMenuItem<NotificationCategory>(
-                          value: category,
-                          child: Text(category.label),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _category = value);
-                      }
-                    },
-                  ),
-                  DropdownButtonFormField<NotificationPriority>(
-                    initialValue: _priority,
-                    decoration: _fieldDecoration('Priority'),
-                    items: [
-                      for (final priority in _announcementPriorityOptions)
-                        DropdownMenuItem<NotificationPriority>(
-                          value: priority,
-                          child: Text(priority.label),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() => _priority = value);
-                      }
-                    },
-                  ),
-                ];
+    return UnsavedChangesGuard(
+      controller: _closeController,
+      isDirty: () => _formFingerprint != _initialFingerprint,
+      isSaving: _submitting,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHeader(
+                title: isEditing ? 'Edit Announcement' : 'Create Announcement',
+                subtitle:
+                    'Drafts and published announcements write to Firestore.',
+              ),
+              const SizedBox(height: 14),
+              _AdminTextField(controller: _titleController, label: 'Title'),
+              const SizedBox(height: 10),
+              _AdminTextField(controller: _summaryController, label: 'Summary'),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _bodyController,
+                label: 'Full message/body',
+                maxLines: 4,
+              ),
+              const SizedBox(height: 10),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoColumns = constraints.maxWidth >= 620;
+                  final fields = [
+                    DropdownButtonFormField<NotificationCategory>(
+                      initialValue: _category,
+                      decoration: _fieldDecoration('Category'),
+                      items: [
+                        for (final category in NotificationCategory.values)
+                          DropdownMenuItem<NotificationCategory>(
+                            value: category,
+                            child: Text(category.label),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _category = value);
+                        }
+                      },
+                    ),
+                    DropdownButtonFormField<NotificationPriority>(
+                      initialValue: _priority,
+                      decoration: _fieldDecoration('Priority'),
+                      items: [
+                        for (final priority in _announcementPriorityOptions)
+                          DropdownMenuItem<NotificationPriority>(
+                            value: priority,
+                            child: Text(priority.label),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => _priority = value);
+                        }
+                      },
+                    ),
+                  ];
 
-                if (!twoColumns) {
-                  return Column(
+                  if (!twoColumns) {
+                    return Column(
+                      children: [
+                        fields.first,
+                        const SizedBox(height: 10),
+                        fields.last,
+                      ],
+                    );
+                  }
+
+                  return Row(
                     children: [
-                      fields.first,
-                      const SizedBox(height: 10),
-                      fields.last,
+                      Expanded(child: fields.first),
+                      const SizedBox(width: 10),
+                      Expanded(child: fields.last),
                     ],
                   );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: fields.first),
-                    const SizedBox(width: 10),
-                    Expanded(child: fields.last),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<_Audience>(
-              initialValue: _audience,
-              decoration: _fieldDecoration('Audience'),
-              items: [
-                for (final audience in _Audience.values)
-                  DropdownMenuItem<_Audience>(
-                    value: audience,
-                    child: Text(audience.label),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _audience = value);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            _buildAudienceTargeting(),
-            const SizedBox(height: 10),
-            SwitchListTile(
-              value: _requiresAction,
-              onChanged: (value) => setState(() => _requiresAction = value),
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              activeThumbColor: OtaColors.maroon,
-              title: Text(
-                'Requires action',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w800,
-                ),
+                },
               ),
-              subtitle: Text(
-                'Shows an action-needed badge on family notification details.',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: OtaColors.mutedText,
-                  fontWeight: FontWeight.w600,
-                ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<_Audience>(
+                initialValue: _audience,
+                decoration: _fieldDecoration('Audience'),
+                items: [
+                  for (final audience in _Audience.values)
+                    DropdownMenuItem<_Audience>(
+                      value: audience,
+                      child: Text(audience.label),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _audience = value);
+                  }
+                },
               ),
-            ),
-            const SizedBox(height: 16),
-            if (_validationMessage != null) ...[
-              _ValidationMessage(message: _validationMessage!),
               const SizedBox(height: 10),
-            ],
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+              _buildAudienceTargeting(),
+              const SizedBox(height: 10),
+              SwitchListTile(
+                value: _requiresAction,
+                onChanged: (value) => setState(() => _requiresAction = value),
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                activeThumbColor: OtaColors.maroon,
+                title: Text(
+                  'Requires action',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                if (canSaveDraft)
-                  OutlinedButton(
-                    onPressed: () => _submit(_AnnouncementSaveAction.draft),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: OtaColors.maroon,
-                      side: const BorderSide(color: OtaColors.maroon),
+                subtitle: Text(
+                  'Shows an action-needed badge on family notification details.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: OtaColors.mutedText,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_validationMessage != null) ...[
+                _ValidationMessage(message: _validationMessage!),
+                const SizedBox(height: 10),
+              ],
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: _closeController.requestClose,
+                    child: const Text('Cancel'),
+                  ),
+                  if (canSaveDraft)
+                    OutlinedButton(
+                      onPressed: () => _submit(_AnnouncementSaveAction.draft),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: OtaColors.maroon,
+                        side: const BorderSide(color: OtaColors.maroon),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: const Text('Save Draft'),
+                    ),
+                  FilledButton(
+                    onPressed: () => _submit(_AnnouncementSaveAction.publish),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtaColors.maroon,
+                      foregroundColor: OtaColors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                    child: const Text('Save Draft'),
+                    child: Text(publishButtonLabel),
                   ),
-                FilledButton(
-                  onPressed: () => _submit(_AnnouncementSaveAction.publish),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: OtaColors.maroon,
-                    foregroundColor: OtaColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: Text(publishButtonLabel),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1074,6 +1088,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   void _submit(_AnnouncementSaveAction action) {
+    if (_submitting) return;
     final title = _titleController.text.trim();
     final summary = _summaryController.text.trim();
     final body = _bodyController.text.trim();
@@ -1147,6 +1162,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             targetUserIds: const <String>[],
           );
 
+    _submitting = true;
     Navigator.of(context).pop(
       _AnnouncementFormResult(
         action: action,
@@ -1155,6 +1171,19 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       ),
     );
   }
+
+  String get _formFingerprint => [
+    _titleController.text,
+    _summaryController.text,
+    _bodyController.text,
+    _category.name,
+    _priority.name,
+    _audience.name,
+    _requiresAction,
+    _sortedValues(_targetBelts).join(','),
+    _sortedValues(_targetClassTypeIds).join(','),
+    _sortedValues(_targetStudentProfileIds).join(','),
+  ].join('\u0000');
 }
 
 class _AdminAnnouncement {

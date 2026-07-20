@@ -259,6 +259,45 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _showClassDetails(ClassSession session) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: OtaColors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (context) => AnimatedBuilder(
+        animation: appDataService,
+        builder: (context, _) {
+          final liveSession = appDataService.schedule.values
+              .expand((sessions) => sessions)
+              .where((item) => item.id == session.id)
+              .firstOrNull;
+          if (liveSession == null) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('This item is no longer available.'),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back'),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          return _buildClassDetailContent(context, liveSession);
+        },
+      ),
+    );
+  }
+
+  Widget _buildClassDetailContent(BuildContext context, ClassSession session) {
     final isRecommended = isTypicallyRecommendedFor(session, _student);
     final isPreferred = matchesResolvedPreferredClassGroup(
       _student.preferredClassGroupIds,
@@ -271,125 +310,111 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     );
     final timeLabel = session.timeRangeLabel;
 
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      backgroundColor: OtaColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isRecommended
-                            ? OtaColors.softRed
-                            : OtaColors.blush,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        isRecommended
-                            ? Icons.star_rounded
-                            : Icons.info_outline_rounded,
-                        color: isRecommended
-                            ? const Color(0xFFD9A441)
-                            : OtaColors.mutedText,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            session.className,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  color: OtaColors.ink,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            timeLabel,
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(
-                                  color: OtaColors.mutedText,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                _DetailRow(
-                  icon: Icons.verified_user_rounded,
-                  label: 'Typical Student Group',
-                  value: classGuidanceFor(session, _student),
-                ),
-                const SizedBox(height: 12),
-                _DetailRow(
-                  icon: Icons.description_rounded,
-                  label: 'Description',
-                  value: session.description,
-                ),
-                const SizedBox(height: 12),
-                _DetailRow(
-                  icon: Icons.favorite_rounded,
-                  label: 'Preferred Class',
-                  value: isPreferred ? 'Yes' : 'No',
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: canSelect
-                        ? () {
-                            Navigator.pop(context);
-                            _changePreferredClass(session);
-                          }
-                        : null,
-                    icon: Icon(
-                      isPreferred
-                          ? Icons.heart_broken_rounded
-                          : Icons.favorite_rounded,
-                    ),
-                    label: Text(
-                      isPreferred
-                          ? 'Remove preferred class'
-                          : _student.preferredClassGroupIds.isNotEmpty
-                          ? 'Replace preferred class'
-                          : 'Set as preferred class',
-                    ),
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isRecommended ? OtaColors.softRed : OtaColors.blush,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    isRecommended
+                        ? Icons.star_rounded
+                        : Icons.info_outline_rounded,
+                    color: isRecommended
+                        ? const Color(0xFFD9A441)
+                        : OtaColors.mutedText,
                   ),
                 ),
-                if (!canSelect && unavailableReason != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    unavailableReason,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: OtaColors.mutedText,
-                      fontWeight: FontWeight.w600,
-                    ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.className,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: OtaColors.ink,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        timeLabel,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: OtaColors.mutedText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 22),
+            _DetailRow(
+              icon: Icons.verified_user_rounded,
+              label: 'Typical Student Group',
+              value: classGuidanceFor(session, _student),
+            ),
+            const SizedBox(height: 12),
+            _DetailRow(
+              icon: Icons.description_rounded,
+              label: 'Description',
+              value: session.description,
+            ),
+            const SizedBox(height: 12),
+            _DetailRow(
+              icon: Icons.favorite_rounded,
+              label: 'Preferred Class',
+              value: isPreferred ? 'Yes' : 'No',
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: canSelect
+                    ? () {
+                        Navigator.pop(context);
+                        _changePreferredClass(session);
+                      }
+                    : null,
+                icon: Icon(
+                  isPreferred
+                      ? Icons.heart_broken_rounded
+                      : Icons.favorite_rounded,
+                ),
+                label: Text(
+                  isPreferred
+                      ? 'Remove preferred class'
+                      : _student.preferredClassGroupIds.isNotEmpty
+                      ? 'Replace preferred class'
+                      : 'Set as preferred class',
+                ),
+              ),
+            ),
+            if (!canSelect && unavailableReason != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                unavailableReason,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

@@ -27,7 +27,31 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
         final notification = appDataService.notifications
             .where((item) => item.id == widget.notification.id)
             .firstOrNull;
-        final current = notification ?? widget.notification;
+        if (notification == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Notification Detail')),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'This item is no longer available.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        final current = notification;
         return Scaffold(
           backgroundColor: OtaColors.blush,
           appBar: AppBar(

@@ -25,6 +25,7 @@ import 'services/firebase/firebase_session_controller.dart';
 import 'services/firebase/route_authorization.dart';
 import 'services/app_data_service_provider.dart';
 import 'services/debug_view_controller.dart';
+import 'services/push_runtime.dart';
 import 'theme/ota_colors.dart';
 
 class OTAApp extends StatefulWidget {
@@ -35,7 +36,6 @@ class OTAApp extends StatefulWidget {
 }
 
 class _OTAAppState extends State<OTAApp> {
-  final _navigatorKey = GlobalKey<NavigatorState>();
   late SessionStage _previousStage;
   late bool _usesFirebase;
 
@@ -54,6 +54,11 @@ class _OTAAppState extends State<OTAApp> {
 
   void _handleSessionChanged() {
     final current = firebaseSessionController.stage;
+    final pushService = pushNotificationService;
+    if (pushService != null) {
+      pushService.handleSession(firebaseSessionController);
+    }
+    pushNavigationCoordinator?.flush();
     if (current != SessionStage.signedOut) {
       debugViewController.clear();
     }
@@ -62,7 +67,7 @@ class _OTAAppState extends State<OTAApp> {
     if (!shouldReset) return;
     debugViewController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      otaNavigatorKey.currentState?.pushNamedAndRemoveUntil(
         OtaRoutes.gate,
         (_) => false,
       );
@@ -85,7 +90,7 @@ class _OTAAppState extends State<OTAApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navigatorKey,
+      navigatorKey: otaNavigatorKey,
       title: 'Olympic Taekwondo Academy',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

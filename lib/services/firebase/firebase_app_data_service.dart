@@ -128,6 +128,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String? _listeningLocationId;
   bool _listeningAsSuperAdmin = false;
   String _sessionDataFingerprint = '';
+  String _notificationReadIdsFingerprint = '';
+  FirebaseFirestore? _notificationReadsFirestore;
+
+  static const memberAnnouncementLimit = 30;
+  static const memberEventLimit = 50;
+  static const memberResourceLimit = 50;
 
   bool get _developmentViewActive =>
       kDebugMode && _developmentViewMode != DebugViewMode.none;
@@ -255,6 +261,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _notifications = const <NotificationItem>[];
     _notificationReadIds = const <String>{};
     _notificationReadsUid = null;
+    _notificationReadIdsFingerprint = '';
+    _notificationReadsFirestore = null;
     _adminAnnouncements = const <AcademyAnnouncement>[];
     _events = const <AcademyEvent>[];
     _resources = const <AcademyResource>[];
@@ -346,6 +354,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
     query = query.where('locationId', isEqualTo: locationId);
     if (publishedOnly) query = query.where('status', isEqualTo: 'published');
+    if (publishedOnly) {
+      query = query
+          .orderBy('publishedAt', descending: true)
+          .limit(memberAnnouncementLimit);
+    }
     _announcementsSubscription = query.snapshots().listen(
       _handleAnnouncementsSnapshot,
       onError: _handleAnnouncementsError,
@@ -364,7 +377,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     if (publishedOnly) {
       query = query
           .where('isPublished', isEqualTo: true)
-          .where('isArchived', isEqualTo: false);
+          .where('isArchived', isEqualTo: false)
+          .where(
+            'endDateTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(
+              memberEventWindowStart(DateTime.now()),
+            ),
+          )
+          .orderBy('endDateTime')
+          .limit(memberEventLimit);
     }
     _eventsSubscription = query.snapshots().listen(
       _handleEventsSnapshot,
@@ -384,7 +405,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     if (publishedOnly) {
       query = query
           .where('isPublished', isEqualTo: true)
-          .where('isArchived', isEqualTo: false);
+          .where('isArchived', isEqualTo: false)
+          .where('resourceSection', isEqualTo: 'general')
+          .limit(memberResourceLimit);
     }
     _resourcesSubscription = query.snapshots().listen(
       _handleResourcesSnapshot,
@@ -682,6 +705,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _notifications = firebaseSessionController.stage == SessionStage.member
         ? _announcementsFromSnapshot(snapshot)
         : const <NotificationItem>[];
+    _syncNotificationReadListener();
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
@@ -690,10 +714,27 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   void _listenToNotificationReads(FirebaseFirestore firestore, String uid) {
     _notificationReadsUid = uid;
+    _notificationReadsFirestore = firestore;
+    _syncNotificationReadListener();
+  }
+
+  void _syncNotificationReadListener() {
+    final firestore = _notificationReadsFirestore;
+    final uid = _notificationReadsUid;
+    if (firestore == null || uid == null) return;
+    final ids = _notifications.map((item) => item.id).toList()..sort();
+    final fingerprint = ids.join('\u0000');
+    if (fingerprint == _notificationReadIdsFingerprint) return;
+    _notificationReadIdsFingerprint = fingerprint;
+    unawaited(_notificationReadsSubscription?.cancel());
+    _notificationReadsSubscription = null;
+    _notificationReadIds = const <String>{};
+    if (ids.isEmpty) return;
     _notificationReadsSubscription = firestore
         .collection(FirestoreCollections.users)
         .doc(uid)
         .collection('notificationReads')
+        .where(FieldPath.documentId, whereIn: ids)
         .snapshots()
         .listen(
           (snapshot) {
@@ -1709,6 +1750,12 @@ List<String> _stringListValue(Object? value) {
 
 Set<String> _normalizedTargetClassTypeIds(List<String> targetClassTypeIds) {
   return targetClassTypeIds.map(_normalizeClassGroupId).toSet();
+}
+
+@visibleForTesting
+DateTime memberEventWindowStart(DateTime now) {
+  final local = now.toLocal();
+  return DateTime(local.year, local.month - 1, 1);
 }
 
 String _normalizeClassGroupId(String id) {

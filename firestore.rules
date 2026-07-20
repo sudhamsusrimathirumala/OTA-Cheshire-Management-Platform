@@ -625,6 +625,26 @@ service cloud.firestore {
           resource.data.isArchived == false;
     }
 
+    function activePushDeviceOwner(uid) {
+      return signedIn() && request.auth.uid == uid &&
+          exists(userPath(uid)) && get(userPath(uid)).data.isActive == true;
+    }
+
+    function validPushDevice(data) {
+      return data.keys().hasOnly([
+            'fcmToken', 'platform', 'appEnvironment', 'enabled',
+            'createdAt', 'updatedAt', 'lastSeenAt'
+          ]) &&
+          data.keys().hasAll([
+            'fcmToken', 'platform', 'appEnvironment', 'enabled',
+            'createdAt', 'updatedAt', 'lastSeenAt'
+          ]) &&
+          data.fcmToken is string && data.fcmToken.size() > 0 &&
+          data.platform in ['android', 'ios'] &&
+          data.appEnvironment in ['dev', 'prod'] &&
+          data.enabled is bool;
+    }
+
     match /users/{uid} {
       allow create: if signedIn() &&
           request.auth.uid == uid &&
@@ -649,6 +669,24 @@ service cloud.firestore {
             request.resource.data.keys().hasAll(['readAt']) &&
             request.resource.data.readAt == request.time;
       }
+
+      match /pushDevices/{installationId} {
+        allow read, delete: if activePushDeviceOwner(uid);
+        allow create: if activePushDeviceOwner(uid) &&
+            validPushDevice(request.resource.data) &&
+            request.resource.data.createdAt == request.time &&
+            request.resource.data.updatedAt == request.time &&
+            request.resource.data.lastSeenAt == request.time;
+        allow update: if activePushDeviceOwner(uid) &&
+            validPushDevice(request.resource.data) &&
+            request.resource.data.createdAt == resource.data.createdAt &&
+            request.resource.data.updatedAt == request.time &&
+            request.resource.data.lastSeenAt == request.time;
+      }
+    }
+
+    match /pushDispatches/{dispatchId} {
+      allow read, write: if false;
     }
 
     match /studentProfiles/{profileId} {

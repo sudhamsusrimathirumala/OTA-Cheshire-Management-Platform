@@ -13,6 +13,7 @@ class OtaAuthTextField extends StatelessWidget {
     this.suffixIcon,
     this.autofillHints,
     this.onFieldSubmitted,
+    this.onChanged,
     super.key,
   });
 
@@ -25,6 +26,7 @@ class OtaAuthTextField extends StatelessWidget {
   final Widget? suffixIcon;
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onFieldSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +40,7 @@ class OtaAuthTextField extends StatelessWidget {
       validator: validator,
       autofillHints: autofillHints,
       onFieldSubmitted: onFieldSubmitted,
+      onChanged: onChanged,
       style: const TextStyle(color: OtaColors.navy),
       decoration: InputDecoration(
         labelText: label,

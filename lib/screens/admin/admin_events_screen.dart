@@ -9,6 +9,7 @@ import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 import '../../widgets/admin/admin_location_selector.dart';
+import '../../widgets/unsaved_changes_guard.dart';
 import '../../widgets/location_date_time_field.dart';
 
 enum _EventFilter { draft, published, past }
@@ -130,6 +131,8 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     final result = await showModalBottomSheet<_EventFormResult>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       useSafeArea: true,
       backgroundColor: OtaColors.white,
       shape: const RoundedRectangleBorder(
@@ -660,6 +663,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   DateTime? _registrationDeadline;
   String? _primaryRegistrationResourceId;
   String? _validationMessage;
+  late final String _initialFingerprint;
+  final _closeController = UnsavedChangesController();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -678,6 +684,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
       event,
       _resourceOptions(),
     );
+    _initialFingerprint = _formFingerprint;
   }
 
   @override
@@ -696,118 +703,126 @@ class _EventFormSheetState extends State<_EventFormSheet> {
         ? 'Update Published Event'
         : 'Publish Event';
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SheetHeader(
-              title: isEditing ? 'Edit Event' : 'Create Event',
-              subtitle: 'Drafts and published events write to Firestore.',
-            ),
-            const SizedBox(height: 14),
-            _AdminTextField(controller: _titleController, label: 'Title'),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _descriptionController,
-              label: 'Description',
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<_EventType>(
-              initialValue: _eventType,
-              decoration: _fieldDecoration('Event type'),
-              items: [
-                for (final type in _EventType.values)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _eventType = value);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            _TwoColumnFields(
-              first: LocationDateTimeField(
-                label: 'Start date and time',
-                locationId: _adminLocationId(),
-                value: _startDateTime,
-                onChanged: (value) => setState(() => _startDateTime = value),
+    return UnsavedChangesGuard(
+      controller: _closeController,
+      isDirty: () => _formFingerprint != _initialFingerprint,
+      isSaving: _submitting,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHeader(
+                title: isEditing ? 'Edit Event' : 'Create Event',
+                subtitle: 'Drafts and published events write to Firestore.',
               ),
-              second: LocationDateTimeField(
-                label: 'End date and time',
-                locationId: _adminLocationId(),
-                value: _endDateTime,
-                onChanged: (value) => setState(() => _endDateTime = value),
-              ),
-            ),
-            const SizedBox(height: 10),
-            LocationDateTimeField(
-              label: 'Registration deadline',
-              locationId: _adminLocationId(),
-              value: _registrationDeadline,
-              optional: true,
-              onChanged: (value) =>
-                  setState(() => _registrationDeadline = value),
-            ),
-            const SizedBox(height: 10),
-            _buildResourceLinkingSection(),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _notesController,
-              label: 'Optional notes',
-              maxLines: 3,
-            ),
-            const SizedBox(height: 16),
-            if (_validationMessage != null) ...[
-              _ValidationMessage(message: _validationMessage!),
+              const SizedBox(height: 14),
+              _AdminTextField(controller: _titleController, label: 'Title'),
               const SizedBox(height: 10),
-            ],
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+              _AdminTextField(
+                controller: _descriptionController,
+                label: 'Description',
+                maxLines: 3,
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<_EventType>(
+                initialValue: _eventType,
+                decoration: _fieldDecoration('Event type'),
+                items: [
+                  for (final type in _EventType.values)
+                    DropdownMenuItem(value: type, child: Text(type.label)),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _eventType = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _TwoColumnFields(
+                first: LocationDateTimeField(
+                  label: 'Start date and time',
+                  locationId: _adminLocationId(),
+                  value: _startDateTime,
+                  onChanged: (value) => setState(() => _startDateTime = value),
                 ),
-                if (!isEditingPublished)
-                  OutlinedButton(
-                    onPressed: () => _submit(_EventSaveAction.draft),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: OtaColors.maroon,
-                      side: const BorderSide(color: OtaColors.maroon),
+                second: LocationDateTimeField(
+                  label: 'End date and time',
+                  locationId: _adminLocationId(),
+                  value: _endDateTime,
+                  onChanged: (value) => setState(() => _endDateTime = value),
+                ),
+              ),
+              const SizedBox(height: 10),
+              LocationDateTimeField(
+                label: 'Registration deadline',
+                locationId: _adminLocationId(),
+                value: _registrationDeadline,
+                optional: true,
+                onChanged: (value) =>
+                    setState(() => _registrationDeadline = value),
+              ),
+              const SizedBox(height: 10),
+              _buildResourceLinkingSection(),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _notesController,
+                label: 'Optional notes',
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              if (_validationMessage != null) ...[
+                _ValidationMessage(message: _validationMessage!),
+                const SizedBox(height: 10),
+              ],
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: _closeController.requestClose,
+                    child: const Text('Cancel'),
+                  ),
+                  if (!isEditingPublished)
+                    OutlinedButton(
+                      onPressed: () => _submit(_EventSaveAction.draft),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: OtaColors.maroon,
+                        side: const BorderSide(color: OtaColors.maroon),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: const Text('Save Draft'),
+                    ),
+                  FilledButton(
+                    onPressed: () => _submit(_EventSaveAction.publish),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtaColors.maroon,
+                      foregroundColor: OtaColors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                    child: const Text('Save Draft'),
+                    child: Text(publishButtonLabel),
                   ),
-                FilledButton(
-                  onPressed: () => _submit(_EventSaveAction.publish),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: OtaColors.maroon,
-                    foregroundColor: OtaColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: Text(publishButtonLabel),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _submit(_EventSaveAction action) {
+    if (_submitting) return;
     final title = _titleController.text.trim();
     final description = _descriptionController.text.trim();
     final locationId = _adminLocationId();
@@ -897,10 +912,22 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             isPublished: isPublished,
           );
 
+    _submitting = true;
     Navigator.of(context).pop(
       _EventFormResult(action: action, data: data, isEditing: event != null),
     );
   }
+
+  String get _formFingerprint => [
+    _titleController.text,
+    _descriptionController.text,
+    _notesController.text,
+    _eventType.name,
+    _startDateTime?.toIso8601String() ?? '',
+    _endDateTime?.toIso8601String() ?? '',
+    _registrationDeadline?.toIso8601String() ?? '',
+    _primaryRegistrationResourceId ?? '',
+  ].join('\u0000');
 
   String _adminLocationId() {
     return adminWriteLocationId();

@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-force-exit"
+    "test": "node --test --test-force-exit",
+    "test:push": "node --test --test-force-exit push_devices.test.js"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.0",

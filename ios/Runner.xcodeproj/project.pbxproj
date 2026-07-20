@@ -644,6 +644,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				APS_ENVIRONMENT = development;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
@@ -659,6 +661,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				APS_ENVIRONMENT = production;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
@@ -674,6 +678,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
+				APS_ENVIRONMENT = production;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
@@ -689,6 +695,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				APS_ENVIRONMENT = development;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
@@ -704,6 +712,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				APS_ENVIRONMENT = production;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
@@ -719,6 +729,8 @@
 			buildSettings = {
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
+				APS_ENVIRONMENT = production;
+				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
 				PRODUCT_BUNDLE_IDENTIFIER = com.academy.olympictaekwondo.placeholder;
