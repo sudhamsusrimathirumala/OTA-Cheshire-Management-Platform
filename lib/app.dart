@@ -35,7 +35,7 @@ class OTAApp extends StatefulWidget {
   State<OTAApp> createState() => _OTAAppState();
 }
 
-class _OTAAppState extends State<OTAApp> {
+class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
   late SessionStage _previousStage;
   late bool _usesFirebase;
 
@@ -48,8 +48,17 @@ class _OTAAppState extends State<OTAApp> {
         : SessionStage.signedOut;
     if (_usesFirebase) {
       firebaseSessionController.addListener(_handleSessionChanged);
+      WidgetsBinding.instance.addObserver(this);
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _handleSessionChanged(),
+      );
     }
     debugViewController.addListener(_handleDebugViewChanged);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _handleSessionChanged();
   }
 
   void _handleSessionChanged() {
@@ -82,6 +91,7 @@ class _OTAAppState extends State<OTAApp> {
   void dispose() {
     if (_usesFirebase) {
       firebaseSessionController.removeListener(_handleSessionChanged);
+      WidgetsBinding.instance.removeObserver(this);
     }
     debugViewController.removeListener(_handleDebugViewChanged);
     super.dispose();

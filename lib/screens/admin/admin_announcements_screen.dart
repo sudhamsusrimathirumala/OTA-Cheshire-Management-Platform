@@ -4,6 +4,7 @@ import '../../models/academy_announcement.dart';
 import '../../models/notification_item.dart';
 import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
+import '../../services/announcement_audience.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
@@ -667,8 +668,8 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _audience = _audienceForFirestoreValue(announcement?.source.audienceType);
     _targetBelts.addAll(announcement?.source.targetBelts ?? const <String>[]);
     _targetClassTypeIds.addAll(
-      (announcement?.source.targetClassTypeIds ?? const <String>[]).map(
-        _normalizeClassGroupId,
+      (announcement?.source.targetClassTypeIds ?? const <String>[]).expand(
+        compatibleAnnouncementClassGroups,
       ),
     );
     _targetStudentProfileIds.addAll(
@@ -1604,14 +1605,19 @@ class _TargetOption {
 }
 
 const _announcementClassGroups = [
-  _TargetOption(id: 'little-tigers', label: 'Little Tigers'),
-  _TargetOption(id: 'teen-adult', label: 'Teen and Adult'),
-  _TargetOption(id: 'teen-adult-sparring', label: 'Teen/Adult Sparring'),
-  _TargetOption(id: 'level-1', label: 'Level 1'),
-  _TargetOption(id: 'level-2', label: 'Level 2'),
-  _TargetOption(id: 'level-3', label: 'Level 3'),
-  _TargetOption(id: 'level-4', label: 'Level 4'),
-  _TargetOption(id: 'level-1-2-sparring', label: 'Level 1/2 Sparring'),
+  _TargetOption(id: 'little-tiger-standard', label: 'Little Tigers'),
+  _TargetOption(id: 'level-1-standard', label: 'Level 1'),
+  _TargetOption(id: 'level-2-standard', label: 'Level 2'),
+  _TargetOption(id: 'level-3-standard', label: 'Level 3'),
+  _TargetOption(id: 'level-4-standard', label: 'Level 4'),
+  _TargetOption(id: 'black-belt-standard', label: 'Black Belt'),
+  _TargetOption(id: 'teen-black-belt-standard', label: 'Teen & Black Belt'),
+  _TargetOption(id: 'adult-standard', label: 'Adult'),
+  _TargetOption(
+    id: 'teen-adult-sparring-standard',
+    label: 'Teen/Adult Sparring',
+  ),
+  _TargetOption(id: 'level-1-2-sparring-standard', label: 'Level 1/2 Sparring'),
 ];
 
 const _announcementPriorityOptions = [
@@ -1695,13 +1701,6 @@ String _classGroupLabelFor(String id) {
         orElse: () => _TargetOption(id: id, label: _labelForId(id)),
       )
       .label;
-}
-
-String _normalizeClassGroupId(String id) {
-  return switch (id) {
-    'black-belt' || 'teen-black-belt' || 'adult' => 'teen-adult',
-    _ => id,
-  };
 }
 
 _BadgeTone _priorityTone(NotificationPriority priority) {

@@ -97,7 +97,7 @@ void main() {
     expect(submitted, 'parent@example.com');
     expect(
       find.text(
-        'If an account is eligible, password reset instructions have been sent.',
+        'If an account exists with this email, password reset instructions have been sent.',
       ),
       findsOneWidget,
     );
@@ -281,7 +281,7 @@ void main() {
   );
 
   test(
-    'device registration lifecycle uses one installation document',
+    'already-restored member registration uses one installation document',
     () async {
       debugViewController.clear();
       final tokens = _FakeTokenProvider('token-1');
@@ -300,12 +300,58 @@ void main() {
       await service.handleSession(session);
       await service.handleSession(session);
       expect(registrations.writes, ['member-1:install-1:token-1']);
+      expect(tokens.permissionRequests, 1);
       tokens.emit('token-2');
       await Future<void>.delayed(Duration.zero);
       expect(registrations.writes.last, 'member-1:install-1:token-2');
       await service.unregisterForSignOut();
       expect(registrations.deletes, ['member-1:install-1']);
       expect(tokens.deleteCalls, 1);
+    },
+  );
+
+  test('denied permission creates no registration', () async {
+    final tokens = _FakeTokenProvider('token', permissionGranted: false);
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(tokens, registrations);
+    await service.handleSession(_memberSession());
+    expect(registrations.writes, isEmpty);
+    expect(
+      service.diagnostics.value.state,
+      PushRegistrationState.permissionDenied,
+    );
+  });
+
+  test('missing token is reported without a registration', () async {
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(_FakeTokenProvider(null), registrations);
+    await service.handleSession(_memberSession());
+    expect(registrations.writes, isEmpty);
+    expect(
+      service.diagnostics.value.state,
+      PushRegistrationState.tokenUnavailable,
+    );
+  });
+
+  test(
+    'sanitized Firestore failure can be retried without exposing token',
+    () async {
+      final registrations = _FakeRegistrationStore(failuresRemaining: 1);
+      final service = _memberPushService(
+        _FakeTokenProvider('secret-raw-token'),
+        registrations,
+      );
+      final session = _memberSession();
+      await service.handleSession(session);
+      expect(service.diagnostics.value.state, PushRegistrationState.failed);
+      expect(service.diagnostics.value.errorCode, 'permission-denied');
+      expect(
+        service.diagnostics.value.toString(),
+        isNot(contains('secret-raw-token')),
+      );
+      await service.handleSession(session);
+      expect(service.diagnostics.value.state, PushRegistrationState.registered);
+      expect(registrations.writes, hasLength(1));
     },
   );
 
@@ -377,10 +423,12 @@ class _MutableAppDataService extends MockAppDataService {
 }
 
 class _FakeTokenProvider implements PushTokenProvider {
-  _FakeTokenProvider(this.token);
+  _FakeTokenProvider(this.token, {this.permissionGranted = true});
 
-  String token;
+  String? token;
+  final bool permissionGranted;
   int deleteCalls = 0;
+  int permissionRequests = 0;
   final _refreshes = StreamController<String>.broadcast();
 
   void emit(String value) => _refreshes.add(value);
@@ -395,7 +443,10 @@ class _FakeTokenProvider implements PushTokenProvider {
   Stream<String> get onTokenRefresh => _refreshes.stream;
 
   @override
-  Future<bool> requestPermission() async => true;
+  Future<bool> requestPermission() async {
+    permissionRequests++;
+    return permissionGranted;
+  }
 }
 
 class _FakeInstallationIdStore implements InstallationIdStore {
@@ -404,6 +455,8 @@ class _FakeInstallationIdStore implements InstallationIdStore {
 }
 
 class _FakeRegistrationStore implements DeviceRegistrationStore {
+  _FakeRegistrationStore({this.failuresRemaining = 0});
+  int failuresRemaining;
   final writes = <String>[];
   final deletes = <String>[];
 
@@ -423,6 +476,13 @@ class _FakeRegistrationStore implements DeviceRegistrationStore {
     required String platform,
     required String environment,
   }) async {
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw FirebaseException(
+        plugin: 'cloud_firestore',
+        code: 'permission-denied',
+      );
+    }
     writes.add('$uid:$installationId:$token');
   }
 }
@@ -450,3 +510,20 @@ PushNotificationService _pushService() => PushNotificationService(
   registrationStore: _FakeRegistrationStore(),
   installationIds: _FakeInstallationIdStore(),
 );
+
+PushNotificationService _memberPushService(
+  _FakeTokenProvider tokens,
+  _FakeRegistrationStore registrations,
+) => PushNotificationService(
+  tokenProvider: tokens,
+  registrationStore: registrations,
+  installationIds: _FakeInstallationIdStore(),
+);
+
+FirebaseSessionController _memberSession() {
+  final authentication = _FakeAuthenticationService(_FakeUser());
+  return FirebaseSessionController(authentication: authentication)
+    ..stage = SessionStage.member
+    ..authUser = authentication.currentUser
+    ..account = _account;
+}

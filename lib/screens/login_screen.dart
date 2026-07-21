@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'If an account is eligible, password reset instructions have been sent.',
+            'If an account exists with this email, password reset instructions have been sent.',
           ),
         ),
       );

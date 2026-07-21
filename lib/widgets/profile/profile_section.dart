@@ -133,11 +133,14 @@ class ProfileActionRow extends StatelessWidget {
               ),
               if (value != null) ...[
                 const SizedBox(width: 12),
-                Text(
-                  value!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: OtaColors.mutedText,
-                    fontWeight: FontWeight.w700,
+                Flexible(
+                  child: Text(
+                    value!,
+                    textAlign: TextAlign.right,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: OtaColors.mutedText,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],

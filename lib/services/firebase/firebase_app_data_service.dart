@@ -13,6 +13,7 @@ import '../../models/notification_item.dart';
 import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
+import '../announcement_audience.dart';
 import '../debug_view_controller.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
@@ -1507,39 +1508,26 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     required List<String> targetStudentProfileIds,
     required List<String> targetUserIds,
   }) {
-    return switch (audienceType) {
-      'everyone' => true,
-      'belt' => targetBelts.contains(selectedStudentProfile.belt),
-      'classType' => _selectedProfileClassGroupIds.any(
-        _normalizedTargetClassTypeIds(targetClassTypeIds).contains,
-      ),
-      'students' =>
-        targetStudentProfileIds.isEmpty
-            ? currentUserAccount.role == UserAccountRole.student
-            : targetStudentProfileIds.contains(selectedStudentProfile.id),
-      'parents' => currentUserAccount.role == UserAccountRole.parent,
-      'specificUsers' => targetUserIds.contains(currentUserAccount.id),
-      'mixed' =>
-        targetBelts.contains(selectedStudentProfile.belt) ||
-            _selectedProfileClassGroupIds.any(
-              _normalizedTargetClassTypeIds(targetClassTypeIds).contains,
-            ) ||
-            targetStudentProfileIds.contains(selectedStudentProfile.id) ||
-            targetUserIds.contains(currentUserAccount.id),
-      _ => false,
-    };
-  }
-
-  Set<String> get _selectedProfileClassGroupIds {
-    final isTeenOrAdult =
-        const LocationTimeService().ageForStudent(selectedStudentProfile) >= 13;
-    return {
-      ...selectedStudentProfile.preferredClassGroupIds.map(
-        _normalizeClassGroupId,
-      ),
-      ..._inferredClassGroupIdsForBelt(selectedStudentProfile.belt),
-      if (isTeenOrAdult) 'teen-adult-sparring',
-    };
+    final account = currentUserAccount;
+    final profiles = account.role == UserAccountRole.parent
+        ? firebaseSessionController.profiles
+              .where(
+                (profile) =>
+                    profile.isActive &&
+                    profile.locationId == account.locationId &&
+                    account.linkedStudentProfileIds.contains(profile.id),
+              )
+              .toList(growable: false)
+        : <StudentProfile>[selectedStudentProfile];
+    return announcementMatchesAccount(
+      audienceType: audienceType,
+      targetBelts: targetBelts,
+      targetClassTypeIds: targetClassTypeIds,
+      targetStudentProfileIds: targetStudentProfileIds,
+      targetUserIds: targetUserIds,
+      account: account,
+      profiles: profiles,
+    );
   }
 
   bool _recordIsInSessionScope(String locationId) {
@@ -1748,36 +1736,10 @@ List<String> _stringListValue(Object? value) {
   return value.whereType<String>().toList(growable: false);
 }
 
-Set<String> _normalizedTargetClassTypeIds(List<String> targetClassTypeIds) {
-  return targetClassTypeIds.map(_normalizeClassGroupId).toSet();
-}
-
 @visibleForTesting
 DateTime memberEventWindowStart(DateTime now) {
   final local = now.toLocal();
   return DateTime(local.year, local.month - 1, 1);
-}
-
-String _normalizeClassGroupId(String id) {
-  return switch (id) {
-    'black-belt' || 'teen-black-belt' || 'adult' => 'teen-adult',
-    'sparring-class' => 'level-1-2-sparring',
-    _ => id,
-  };
-}
-
-Set<String> _inferredClassGroupIdsForBelt(String belt) {
-  return switch (belt) {
-    'White' || 'White-Yellow' || 'Yellow' => {'level-1'},
-    'Yellow-Green' || 'Green' || 'Green-Blue' => {'level-2'},
-    'Blue' || 'Blue-Red' => {'level-3'},
-    'Red' ||
-    'Red-Yellow' ||
-    'Red-Green' ||
-    'Red-Blue' ||
-    'Red-Black' => {'level-4'},
-    _ => const <String>{},
-  };
 }
 
 String _classTypeIdFor(String className) {

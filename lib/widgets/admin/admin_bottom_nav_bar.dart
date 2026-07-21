@@ -300,28 +300,9 @@ class AdminTopHeader extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1040),
-          child: Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                margin: const EdgeInsets.only(right: 10),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [OtaColors.maroon, OtaColors.actionRed],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(color: const Color(0xFFDCA6AE)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Icon(
-                  Icons.admin_panel_settings_outlined,
-                  color: OtaColors.white,
-                  size: 20,
-                ),
-              ),
-              Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final identity = Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -343,8 +324,8 @@ class AdminTopHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-              Container(
+              );
+              final badge = Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 10,
                   vertical: 5,
@@ -361,12 +342,10 @@ class AdminTopHeader extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: () {
-                  Navigator.of(context).pushNamed(OtaRoutes.adminProfile);
-                },
+              );
+              final profileButton = IconButton.filledTonal(
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(OtaRoutes.adminProfile),
                 style: IconButton.styleFrom(
                   backgroundColor: OtaColors.white,
                   foregroundColor: OtaColors.maroon,
@@ -377,8 +356,46 @@ class AdminTopHeader extends StatelessWidget {
                 ),
                 icon: const Icon(Icons.person_outline_rounded),
                 tooltip: 'Admin profile',
-              ),
-            ],
+              );
+              final logo = Container(
+                width: 34,
+                height: 34,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [OtaColors.maroon, OtaColors.actionRed],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(color: const Color(0xFFDCA6AE)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Icon(
+                  Icons.admin_panel_settings_outlined,
+                  color: OtaColors.white,
+                  size: 20,
+                ),
+              );
+              if (constraints.maxWidth < 500) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(children: [logo, identity, profileButton]),
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerLeft, child: badge),
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  logo,
+                  identity,
+                  badge,
+                  const SizedBox(width: 8),
+                  profileButton,
+                ],
+              );
+            },
           ),
         ),
       ),

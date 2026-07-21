@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../app_environment.dart';
@@ -150,6 +151,11 @@ class PushNotificationService {
   String? _installationId;
   String? _registrationFingerprint;
   bool _registering = false;
+  bool _permissionRequested = false;
+  bool? _permissionGranted;
+  final diagnostics = ValueNotifier<PushDiagnostics>(
+    const PushDiagnostics(state: PushRegistrationState.idle),
+  );
 
   Future<void> handleSession(FirebaseSessionController session) async {
     final account = session.account;
@@ -159,26 +165,83 @@ class PushNotificationService {
       hasAuthenticatedUser: session.authUser != null,
       debugViewActive: debugViewController.isActive,
     )) {
+      diagnostics.value = PushDiagnostics(
+        state: PushRegistrationState.idle,
+        sessionEligible: false,
+      );
       return;
     }
     if (_registering) return;
     _registering = true;
     try {
-      if (!await _tokenProvider.requestPermission()) return;
+      diagnostics.value = const PushDiagnostics(
+        state: PushRegistrationState.requestingPermission,
+        sessionEligible: true,
+      );
+      if (!_permissionRequested) {
+        _permissionGranted = await _tokenProvider.requestPermission();
+        _permissionRequested = true;
+      }
+      if (_permissionGranted != true) {
+        diagnostics.value = const PushDiagnostics(
+          state: PushRegistrationState.permissionDenied,
+          sessionEligible: true,
+        );
+        return;
+      }
+      diagnostics.value = const PushDiagnostics(
+        state: PushRegistrationState.requestingToken,
+        sessionEligible: true,
+        permissionGranted: true,
+      );
       final token = await _tokenProvider.getToken();
-      if (token == null || token.trim().isEmpty) return;
+      if (token == null || token.trim().isEmpty) {
+        diagnostics.value = const PushDiagnostics(
+          state: PushRegistrationState.tokenUnavailable,
+          sessionEligible: true,
+          permissionGranted: true,
+        );
+        return;
+      }
+      diagnostics.value = const PushDiagnostics(
+        state: PushRegistrationState.writingRegistration,
+        sessionEligible: true,
+        permissionGranted: true,
+        tokenExists: true,
+      );
       await _writeRegistration(account!.id, token);
+      diagnostics.value = const PushDiagnostics(
+        state: PushRegistrationState.registered,
+        sessionEligible: true,
+        permissionGranted: true,
+        tokenExists: true,
+        registrationSucceeded: true,
+      );
       await _tokenSubscription?.cancel();
       _tokenSubscription = _tokenProvider.onTokenRefresh.listen((value) {
         if (value.trim().isNotEmpty && _registeredUid == account.id) {
           unawaited(_writeRegistration(account.id, value));
         }
       });
+    } on FirebaseException catch (error) {
+      _failed(error.code);
+    } on PlatformException catch (error) {
+      _failed(error.code);
     } catch (_) {
-      // Push registration is best effort and must never block app access.
+      _failed('unknown');
     } finally {
       _registering = false;
     }
+  }
+
+  void _failed(String code) {
+    diagnostics.value = PushDiagnostics(
+      state: PushRegistrationState.failed,
+      sessionEligible: true,
+      permissionGranted: diagnostics.value.permissionGranted,
+      tokenExists: diagnostics.value.tokenExists,
+      errorCode: code.replaceAll(RegExp(r'[^a-zA-Z0-9_/-]'), '-'),
+    );
   }
 
   Future<void> _writeRegistration(String uid, String token) async {
@@ -228,6 +291,34 @@ class PushNotificationService {
   }
 
   FirebaseMessaging get messaging => _messaging ?? FirebaseMessaging.instance;
+}
+
+enum PushRegistrationState {
+  idle,
+  requestingPermission,
+  permissionDenied,
+  requestingToken,
+  tokenUnavailable,
+  writingRegistration,
+  registered,
+  failed,
+}
+
+class PushDiagnostics {
+  const PushDiagnostics({
+    required this.state,
+    this.sessionEligible = false,
+    this.permissionGranted = false,
+    this.tokenExists = false,
+    this.registrationSucceeded = false,
+    this.errorCode,
+  });
+  final PushRegistrationState state;
+  final bool sessionEligible;
+  final bool permissionGranted;
+  final bool tokenExists;
+  final bool registrationSucceeded;
+  final String? errorCode;
 }
 
 bool shouldRegisterPushDevice({

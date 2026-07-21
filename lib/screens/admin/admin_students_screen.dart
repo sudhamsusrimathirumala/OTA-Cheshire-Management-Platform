@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
+import '../../data/sample_curriculum.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/location_time_service.dart';
+import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 
@@ -93,6 +95,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
         _AdminStudentRecord(
           profile: profile,
           account: accountHolderForProfile(profile, accounts),
+          parent: parentAccountForProfile(profile, accounts),
         ),
     ]..sort((a, b) => a.profile.name.compareTo(b.profile.name));
     return records;
@@ -126,18 +129,6 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   }
 
   Future<void> _openStudentDetail(_AdminStudentRecord student) async {
-    final all = _records(
-      appDataService.adminStudentProfiles,
-      appDataService.adminUserAccounts,
-    );
-    final related = all
-        .where(
-          (candidate) =>
-              candidate.profile.id != student.profile.id &&
-              candidate.account?.id != null &&
-              candidate.account?.id == student.account?.id,
-        )
-        .toList();
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -146,8 +137,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) =>
-          _StudentDetailSheet(student: student, relatedStudents: related),
+      builder: (context) => _StudentDetailSheet(student: student),
     );
   }
 }
@@ -163,6 +153,16 @@ UserAccount? accountHolderForProfile(
   };
   return accounts.where((account) => ownerIds.contains(account.id)).firstOrNull;
 }
+
+@visibleForTesting
+UserAccount? parentAccountForProfile(
+  StudentProfile profile,
+  List<UserAccount> accounts,
+) => accounts.where((account) {
+  return account.role == UserAccountRole.parent &&
+      account.id != profile.linkedUserId &&
+      account.linkedStudentProfileIds.contains(profile.id);
+}).firstOrNull;
 
 class _StudentToolbar extends StatelessWidget {
   const _StudentToolbar({
@@ -320,66 +320,112 @@ class _StudentRow extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final details = Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: [
+                _Meta(
+                  icon: Icons.workspace_premium_outlined,
+                  text: profile.belt,
+                ),
+                _Meta(icon: Icons.cake_outlined, text: 'Age $age'),
+              ],
+            );
+            final identity = Text(
+              profile.name,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            );
+            if (constraints.maxWidth < 520) {
+              return Row(
                 children: [
-                  Text(
-                    profile.name,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  if (student.account != null)
-                    Text(
-                      student.account!.displayName,
-                      style: const TextStyle(color: OtaColors.mutedText),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [identity, const SizedBox(height: 6), details],
                     ),
-                ],
-              ),
-            ),
-            Expanded(
-              flex: 4,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _Meta(
-                    icon: Icons.workspace_premium_outlined,
-                    text: profile.belt,
                   ),
-                  _Meta(icon: Icons.cake_outlined, text: '$age'),
-                  _Meta(
-                    icon: Icons.place_outlined,
-                    text: _locationLabel(profile.locationId),
-                  ),
-                  Chip(label: Text(profile.isActive ? 'Active' : 'Inactive')),
+                  const Icon(Icons.chevron_right_rounded),
                 ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded),
-          ],
+              );
+            }
+            return Row(
+              children: [
+                Expanded(flex: 3, child: identity),
+                Expanded(flex: 4, child: details),
+                const Icon(Icons.chevron_right_rounded),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 }
 
-class _StudentDetailSheet extends StatelessWidget {
-  const _StudentDetailSheet({
-    required this.student,
-    required this.relatedStudents,
-  });
+class _StudentDetailSheet extends StatefulWidget {
+  const _StudentDetailSheet({required this.student});
 
   final _AdminStudentRecord student;
-  final List<_AdminStudentRecord> relatedStudents;
+
+  @override
+  State<_StudentDetailSheet> createState() => _StudentDetailSheetState();
+}
+
+class _StudentDetailSheetState extends State<_StudentDetailSheet> {
+  var _editing = false;
+  var _saving = false;
+  String? _error;
+
+  Future<void> _save(
+    String belt,
+    String currentText,
+    String requiredText,
+  ) async {
+    final current = int.tryParse(currentText);
+    final required = int.tryParse(requiredText);
+    if (current == null || required == null) {
+      setState(() => _error = 'Sticker values must be whole numbers.');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await FirebaseAdminWriteService().updateStudentProgress(
+        AdminStudentProgressWriteData(
+          profileId: widget.student.profile.id,
+          beltRank: belt,
+          stickerCurrent: current,
+          stickerRequired: required,
+        ),
+      );
+      if (mounted) Navigator.pop(context);
+    } on ArgumentError catch (error) {
+      if (mounted) setState(() => _error = error.message?.toString());
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Progress could not be saved.');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final profile = student.profile;
-    final account = student.account;
+    final profile = widget.student.profile;
+    final parent = widget.student.parent;
     final required = profile.stickersRequired;
+    if (_editing) {
+      return _StudentProgressEditor(
+        profile: profile,
+        saving: _saving,
+        error: _error,
+        onCancel: () => setState(() => _editing = false),
+        onSave: _save,
+      );
+    }
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         18,
@@ -396,77 +442,45 @@ class _StudentDetailSheet extends StatelessWidget {
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
-          const Text('Student profile overview'),
-          const SizedBox(height: 14),
           _DetailSection(
-            title: 'Student Information',
+            title: 'Student details',
             children: [
               _DetailRow(label: 'Name', value: profile.name),
               _DetailRow(
                 label: 'Age',
                 value: '${const LocationTimeService().ageForStudent(profile)}',
               ),
-              _DetailRow(label: 'Belt', value: profile.belt),
-              _DetailRow(
-                label: 'Academy',
-                value: _locationLabel(profile.locationId),
-              ),
-              _DetailRow(
-                label: 'State',
-                value: profile.isActive ? 'Active' : 'Inactive',
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _DetailSection(
-            title: 'Account holder or parent',
-            children: [
-              if (account != null) ...[
-                _DetailRow(label: 'Name', value: account.displayName),
-                _DetailRow(label: 'Email', value: account.email),
-                _DetailRow(label: 'Role', value: account.roleLabel),
-              ] else ...[
-                _DetailRow(
-                  label: 'Guardian email',
-                  value: profile.guardianEmail ?? 'Not provided',
-                ),
-              ],
-              if (relatedStudents.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                const Text(
-                  'Linked student profiles',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
-                for (final related in relatedStudents)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(related.profile.name),
-                    subtitle: Text(related.profile.belt),
-                  ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-          _DetailSection(
-            title: 'Belt / Promotion',
-            children: [
               _DetailRow(label: 'Current belt', value: profile.belt),
-              _DetailRow(label: 'Next rank', value: profile.nextRank),
-              _DetailRow(
-                label: 'Sticker progress',
-                value: required > 0
-                    ? '${profile.stickerCount} / $required'
-                    : 'Not configured',
-              ),
+              if (required > 0)
+                _DetailRow(
+                  label: 'Sticker progress',
+                  value: '${profile.stickerCount} / $required',
+                ),
+              if (parent != null) ...[
+                _DetailRow(label: 'Parent name', value: parent.displayName),
+                _DetailRow(label: 'Parent email', value: parent.email),
+              ] else if (profile.linkedUserId == null &&
+                  profile.guardianEmail != null)
+                _DetailRow(
+                  label: 'Parent email',
+                  value: profile.guardianEmail!,
+                ),
             ],
           ),
           const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            children: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+              FilledButton(
+                onPressed: () => setState(() => _editing = true),
+                child: const Text('Edit Progress'),
+              ),
+            ],
           ),
         ],
       ),
@@ -475,9 +489,118 @@ class _StudentDetailSheet extends StatelessWidget {
 }
 
 class _AdminStudentRecord {
-  const _AdminStudentRecord({required this.profile, required this.account});
+  const _AdminStudentRecord({
+    required this.profile,
+    required this.account,
+    required this.parent,
+  });
   final StudentProfile profile;
   final UserAccount? account;
+  final UserAccount? parent;
+}
+
+class _StudentProgressEditor extends StatefulWidget {
+  const _StudentProgressEditor({
+    required this.profile,
+    required this.saving,
+    required this.error,
+    required this.onCancel,
+    required this.onSave,
+  });
+  final StudentProfile profile;
+  final bool saving;
+  final String? error;
+  final VoidCallback onCancel;
+  final Future<void> Function(String, String, String) onSave;
+  @override
+  State<_StudentProgressEditor> createState() => _StudentProgressEditorState();
+}
+
+class _StudentProgressEditorState extends State<_StudentProgressEditor> {
+  late String _belt = widget.profile.belt;
+  late final _current = TextEditingController(
+    text: '${widget.profile.stickerCount}',
+  );
+  late final _required = TextEditingController(
+    text: '${widget.profile.stickersRequired}',
+  );
+  @override
+  void dispose() {
+    _current.dispose();
+    _required.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SingleChildScrollView(
+    padding: EdgeInsets.fromLTRB(
+      18,
+      14,
+      18,
+      18 + MediaQuery.viewInsetsOf(context).bottom,
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Edit Progress',
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
+          initialValue: _belt,
+          isExpanded: true,
+          decoration: const InputDecoration(labelText: 'Current belt'),
+          items: [
+            for (final belt in curriculumBeltOrder)
+              DropdownMenuItem(value: belt, child: Text(belt)),
+          ],
+          onChanged: widget.saving
+              ? null
+              : (value) => setState(() => _belt = value!),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _current,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Current stickers'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _required,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Required stickers'),
+        ),
+        if (widget.error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Text(
+              widget.error!,
+              style: const TextStyle(color: OtaColors.maroon),
+            ),
+          ),
+        const SizedBox(height: 16),
+        Wrap(
+          alignment: WrapAlignment.end,
+          spacing: 8,
+          children: [
+            TextButton(
+              onPressed: widget.saving ? null : widget.onCancel,
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: widget.saving
+                  ? null
+                  : () => widget.onSave(_belt, _current.text, _required.text),
+              child: Text(widget.saving ? 'Saving...' : 'Save'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
 }
 
 class _AdminPanel extends StatelessWidget {
@@ -554,9 +677,10 @@ class _Meta extends StatelessWidget {
   final IconData icon;
   final String text;
   @override
-  Widget build(BuildContext context) => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [Icon(icon, size: 16), const SizedBox(width: 3), Text(text)],
+  Widget build(BuildContext context) => Wrap(
+    spacing: 3,
+    crossAxisAlignment: WrapCrossAlignment.center,
+    children: [Icon(icon, size: 16), Text(text)],
   );
 }
 
@@ -617,10 +741,3 @@ InputDecoration _fieldDecoration(String label, {IconData? prefixIcon}) =>
       border: const OutlineInputBorder(),
       isDense: true,
     );
-
-String _locationLabel(String locationId) {
-  for (final location in adminLocationController.locations) {
-    if (location.id == locationId) return location.name;
-  }
-  return locationId;
-}

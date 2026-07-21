@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../data/sample_constants.dart';
 import '../models/student_profile.dart';
@@ -10,6 +11,8 @@ import '../services/debug_view_controller.dart';
 import '../services/location_time_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/firebase/profile_service.dart';
+import '../services/push_runtime.dart';
+import '../services/push_notification_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
@@ -57,6 +60,11 @@ class ProfileScreen extends StatelessWidget {
                               managementAvailableOverride:
                                   managementAvailableOverride,
                             ),
+                            if (kDebugMode &&
+                                pushNotificationService != null) ...[
+                              const SizedBox(height: 22),
+                              const _PushDiagnosticsSection(),
+                            ],
                           ],
                         ),
                       ),
@@ -75,6 +83,57 @@ class ProfileScreen extends StatelessWidget {
               : null,
         );
       },
+    );
+  }
+}
+
+class _PushDiagnosticsSection extends StatelessWidget {
+  const _PushDiagnosticsSection();
+  @override
+  Widget build(BuildContext context) {
+    final service = pushNotificationService!;
+    return ValueListenableBuilder<PushDiagnostics>(
+      valueListenable: service.diagnostics,
+      builder: (context, value, _) => ProfileSection(
+        title: 'Push Diagnostics',
+        children: [
+          ProfileInfoRow(
+            icon: Icons.person_outline,
+            label: 'Session eligible',
+            value: value.sessionEligible ? 'Yes' : 'No',
+          ),
+          ProfileInfoRow(
+            icon: Icons.notifications_outlined,
+            label: 'Permission',
+            value: value.permissionGranted
+                ? 'Authorized'
+                : value.state == PushRegistrationState.permissionDenied
+                ? 'Denied'
+                : 'Not confirmed',
+          ),
+          ProfileInfoRow(
+            icon: Icons.key_outlined,
+            label: 'Token available',
+            value: value.tokenExists ? 'Yes' : 'No',
+          ),
+          ProfileInfoRow(
+            icon: Icons.cloud_done_outlined,
+            label: 'Registration',
+            value: value.registrationSucceeded ? 'Succeeded' : value.state.name,
+          ),
+          if (value.errorCode != null)
+            ProfileInfoRow(
+              icon: Icons.error_outline,
+              label: 'Last error code',
+              value: value.errorCode!,
+            ),
+          ProfileActionRow(
+            icon: Icons.refresh,
+            label: 'Retry registration',
+            onTap: () => service.handleSession(firebaseSessionController),
+          ),
+        ],
+      ),
     );
   }
 }

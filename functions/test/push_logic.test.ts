@@ -7,6 +7,7 @@ import {
   isFirstPublication,
   isPermanentMessagingError,
   notificationPayload,
+  compatibleClassGroups,
 } from "../src/push_logic";
 
 test("only first valid publication triggers", () => {
@@ -15,6 +16,16 @@ test("only first valid publication triggers", () => {
   assert.equal(isFirstPublication("announcement", published, {...published, title: "Edited"}), false);
   assert.equal(isFirstPublication("event", {}, {title: "Event", locationId: "cheshire", isPublished: true, isArchived: false}), true);
   assert.equal(isFirstPublication("resource", {}, {title: "Form", locationId: "cheshire", isPublished: true, isArchived: false, resourceSection: "curriculum"}), false);
+});
+
+test("canonical and legacy class audiences match equivalently", () => {
+  const account = [{id: "parent", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["adult"]}];
+  const profiles = [{id: "adult", isActive: true, locationId: "cheshire", preferredClassGroupIds: ["adult-standard"]}];
+  for (const target of ["adult-standard", "teen-adult"]) {
+    assert.deepEqual(eligibleAccountIds("announcement", {locationId: "cheshire", audienceType: "classType", targetClassTypeIds: [target]}, account, profiles), ["parent"]);
+  }
+  assert.deepEqual(compatibleClassGroups("teen-adult"), ["black-belt-standard", "teen-black-belt-standard", "adult-standard"]);
+  assert.deepEqual(eligibleAccountIds("announcement", {locationId: "cheshire", audienceType: "classType", targetClassTypeIds: ["level-1-standard"]}, account, profiles), []);
 });
 
 test("audiences deduplicate parents and broadcast events by location", () => {

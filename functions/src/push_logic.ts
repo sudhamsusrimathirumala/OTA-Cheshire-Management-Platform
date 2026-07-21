@@ -80,9 +80,10 @@ function announcementMatches(
     return profiles.some((profile) => profile.beltRank && belts.has(profile.beltRank));
   }
   if (audience === "classType") {
-    const groups = new Set(strings(content.targetClassTypeIds));
+    const groups = new Set(strings(content.targetClassTypeIds).flatMap(compatibleClassGroups));
     return profiles.some((profile) =>
-      (profile.preferredClassGroupIds ?? []).some((group) => groups.has(group)));
+      (profile.preferredClassGroupIds ?? []).flatMap(compatibleClassGroups)
+        .some((group) => groups.has(group)));
   }
   if (audience === "students") {
     const selected = new Set(strings(content.targetStudentProfileIds));
@@ -96,6 +97,23 @@ function announcementMatches(
       announcementMatches({...content, audienceType: "students"}, account, profiles);
   }
   return false;
+}
+
+export function compatibleClassGroups(value: string): string[] {
+  switch (value) {
+    case "little-tigers": return ["little-tiger-standard"];
+    case "level-1": return ["level-1-standard"];
+    case "level-2": return ["level-2-standard"];
+    case "level-3": return ["level-3-standard"];
+    case "level-4": return ["level-4-standard"];
+    case "teen-adult-sparring": return ["teen-adult-sparring-standard"];
+    case "sparring-class":
+    case "level-1-2-sparring": return ["level-1-2-sparring-standard"];
+    case "teen-adult": return [
+      "black-belt-standard", "teen-black-belt-standard", "adult-standard",
+    ];
+    default: return [value];
+  }
 }
 
 export function chunkTargets(targets: string[], size = 500): string[][] {

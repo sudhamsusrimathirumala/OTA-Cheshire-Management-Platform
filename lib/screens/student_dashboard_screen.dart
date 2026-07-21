@@ -394,12 +394,15 @@ class _NextClassCard extends StatelessWidget {
                         iconColor: OtaColors.maroon,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'NEXT CLASS',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: OtaColors.white.withValues(alpha: 0.78),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
+                      Flexible(
+                        child: Text(
+                          'NEXT CLASS',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: OtaColors.white.withValues(alpha: 0.78),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
                         ),
                       ),
                     ],
@@ -699,6 +702,7 @@ class _QuickActionsGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 560 ? 4 : 2;
+        final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
         return GridView.builder(
           shrinkWrap: true,
@@ -708,7 +712,11 @@ class _QuickActionsGrid extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: constraints.maxWidth >= 560 ? 1.04 : 0.96,
+            childAspectRatio: constraints.maxWidth >= 560
+                ? 1.04
+                : largeText
+                ? 0.78
+                : 0.96,
           ),
           itemBuilder: (context, index) {
             final action = _actions[index];

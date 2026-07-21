@@ -33,6 +33,10 @@ linking is intentionally not part of this implementation.
 Manual Firebase/platform setup still required:
 
 1. In Firebase Console Authentication, enable Email/Password.
+2. Set **Authentication -> Settings -> Password policy -> Minimum length** to
+   **8**, and set **Enforcement mode** to **Require**. The app also validates an
+   eight-character minimum during signup; the hosted Firebase reset page handles
+   choosing the replacement password.
 2. Enable Google, select a project support email, and save the provider.
 3. Add Android debug/release SHA-1 and SHA-256 fingerprints when required,
    then refresh `google-services.json` and generated FlutterFire options.
