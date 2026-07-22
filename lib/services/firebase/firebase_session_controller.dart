@@ -248,6 +248,13 @@ class FirebaseSessionController extends ChangeNotifier {
     );
     if (_profilesSubscription != null &&
         _profilesLinkedFingerprint == linkedFingerprint) {
+      final cachedSelectedProfile = selectedProfileFromCachedProfiles(
+        account: loadedAccount,
+        profiles: profiles,
+      );
+      if (cachedSelectedProfile != null) {
+        selectedProfile = cachedSelectedProfile;
+      }
       errorMessage = null;
       notifyListeners();
       return;
@@ -561,7 +568,6 @@ class FirebaseSessionController extends ChangeNotifier {
               sessionGeneration,
               profilesGeneration,
               generation,
-              profile.id,
               locationId,
             )) {
               return;
@@ -587,7 +593,6 @@ class FirebaseSessionController extends ChangeNotifier {
               sessionGeneration,
               profilesGeneration,
               generation,
-              profile.id,
               locationId,
             )) {
               _setError('Unable to verify academy location.');
@@ -664,7 +669,6 @@ class FirebaseSessionController extends ChangeNotifier {
     int sessionGeneration,
     int profilesGeneration,
     int locationGeneration,
-    String profileId,
     String locationId,
   ) =>
       _isCurrentProfiles(
@@ -673,7 +677,6 @@ class FirebaseSessionController extends ChangeNotifier {
         account?.linkedStudentProfileIds.join('\u0000') ?? '',
       ) &&
       locationGeneration == _locationGeneration &&
-      selectedProfile?.id == profileId &&
       selectedProfile?.locationId == locationId;
 
   bool _isCurrentAdminLocation(
@@ -764,6 +767,15 @@ bool hasActiveAcademyAccessFor({
       account.selectedStudentProfileId == selectedProfile.id &&
       account.linkedStudentProfileIds.contains(selectedProfile.id) &&
       locationActive;
+}
+
+@visibleForTesting
+StudentProfile? selectedProfileFromCachedProfiles({
+  required UserAccount account,
+  required List<StudentProfile> profiles,
+}) {
+  final selectedId = account.selectedStudentProfileId;
+  return profiles.where((profile) => profile.id == selectedId).firstOrNull;
 }
 
 @visibleForTesting

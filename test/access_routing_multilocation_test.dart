@@ -170,6 +170,25 @@ void main() {
       );
     });
 
+    test(
+      'profile switching resolves the new selection from cached profiles',
+      () {
+        final profiles = <Student>[_student(), _student(id: 'student-2')];
+        final account = _account(
+          linkedIds: const ['student-1', 'student-2'],
+          selectedId: 'student-2',
+        );
+
+        expect(
+          selectedProfileFromCachedProfiles(
+            account: account,
+            profiles: profiles,
+          ),
+          same(profiles[1]),
+        );
+      },
+    );
+
     test('inactive or mismatched records fail closed', () {
       final cases = <({UserAccount account, Student profile, bool location})>[
         (
