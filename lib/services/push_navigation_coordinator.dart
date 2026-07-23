@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -19,8 +20,13 @@ class PushNavigationCoordinator {
     required this.service,
     FlutterLocalNotificationsPlugin? localNotifications,
     PushAccessState Function()? accessState,
+    this.foregroundNotificationDisplay,
+    bool? useAndroidForegroundNotifications,
   }) : _localNotifications =
            localNotifications ?? FlutterLocalNotificationsPlugin(),
+       _useAndroidForegroundNotifications =
+           useAndroidForegroundNotifications ??
+           defaultTargetPlatform == TargetPlatform.android,
        _accessState =
            accessState ??
            (() {
@@ -34,6 +40,9 @@ class PushNavigationCoordinator {
   final GlobalKey<NavigatorState> navigatorKey;
   final PushNotificationService service;
   final FlutterLocalNotificationsPlugin _localNotifications;
+  @visibleForTesting
+  final ForegroundNotificationDisplay? foregroundNotificationDisplay;
+  final bool _useAndroidForegroundNotifications;
   final PushAccessState Function() _accessState;
   final PendingPushDestination _pending = PendingPushDestination();
   StreamSubscription<RemoteMessage>? _foregroundSubscription;
@@ -74,7 +83,7 @@ class PushNavigationCoordinator {
       sound: true,
     );
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
-      _showForegroundMessage,
+      showForegroundMessage,
     );
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _queueRemoteMessage,
@@ -94,14 +103,34 @@ class PushNavigationCoordinator {
     flush();
   }
 
-  Future<void> _showForegroundMessage(RemoteMessage message) async {
+  @visibleForTesting
+  Future<void> showForegroundMessage(RemoteMessage message) async {
+    if (!_useAndroidForegroundNotifications) return;
     final destination = PushDestination.tryParse(message.data);
-    if (destination == null) return;
     final notification = message.notification;
+    final receivedTitle = _visibleText(notification?.title);
+    final receivedBody = _visibleText(notification?.body);
+    if (destination == null && receivedTitle == null && receivedBody == null) {
+      return;
+    }
+    final display = ForegroundNotificationRequest(
+      id: foregroundNotificationId(
+        messageId: message.messageId,
+        destination: destination,
+      ),
+      title: receivedTitle ?? 'Olympic Taekwondo Academy',
+      body: receivedBody ?? 'A new academy update is available.',
+      payload: destination?.encode(),
+    );
+    final displayOverride = foregroundNotificationDisplay;
+    if (displayOverride != null) {
+      await displayOverride(display);
+      return;
+    }
     await _localNotifications.show(
-      id: destination.contentId.hashCode,
-      title: notification?.title ?? 'Olympic Taekwondo Academy',
-      body: notification?.body ?? 'A new academy update is available.',
+      id: display.id,
+      title: display.title,
+      body: display.body,
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
           otaUpdatesChannelId,
@@ -113,7 +142,7 @@ class PushNavigationCoordinator {
           icon: 'ic_stat_ota',
         ),
       ),
-      payload: destination.encode(),
+      payload: display.payload,
     );
   }
 
@@ -178,6 +207,55 @@ class PushNavigationCoordinator {
     await _foregroundSubscription?.cancel();
     await _openedSubscription?.cancel();
   }
+}
+
+typedef ForegroundNotificationDisplay =
+    Future<void> Function(ForegroundNotificationRequest notification);
+
+class ForegroundNotificationRequest {
+  const ForegroundNotificationRequest({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.payload,
+  });
+
+  final int id;
+  final String title;
+  final String body;
+  final String? payload;
+}
+
+@visibleForTesting
+int foregroundNotificationId({
+  required String? messageId,
+  required PushDestination? destination,
+  DateTime? now,
+}) {
+  final normalizedMessageId = _visibleText(messageId);
+  if (normalizedMessageId != null) {
+    return _stableNotificationId(normalizedMessageId);
+  }
+  if (destination != null) {
+    return _stableNotificationId(
+      '${destination.type.name}:${destination.contentId}:${destination.locationId}',
+    );
+  }
+  return (now ?? DateTime.now()).millisecondsSinceEpoch & 0x7fffffff;
+}
+
+String? _visibleText(String? value) {
+  final normalized = value?.trim();
+  return normalized == null || normalized.isEmpty ? null : normalized;
+}
+
+int _stableNotificationId(String value) {
+  var hash = 0x811c9dc5;
+  for (final codeUnit in value.codeUnits) {
+    hash ^= codeUnit;
+    hash = (hash * 0x01000193) & 0xffffffff;
+  }
+  return hash & 0x7fffffff;
 }
 
 class PushAccessState {
