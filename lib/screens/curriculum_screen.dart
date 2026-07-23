@@ -13,11 +13,14 @@ typedef CurriculumVideoBuilder =
     Widget Function(BuildContext context, String videoId);
 
 String? initialCurriculumBelt({
-  required String selectedStudentBelt,
+  required String? selectedStudentBelt,
   required List<String> beltOrder,
   required Map<String, CurriculumRequirement> curriculum,
 }) {
-  if (curriculum.containsKey(selectedStudentBelt)) return selectedStudentBelt;
+  if (selectedStudentBelt != null &&
+      curriculum.containsKey(selectedStudentBelt)) {
+    return selectedStudentBelt;
+  }
   if (curriculum.containsKey('No Belt')) return 'No Belt';
   for (final belt in beltOrder) {
     if (curriculum.containsKey(belt)) return belt;
@@ -73,7 +76,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
   void initState() {
     super.initState();
     _selectedBelt = initialCurriculumBelt(
-      selectedStudentBelt: _service.selectedStudentProfile.belt,
+      selectedStudentBelt: widget.isAdmin
+          ? null
+          : _service.selectedStudentProfile.belt,
       beltOrder: _service.curriculumBeltOrder,
       curriculum: _service.curriculum,
     );

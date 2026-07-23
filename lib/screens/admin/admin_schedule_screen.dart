@@ -465,7 +465,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   int? _startMinutes;
   int? _endMinutes;
   late bool _isActive;
-  late bool _isPreferred;
   String? _validationMessage;
   late final String _initialFingerprint;
   final _closeController = UnsavedChangesController();
@@ -491,7 +490,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       text: session?.eligibilityNote ?? '',
     );
     _isActive = session?.isPublished ?? true;
-    _isPreferred = session?.isPreferred ?? false;
     _initialFingerprint = _formFingerprint;
   }
 
@@ -616,11 +614,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                 value: _isActive,
                 onChanged: (value) => setState(() => _isActive = value),
               ),
-              _SwitchRow(
-                title: 'Preferred class',
-                value: _isPreferred,
-                onChanged: (value) => setState(() => _isPreferred = value),
-              ),
               const SizedBox(height: 16),
               if (_validationMessage != null) ...[
                 _ValidationMessage(message: _validationMessage!),
@@ -700,7 +693,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
           ? null
           : _eligibilityNoteController.text.trim(),
       isActive: _isActive,
-      isPreferred: _isPreferred,
       resumesOn: session?.resumesOn,
       createdAt: session?.createdAt,
     );
@@ -718,7 +710,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _startMinutes ?? '',
     _endMinutes ?? '',
     _isActive,
-    _isPreferred,
   ].join('\u0000');
 
   String _adminLocationId() {

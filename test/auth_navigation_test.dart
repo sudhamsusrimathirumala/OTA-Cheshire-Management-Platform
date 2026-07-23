@@ -123,6 +123,38 @@ void main() {
     expect(find.text('AUTH GATE'), findsNothing);
   });
 
+  testWidgets('unexpected sign-in failure shows a safe message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.login,
+        screen: LoginScreen(
+          emailSignIn: (email, password) async =>
+              throw StateError('Sensitive implementation detail'),
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'student@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password1');
+
+    await tester.tap(find.text('LOGIN'));
+    await tester.pump();
+
+    expect(
+      find.text('Sign-in could not be completed. Please try again.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Sensitive implementation detail'),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('repeated signup submit performs one action and one reset', (
     tester,
   ) async {

@@ -11,16 +11,23 @@ enum AuthenticationError {
   accountDisabled,
   tooManyAttempts,
   networkFailure,
+  providerDisabled,
+  appConfiguration,
   googleCancelled,
   providerConflict,
   unknownFailure,
 }
 
 class AuthenticationException implements Exception {
-  const AuthenticationException(this.error, this.message);
+  const AuthenticationException(
+    this.error,
+    this.message, {
+    this.diagnosticCode,
+  });
 
   final AuthenticationError error;
   final String message;
+  final String? diagnosticCode;
 
   @override
   String toString() => message;
@@ -156,7 +163,8 @@ class FirebaseAuthenticationService implements AuthenticationService {
 }
 
 AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {
-  final category = switch (error.code) {
+  final diagnosticCode = sanitizedAuthenticationDiagnosticCode(error.code);
+  final category = switch (diagnosticCode) {
     'invalid-email' => AuthenticationError.invalidEmail,
     'weak-password' => AuthenticationError.weakPassword,
     'email-already-in-use' => AuthenticationError.emailAlreadyInUse,
@@ -166,6 +174,9 @@ AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {
     'user-disabled' => AuthenticationError.accountDisabled,
     'too-many-requests' => AuthenticationError.tooManyAttempts,
     'network-request-failed' => AuthenticationError.networkFailure,
+    'operation-not-allowed' => AuthenticationError.providerDisabled,
+    'app-not-authorized' ||
+    'invalid-api-key' => AuthenticationError.appConfiguration,
     'account-exists-with-different-credential' ||
     'credential-already-in-use' ||
     'provider-already-linked' => AuthenticationError.providerConflict,
@@ -185,8 +196,19 @@ AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {
       'Too many attempts. Wait a moment and try again.',
     AuthenticationError.networkFailure =>
       'The network is unavailable. Check your connection and try again.',
+    AuthenticationError.providerDisabled =>
+      'Email and password sign-in is not enabled for this app.',
+    AuthenticationError.appConfiguration =>
+      'This app is not configured correctly for sign-in.',
     AuthenticationError.providerConflict =>
       'This account uses a different sign-in method.',
     _ => 'Sign-in could not be completed. Please try again.',
-  });
+  }, diagnosticCode: diagnosticCode);
+}
+
+String? sanitizedAuthenticationDiagnosticCode(String? code) {
+  final normalized = code?.trim().toLowerCase();
+  if (normalized == null || normalized.isEmpty) return null;
+  final sanitized = normalized.replaceAll(RegExp(r'[^a-z0-9_-]'), '-');
+  return sanitized.isEmpty ? null : sanitized;
 }

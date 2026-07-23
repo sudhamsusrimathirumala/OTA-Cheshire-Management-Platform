@@ -332,7 +332,6 @@ Map<String, Object?> classSessionWriteFields(
     else if (data.id != null)
       'eligibilityNote': FieldValue.delete(),
     'isActive': data.isActive,
-    'isPreferred': data.isPreferred,
     if (data.resumesOn != null)
       'resumesOn': Timestamp.fromDate(data.resumesOn!)
     else if (data.id != null)
@@ -548,7 +547,6 @@ class ClassSessionWriteData {
     required this.eligibleBelts,
     required this.description,
     required this.isActive,
-    required this.isPreferred,
     this.id,
     this.eligibilityNote,
     this.resumesOn,
@@ -567,7 +565,6 @@ class ClassSessionWriteData {
   final String description;
   final String? eligibilityNote;
   final bool isActive;
-  final bool isPreferred;
   final DateTime? resumesOn;
   final DateTime? createdAt;
 

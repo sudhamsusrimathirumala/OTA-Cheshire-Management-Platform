@@ -237,7 +237,6 @@ void main() {
           eligibleBelts: const <String>[],
           description: 'Class',
           isActive: true,
-          isPreferred: false,
           createdAt: createdAt,
         ),
         now: now,
@@ -387,7 +386,6 @@ void main() {
           eligibleBelts: <String>[],
           description: 'Class',
           isActive: true,
-          isPreferred: false,
         ),
         now: now,
       );
@@ -460,7 +458,6 @@ void main() {
           eligibilityNote: 'Instructor approval',
           resumesOn: resumesOn,
           isActive: true,
-          isPreferred: false,
         ),
         now: now,
       );

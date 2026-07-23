@@ -606,7 +606,8 @@ void main() {
     expect(find.text('Class name'), findsOneWidget);
     expect(find.text('Save Class'), findsOneWidget);
 
-    await tester.tapAt(const Offset(20, 20));
+    await tester.ensureVisible(find.text('Cancel'));
+    await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Bulk Actions'));
     await tester.tap(find.text('Bulk Actions'));
@@ -2261,7 +2262,6 @@ void main() {
       eligibleBelts: [],
       description: '',
       isActive: true,
-      isPreferred: false,
     );
 
     expect(data.startMinutes, 1160);
@@ -2277,7 +2277,6 @@ void main() {
       eligibleBelts: const [],
       description: '',
       isActive: true,
-      isPreferred: false,
     );
     final blackBelt = ClassSessionWriteData(
       className: 'Black Belt',
@@ -2289,7 +2288,6 @@ void main() {
       eligibleBelts: const [],
       description: '',
       isActive: true,
-      isPreferred: false,
     );
     final teenBlackBelt = ClassSessionWriteData(
       className: 'Teen & Black Belt',
@@ -2301,7 +2299,6 @@ void main() {
       eligibleBelts: const [],
       description: '',
       isActive: true,
-      isPreferred: false,
     );
     expect(adult.bulkGroupId, 'adult-standard');
     expect(blackBelt.bulkGroupId, 'black-belt-standard');
@@ -2508,7 +2505,6 @@ void main() {
       description: 'Sparring',
       eligibilityNote: 'Instructor approval',
       isActive: true,
-      isPreferred: false,
       createdAt: createdAt,
     );
     final fields = classSessionWriteFields(data, now: now);
@@ -2532,11 +2528,11 @@ void main() {
         'description',
         'eligibilityNote',
         'isActive',
-        'isPreferred',
         'createdAt',
         'updatedAt',
       }),
     );
+    expect(fields, isNot(contains('isPreferred')));
   });
 
   testWidgets('combined date time field preserves value when canceled', (

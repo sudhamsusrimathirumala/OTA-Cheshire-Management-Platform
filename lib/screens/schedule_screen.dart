@@ -904,7 +904,6 @@ class _WeekClassRow extends StatelessWidget {
                   icon: Icons.workspace_premium_rounded,
                   label: session.eligibilityLabel,
                 ),
-                if (session.isPreferred) const _WeekBadge(label: 'Preferred'),
               ],
             ),
           ],
@@ -941,30 +940,6 @@ class _WeekMeta extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _WeekBadge extends StatelessWidget {
-  const _WeekBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: OtaColors.white,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: OtaColors.maroon,
-          fontWeight: FontWeight.w900,
-        ),
       ),
     );
   }

@@ -94,8 +94,7 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
       for (final profile in profiles)
         _AdminStudentRecord(
           profile: profile,
-          account: accountHolderForProfile(profile, accounts),
-          parent: parentAccountForProfile(profile, accounts),
+          relationship: adminStudentRelationship(profile, accounts),
         ),
     ]..sort((a, b) => a.profile.name.compareTo(b.profile.name));
     return records;
@@ -161,8 +160,66 @@ UserAccount? parentAccountForProfile(
 ) => accounts.where((account) {
   return account.role == UserAccountRole.parent &&
       account.id != profile.linkedUserId &&
-      account.linkedStudentProfileIds.contains(profile.id);
+      (account.linkedStudentProfileIds.contains(profile.id) ||
+          profile.guardianUserIds.contains(account.id));
 }).firstOrNull;
+
+enum AdminStudentProfileType {
+  child('Child profile'),
+  parentSelf('Parent’s own student profile'),
+  studentSelf('Self-managed student'),
+  unknown('Unknown relationship');
+
+  const AdminStudentProfileType(this.label);
+
+  final String label;
+}
+
+class AdminStudentRelationship {
+  const AdminStudentRelationship({required this.type, this.account});
+
+  final AdminStudentProfileType type;
+  final UserAccount? account;
+}
+
+@visibleForTesting
+AdminStudentRelationship adminStudentRelationship(
+  StudentProfile profile,
+  List<UserAccount> accounts,
+) {
+  final linkedAccount = accounts
+      .where((account) => account.id == profile.linkedUserId)
+      .firstOrNull;
+  if (linkedAccount?.role == UserAccountRole.parent) {
+    return AdminStudentRelationship(
+      type: AdminStudentProfileType.parentSelf,
+      account: linkedAccount,
+    );
+  }
+  if (linkedAccount?.role == UserAccountRole.student) {
+    return AdminStudentRelationship(
+      type: AdminStudentProfileType.studentSelf,
+      account: linkedAccount,
+    );
+  }
+  final parent = parentAccountForProfile(profile, accounts);
+  if (parent != null) {
+    return AdminStudentRelationship(
+      type: AdminStudentProfileType.child,
+      account: parent,
+    );
+  }
+  if (linkedAccount != null) {
+    return AdminStudentRelationship(
+      type: AdminStudentProfileType.unknown,
+      account: linkedAccount,
+    );
+  }
+  if (profile.linkedUserId == null && profile.guardianEmail != null) {
+    return const AdminStudentRelationship(type: AdminStudentProfileType.child);
+  }
+  return const AdminStudentRelationship(type: AdminStudentProfileType.unknown);
+}
 
 class _StudentToolbar extends StatelessWidget {
   const _StudentToolbar({
@@ -415,7 +472,8 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
   @override
   Widget build(BuildContext context) {
     final profile = widget.student.profile;
-    final parent = widget.student.parent;
+    final relationship = widget.student.relationship;
+    final account = relationship.account;
     final required = profile.stickersRequired;
     if (_editing) {
       return _StudentProgressEditor(
@@ -456,10 +514,25 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
                   label: 'Sticker progress',
                   value: '${profile.stickerCount} / $required',
                 ),
-              if (parent != null) ...[
-                _DetailRow(label: 'Parent name', value: parent.displayName),
-                _DetailRow(label: 'Parent email', value: parent.email),
-              ] else if (profile.linkedUserId == null &&
+              _DetailRow(label: 'Profile type', value: relationship.type.label),
+              if (account != null)
+                _DetailRow(label: 'Account role', value: account.roleLabel),
+              if (relationship.type == AdminStudentProfileType.child &&
+                  account != null) ...[
+                _DetailRow(label: 'Parent name', value: account.displayName),
+                _DetailRow(label: 'Parent email', value: account.email),
+              ] else if ((relationship.type ==
+                          AdminStudentProfileType.parentSelf ||
+                      relationship.type ==
+                          AdminStudentProfileType.studentSelf) &&
+                  account != null) ...[
+                _DetailRow(
+                  label: 'Account holder name',
+                  value: account.displayName,
+                ),
+                _DetailRow(label: 'Account holder email', value: account.email),
+              ] else if (relationship.type == AdminStudentProfileType.child &&
+                  account == null &&
                   profile.guardianEmail != null)
                 _DetailRow(
                   label: 'Parent email',
@@ -491,12 +564,11 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
 class _AdminStudentRecord {
   const _AdminStudentRecord({
     required this.profile,
-    required this.account,
-    required this.parent,
+    required this.relationship,
   });
   final StudentProfile profile;
-  final UserAccount? account;
-  final UserAccount? parent;
+  final AdminStudentRelationship relationship;
+  UserAccount? get account => relationship.account;
 }
 
 class _StudentProgressEditor extends StatefulWidget {

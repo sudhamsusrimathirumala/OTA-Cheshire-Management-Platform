@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
@@ -78,7 +79,20 @@ class _LoginScreenState extends State<LoginScreen> {
         context,
       ).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
     } on AuthenticationException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(
+          () => _error = authenticationDisplayMessage(
+            error,
+            includeDiagnostic: kDebugMode,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'Sign-in could not be completed. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -224,6 +238,16 @@ class _LoginScreenState extends State<LoginScreen> {
   void _clearServerError() {
     if (_error != null) setState(() => _error = null);
   }
+}
+
+@visibleForTesting
+String authenticationDisplayMessage(
+  AuthenticationException error, {
+  required bool includeDiagnostic,
+}) {
+  final code = error.diagnosticCode;
+  if (!includeDiagnostic || code == null || code.isEmpty) return error.message;
+  return '${error.message} (Code: $code)';
 }
 
 String? _emailValidator(String? value) =>
