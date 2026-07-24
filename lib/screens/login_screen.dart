@@ -116,7 +116,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } on AuthenticationException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(
+          () => _error = authenticationDisplayMessage(
+            error,
+            includeDiagnostic: kDebugMode,
+          ),
+        );
+      }
     }
   }
 
@@ -244,9 +251,14 @@ String authenticationDisplayMessage(
   AuthenticationException error, {
   required bool includeDiagnostic,
 }) {
+  if (!includeDiagnostic) return error.message;
   final code = error.diagnosticCode;
-  if (!includeDiagnostic || code == null || code.isEmpty) return error.message;
-  return '${error.message} (Code: $code)';
+  final details = error.diagnosticMessage;
+  return [
+    error.message,
+    if (code != null && code.isNotEmpty) 'Code: $code',
+    if (details != null && details.isNotEmpty) 'Details: $details',
+  ].join('\n');
 }
 
 String? _emailValidator(String? value) =>

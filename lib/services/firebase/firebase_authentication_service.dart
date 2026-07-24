@@ -23,11 +23,13 @@ class AuthenticationException implements Exception {
     this.error,
     this.message, {
     this.diagnosticCode,
+    this.diagnosticMessage,
   });
 
   final AuthenticationError error;
   final String message;
   final String? diagnosticCode;
+  final String? diagnosticMessage;
 
   @override
   String toString() => message;
@@ -164,6 +166,10 @@ class FirebaseAuthenticationService implements AuthenticationService {
 
 AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {
   final diagnosticCode = sanitizedAuthenticationDiagnosticCode(error.code);
+  final diagnosticMessage = sanitizedAuthenticationDiagnosticMessage(
+    error.message,
+    plugin: error.plugin,
+  );
   final category = switch (diagnosticCode) {
     'invalid-email' => AuthenticationError.invalidEmail,
     'weak-password' => AuthenticationError.weakPassword,
@@ -182,33 +188,98 @@ AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {
     'provider-already-linked' => AuthenticationError.providerConflict,
     _ => AuthenticationError.unknownFailure,
   };
-  return AuthenticationException(category, switch (category) {
-    AuthenticationError.invalidEmail => 'Enter a valid email address.',
-    AuthenticationError.weakPassword => 'Choose a stronger password.',
-    AuthenticationError.emailAlreadyInUse =>
-      'An account already uses this email address.',
-    AuthenticationError.invalidCredentials ||
-    AuthenticationError.wrongPassword ||
-    AuthenticationError.userNotFound => 'The email or password is incorrect.',
-    AuthenticationError.accountDisabled =>
-      'This account is disabled. Contact the academy.',
-    AuthenticationError.tooManyAttempts =>
-      'Too many attempts. Wait a moment and try again.',
-    AuthenticationError.networkFailure =>
-      'The network is unavailable. Check your connection and try again.',
-    AuthenticationError.providerDisabled =>
-      'Email and password sign-in is not enabled for this app.',
-    AuthenticationError.appConfiguration =>
-      'This app is not configured correctly for sign-in.',
-    AuthenticationError.providerConflict =>
-      'This account uses a different sign-in method.',
-    _ => 'Sign-in could not be completed. Please try again.',
-  }, diagnosticCode: diagnosticCode);
+  return AuthenticationException(
+    category,
+    switch (category) {
+      AuthenticationError.invalidEmail => 'Enter a valid email address.',
+      AuthenticationError.weakPassword => 'Choose a stronger password.',
+      AuthenticationError.emailAlreadyInUse =>
+        'An account already uses this email address.',
+      AuthenticationError.invalidCredentials ||
+      AuthenticationError.wrongPassword ||
+      AuthenticationError.userNotFound => 'The email or password is incorrect.',
+      AuthenticationError.accountDisabled =>
+        'This account is disabled. Contact the academy.',
+      AuthenticationError.tooManyAttempts =>
+        'Too many attempts. Wait a moment and try again.',
+      AuthenticationError.networkFailure =>
+        'The network is unavailable. Check your connection and try again.',
+      AuthenticationError.providerDisabled =>
+        'Email and password sign-in is not enabled for this app.',
+      AuthenticationError.appConfiguration =>
+        'This app is not configured correctly for sign-in.',
+      AuthenticationError.providerConflict =>
+        'This account uses a different sign-in method.',
+      _ => 'Sign-in could not be completed. Please try again.',
+    },
+    diagnosticCode: diagnosticCode,
+    diagnosticMessage: diagnosticMessage,
+  );
 }
 
 String? sanitizedAuthenticationDiagnosticCode(String? code) {
-  final normalized = code?.trim().toLowerCase();
-  if (normalized == null || normalized.isEmpty) return null;
+  final raw = code?.trim();
+  if (raw == null ||
+      raw.isEmpty ||
+      raw.length > 64 ||
+      raw.contains('@') ||
+      raw.contains('://') ||
+      raw.contains('?') ||
+      raw.contains('[') ||
+      raw.contains(']') ||
+      RegExp(r'[A-Za-z0-9]{24,}').hasMatch(raw)) {
+    return null;
+  }
+  final normalized = raw.toLowerCase();
   final sanitized = normalized.replaceAll(RegExp(r'[^a-z0-9_-]'), '-');
   return sanitized.isEmpty ? null : sanitized;
+}
+
+String? sanitizedAuthenticationDiagnosticMessage(
+  String? message, {
+  String? plugin,
+}) {
+  final value = message?.trim();
+  if (value == null || value.isEmpty) return null;
+
+  final upper = value.toUpperCase();
+  final lower = value.toLowerCase();
+  final marker = switch (upper) {
+    _ when upper.contains('CONFIGURATION_NOT_FOUND') =>
+      'CONFIGURATION_NOT_FOUND',
+    _ when upper.contains('OPERATION_NOT_ALLOWED') => 'OPERATION_NOT_ALLOWED',
+    _
+        when upper.contains('API_KEY_INVALID') ||
+            lower.contains('api key not valid') =>
+      'API_KEY_INVALID',
+    _ when upper.contains('APP_NOT_AUTHORIZED') => 'APP_NOT_AUTHORIZED',
+    _
+        when lower.contains(
+          'requests from this android client application are blocked',
+        ) =>
+      'Requests from this Android client application are blocked',
+    _
+        when lower.contains('network failure') ||
+            lower.contains('network request failed') =>
+      'NETWORK_FAILURE',
+    _ when lower.contains('internal error') => 'INTERNAL_ERROR',
+    _ => null,
+  };
+  if (marker == null) return null;
+
+  final safePlugin = _sanitizedAuthenticationPlugin(plugin);
+  return safePlugin == null ? marker : '$marker; plugin=$safePlugin';
+}
+
+String? _sanitizedAuthenticationPlugin(String? plugin) {
+  final normalized = plugin?.trim().toLowerCase();
+  if (normalized == null ||
+      normalized.isEmpty ||
+      normalized == 'firebase_auth' ||
+      normalized.length > 40 ||
+      !RegExp(r'^[a-z0-9_.-]+$').hasMatch(normalized) ||
+      RegExp(r'(token|credential|password|api[_-]?key)').hasMatch(normalized)) {
+    return null;
+  }
+  return normalized;
 }

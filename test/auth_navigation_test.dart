@@ -123,6 +123,56 @@ void main() {
     expect(find.text('AUTH GATE'), findsNothing);
   });
 
+  testWidgets('login and signup use the same safe diagnostic formatter', (
+    tester,
+  ) async {
+    const failure = AuthenticationException(
+      AuthenticationError.unknownFailure,
+      'Sign-in could not be completed. Please try again.',
+      diagnosticCode: 'unknown',
+      diagnosticMessage: 'CONFIGURATION_NOT_FOUND',
+    );
+    final expected = authenticationDisplayMessage(
+      failure,
+      includeDiagnostic: true,
+    );
+
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.login,
+        screen: LoginScreen(
+          emailSignIn: (email, password) async => throw failure,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'student@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password1');
+    await tester.tap(find.text('LOGIN'));
+    await tester.pump();
+    expect(find.text(expected), findsOneWidget);
+
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.signup,
+        screen: SignupScreen(
+          emailSignUp: (email, password) async => throw failure,
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'student@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password1');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+    await tester.tap(find.text('CREATE ACCOUNT'));
+    await tester.pump();
+    expect(find.text(expected), findsOneWidget);
+  });
+
   testWidgets('unexpected sign-in failure shows a safe message', (
     tester,
   ) async {
