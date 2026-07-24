@@ -132,6 +132,34 @@ class FirebaseSessionController extends ChangeNotifier {
     await profileService.selectProfile(profileId);
   }
 
+  Future<SessionStage> adoptAuthenticatedUserAfterSignup({
+    Duration timeout = const Duration(seconds: 15),
+  }) async {
+    final user = authentication.currentUser;
+    if (user == null) {
+      throw StateError('No authenticated user is available for onboarding.');
+    }
+    if (authUser?.uid != user.uid || stage == SessionStage.signedOut) {
+      await _replaceAuthUser(user);
+    }
+    if (stage != SessionStage.loading) return stage;
+
+    final completer = Completer<SessionStage>();
+    void handleStageChanged() {
+      if (!completer.isCompleted && stage != SessionStage.loading) {
+        completer.complete(stage);
+      }
+    }
+
+    addListener(handleStageChanged);
+    handleStageChanged();
+    try {
+      return await completer.future.timeout(timeout);
+    } finally {
+      removeListener(handleStageChanged);
+    }
+  }
+
   Future<void> _replaceAuthUser(User? user) async {
     final generation = ++_sessionGeneration;
     _profilesGeneration++;

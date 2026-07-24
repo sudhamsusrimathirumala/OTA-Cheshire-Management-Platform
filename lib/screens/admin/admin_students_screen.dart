@@ -515,8 +515,6 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
                   value: '${profile.stickerCount} / $required',
                 ),
               _DetailRow(label: 'Profile type', value: relationship.type.label),
-              if (account != null)
-                _DetailRow(label: 'Account role', value: account.roleLabel),
               if (relationship.type == AdminStudentProfileType.child &&
                   account != null) ...[
                 _DetailRow(label: 'Parent name', value: account.displayName),

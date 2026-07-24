@@ -240,7 +240,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-@visibleForTesting
 String authenticationDisplayMessage(
   AuthenticationException error, {
   required bool includeDiagnostic,

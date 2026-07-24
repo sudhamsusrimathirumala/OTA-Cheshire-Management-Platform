@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../routes.dart';
+import 'login_screen.dart' show authenticationDisplayMessage;
 import '../services/firebase/firebase_authentication_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/debug_view_controller.dart';
@@ -12,10 +14,16 @@ import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key, this.emailSignUp, this.googleSignIn});
+  const SignupScreen({
+    super.key,
+    this.emailSignUp,
+    this.googleSignIn,
+    this.emailSignupSessionTransition,
+  });
 
   final Future<Object?> Function(String email, String password)? emailSignUp;
   final Future<Object?> Function()? googleSignIn;
+  final Future<SessionStage> Function()? emailSignupSessionTransition;
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -28,6 +36,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _confirmation = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
+  bool _emailAccountCreated = false;
   String? _error;
 
   @override
@@ -40,14 +49,62 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _createAccount() async {
     if (!_formKey.currentState!.validate()) return;
-    await _run(
-      () =>
-          widget.emailSignUp?.call(_email.text, _password.text) ??
-          firebaseSessionController.authentication.signUpWithEmail(
-            _email.text,
-            _password.text,
-          ),
-    );
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      if (!_emailAccountCreated) {
+        await (widget.emailSignUp?.call(_email.text, _password.text) ??
+            firebaseSessionController.authentication.signUpWithEmail(
+              _email.text,
+              _password.text,
+            ));
+        _emailAccountCreated = true;
+      }
+
+      final stage = await _completeEmailSignupSession();
+      if (stage != SessionStage.needsProfiles) {
+        throw const _SignupSessionTransitionException();
+      }
+      if (!mounted) return;
+      _openAuthGate();
+    } on AuthenticationException catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = _emailAccountCreated
+              ? _SignupSessionTransitionException.message
+              : authenticationDisplayMessage(
+                  error,
+                  includeDiagnostic: kDebugMode,
+                ),
+        );
+      }
+    } on _SignupSessionTransitionException {
+      if (mounted) {
+        setState(() => _error = _SignupSessionTransitionException.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = _emailAccountCreated
+              ? _SignupSessionTransitionException.message
+              : 'Account creation could not be completed. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<SessionStage> _completeEmailSignupSession() {
+    final transition = widget.emailSignupSessionTransition;
+    if (transition != null) return transition();
+    if (widget.emailSignUp != null) {
+      return Future.value(SessionStage.needsProfiles);
+    }
+    return firebaseSessionController.adoptAuthenticatedUserAfterSignup();
   }
 
   Future<void> _run(Future<Object?> Function() action) async {
@@ -59,15 +116,31 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       await action();
       if (!mounted) return;
-      debugViewController.clear();
-      Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
+      _openAuthGate();
     } on AuthenticationException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted) {
+        setState(
+          () => _error = authenticationDisplayMessage(
+            error,
+            includeDiagnostic: kDebugMode,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error =
+              'Account creation could not be completed. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  void _openAuthGate() {
+    debugViewController.clear();
+    Navigator.of(context).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
   }
 
   @override
@@ -183,4 +256,11 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
+}
+
+class _SignupSessionTransitionException implements Exception {
+  const _SignupSessionTransitionException();
+
+  static const message =
+      'Your account was created, but profile setup could not be opened. Please return to Login and sign in.';
 }

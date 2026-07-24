@@ -80,87 +80,96 @@ void main() {
     expect(relationship.account, isNull);
   });
 
-  testWidgets('detail sheet shows relationship, role, and contact labels', (
-    tester,
-  ) async {
-    final profiles = [
-      _profile(
-        id: 'child',
-        name: 'Child Profile',
-        guardianUserIds: const ['parent-1'],
-      ),
-      _profile(
-        id: 'parent-self',
-        name: 'Parent Profile',
-        linkedUserId: 'parent-1',
-      ),
-      _profile(
-        id: 'student-self',
-        name: 'Student Profile',
-        linkedUserId: 'student-1',
-      ),
-      _profile(
-        id: 'legacy',
-        name: 'Legacy Profile',
-        guardianEmail: 'legacy@example.com',
-      ),
-      _profile(
-        id: 'missing',
-        name: 'Missing Account Profile',
-        linkedUserId: 'missing-account',
-      ),
-    ];
-    appDataService = _AdminStudentService(
-      profiles: profiles,
-      accounts: const [parent, studentAccount],
-    );
-    adminLocationController = AdminLocationController.forTesting(
-      role: UserAccountRole.admin,
-      locations: const [
-        AcademyLocation(
-          id: 'ota-cheshire',
-          name: 'OTA Cheshire',
-          timeZoneId: 'America/New_York',
-          isActive: true,
+  testWidgets(
+    'detail sheet shows relationship and contact labels without role',
+    (tester) async {
+      final profiles = [
+        _profile(
+          id: 'child',
+          name: 'Child Profile',
+          guardianUserIds: const ['parent-1'],
         ),
-      ],
-      assignedLocationId: 'ota-cheshire',
-    );
-    addTearDown(initializeMockAppDataServiceForTests);
+        _profile(
+          id: 'parent-self',
+          name: 'Parent Profile',
+          linkedUserId: 'parent-1',
+        ),
+        _profile(
+          id: 'student-self',
+          name: 'Student Profile',
+          linkedUserId: 'student-1',
+        ),
+        _profile(
+          id: 'legacy',
+          name: 'Legacy Profile',
+          guardianEmail: 'legacy@example.com',
+        ),
+        _profile(
+          id: 'missing',
+          name: 'Missing Account Profile',
+          linkedUserId: 'missing-account',
+        ),
+      ];
+      appDataService = _AdminStudentService(
+        profiles: profiles,
+        accounts: const [parent, studentAccount],
+      );
+      adminLocationController = AdminLocationController.forTesting(
+        role: UserAccountRole.admin,
+        locations: const [
+          AcademyLocation(
+            id: 'ota-cheshire',
+            name: 'OTA Cheshire',
+            timeZoneId: 'America/New_York',
+            isActive: true,
+          ),
+        ],
+        assignedLocationId: 'ota-cheshire',
+      );
+      addTearDown(initializeMockAppDataServiceForTests);
 
-    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+      await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
 
-    await _open(tester, 'Child Profile');
-    expect(find.text('Child profile'), findsOneWidget);
-    expect(find.text('Account role'), findsOneWidget);
-    expect(find.text('Parent'), findsOneWidget);
-    expect(find.text('Parent name'), findsOneWidget);
-    expect(find.text('parent@example.com'), findsOneWidget);
-    await _close(tester);
+      await _open(tester, 'Child Profile');
+      expect(find.text('Profile type'), findsOneWidget);
+      expect(find.text('Child profile'), findsOneWidget);
+      expect(find.text('Account role'), findsNothing);
+      expect(find.text('Parent name'), findsOneWidget);
+      expect(find.text('Pat Parent'), findsOneWidget);
+      expect(find.text('parent@example.com'), findsOneWidget);
+      await _close(tester);
 
-    await _open(tester, 'Parent Profile');
-    expect(find.text('Parent’s own student profile'), findsOneWidget);
-    expect(find.text('Parent'), findsOneWidget);
-    expect(find.text('Account holder name'), findsOneWidget);
-    expect(find.text('Pat Parent'), findsOneWidget);
-    await _close(tester);
+      await _open(tester, 'Parent Profile');
+      expect(find.text('Profile type'), findsOneWidget);
+      expect(find.text('Parent’s own student profile'), findsOneWidget);
+      expect(find.text('Account role'), findsNothing);
+      expect(find.text('Account holder name'), findsOneWidget);
+      expect(find.text('Pat Parent'), findsOneWidget);
+      expect(find.text('parent@example.com'), findsOneWidget);
+      await _close(tester);
 
-    await _open(tester, 'Student Profile');
-    expect(find.text('Self-managed student'), findsOneWidget);
-    expect(find.text('Student'), findsOneWidget);
-    expect(find.text('student@example.com'), findsOneWidget);
-    await _close(tester);
+      await _open(tester, 'Student Profile');
+      expect(find.text('Profile type'), findsOneWidget);
+      expect(find.text('Self-managed student'), findsOneWidget);
+      expect(find.text('Account role'), findsNothing);
+      expect(find.text('Account holder name'), findsOneWidget);
+      expect(find.text('Sam Student'), findsOneWidget);
+      expect(find.text('student@example.com'), findsOneWidget);
+      await _close(tester);
 
-    await _open(tester, 'Legacy Profile');
-    expect(find.text('Child profile'), findsOneWidget);
-    expect(find.text('legacy@example.com'), findsOneWidget);
-    expect(find.text('Account role'), findsNothing);
-    await _close(tester);
+      await _open(tester, 'Legacy Profile');
+      expect(find.text('Profile type'), findsOneWidget);
+      expect(find.text('Child profile'), findsOneWidget);
+      expect(find.text('legacy@example.com'), findsOneWidget);
+      expect(find.text('Account role'), findsNothing);
+      await _close(tester);
 
-    await _open(tester, 'Missing Account Profile');
-    expect(find.text('Unknown relationship'), findsOneWidget);
-    expect(find.text('Account role'), findsNothing);
-  });
+      await _open(tester, 'Missing Account Profile');
+      expect(find.text('Profile type'), findsOneWidget);
+      expect(find.text('Unknown relationship'), findsOneWidget);
+      expect(find.text('Account role'), findsNothing);
+    },
+  );
 }
 
 Future<void> _open(WidgetTester tester, String name) async {
