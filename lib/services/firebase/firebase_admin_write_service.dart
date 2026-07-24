@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
+import '../../models/class_session.dart';
+import '../../data/sample_curriculum.dart';
 import '../firestore/firestore_collections.dart';
 
 class FirebaseAdminWriteService {
@@ -114,6 +116,57 @@ class FirebaseAdminWriteService {
         .doc(resourceId)
         .delete();
   }
+
+  Future<void> updateStudentProgress(AdminStudentProgressWriteData data) async {
+    final fields = adminStudentProgressWriteFields(data);
+    await _database
+        .collection(FirestoreCollections.studentProfiles)
+        .doc(data.profileId)
+        .update({...fields, 'updatedAt': FieldValue.serverTimestamp()});
+  }
+}
+
+class AdminStudentProgressWriteData {
+  const AdminStudentProgressWriteData({
+    required this.profileId,
+    required this.beltRank,
+    required this.stickerCurrent,
+    required this.stickerRequired,
+  });
+
+  final String profileId;
+  final String beltRank;
+  final int stickerCurrent;
+  final int stickerRequired;
+}
+
+Map<String, Object?> adminStudentProgressWriteFields(
+  AdminStudentProgressWriteData data,
+) {
+  if (!curriculumBeltOrder.contains(data.beltRank)) {
+    throw ArgumentError.value(data.beltRank, 'beltRank', 'Unsupported belt.');
+  }
+  if (data.stickerCurrent < 0 || data.stickerRequired < 0) {
+    throw ArgumentError('Sticker values must be at least zero.');
+  }
+  if (data.stickerRequired > 0 && data.stickerCurrent > data.stickerRequired) {
+    throw ArgumentError('Current stickers cannot exceed required stickers.');
+  }
+  return <String, Object?>{
+    'beltRank': data.beltRank,
+    'stickerProgress': <String, Object?>{
+      'current': data.stickerCurrent,
+      'required': data.stickerRequired,
+      'nextRank': _nextRankForAdminProgress(data.beltRank),
+    },
+  };
+}
+
+String _nextRankForAdminProgress(String belt) {
+  final index = curriculumBeltOrder.indexOf(belt);
+  return index >= 0 && index < curriculumBeltOrder.length - 1
+      ? curriculumBeltOrder[index + 1]
+      : 'Black';
 }
 
 Map<String, Object?> resourceWriteFields(
@@ -279,7 +332,6 @@ Map<String, Object?> classSessionWriteFields(
     else if (data.id != null)
       'eligibilityNote': FieldValue.delete(),
     'isActive': data.isActive,
-    'isPreferred': data.isPreferred,
     if (data.resumesOn != null)
       'resumesOn': Timestamp.fromDate(data.resumesOn!)
     else if (data.id != null)
@@ -484,7 +536,7 @@ class ResourceWriteData {
 }
 
 class ClassSessionWriteData {
-  const ClassSessionWriteData({
+  ClassSessionWriteData({
     required this.className,
     required this.classTypeId,
     String? bulkGroupId,
@@ -495,12 +547,11 @@ class ClassSessionWriteData {
     required this.eligibleBelts,
     required this.description,
     required this.isActive,
-    required this.isPreferred,
     this.id,
     this.eligibilityNote,
     this.resumesOn,
     this.createdAt,
-  }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard';
+  }) : bulkGroupId = resolvedPreferredClassGroupId(className, bulkGroupId);
 
   final String? id;
   final String className;
@@ -514,7 +565,6 @@ class ClassSessionWriteData {
   final String description;
   final String? eligibilityNote;
   final bool isActive;
-  final bool isPreferred;
   final DateTime? resumesOn;
   final DateTime? createdAt;
 

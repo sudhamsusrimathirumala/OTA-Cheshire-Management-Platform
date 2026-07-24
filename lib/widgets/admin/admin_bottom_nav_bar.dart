@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../routes.dart';
+import '../../models/academy_location.dart';
+import '../../services/app_data_service_provider.dart';
+import '../../services/firebase/admin_location_controller.dart';
 import '../../theme/ota_colors.dart';
 
 void returnToAdminResourcesLanding(BuildContext context) {
@@ -143,7 +146,7 @@ class AdminPageShell extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _AdminTopHeader(),
+            const AdminTopHeader(),
             AdminNavigationBar(
               selectedDestination: selectedDestination,
               onSelectedDestinationTap: onSelectedDestinationTap,
@@ -268,11 +271,25 @@ class AdminPlaceholderPage extends StatelessWidget {
 // Kept as an alias so existing admin screens can migrate without route churn.
 typedef AdminBottomNavBar = AdminNavigationBar;
 
-class _AdminTopHeader extends StatelessWidget {
-  const _AdminTopHeader();
+class AdminTopHeader extends StatelessWidget {
+  const AdminTopHeader({this.controller, super.key});
+
+  final AdminLocationController? controller;
 
   @override
   Widget build(BuildContext context) {
+    final locationController = controller ?? adminLocationController;
+    return AnimatedBuilder(
+      animation: locationController,
+      builder: (context, _) => _buildHeader(context, locationController),
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    AdminLocationController locationController,
+  ) {
+    final presentation = adminHeaderPresentation(locationController);
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -283,9 +300,64 @@ class _AdminTopHeader extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1040),
-          child: Row(
-            children: [
-              Container(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final identity = Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      presentation.title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: OtaColors.ink,
+                        fontWeight: FontWeight.w800,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      presentation.subtitle,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: OtaColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              final badge = Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF3CD),
+                  border: Border.all(color: const Color(0xFFE9D28E)),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  presentation.badge,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+              final profileButton = IconButton.filledTonal(
+                onPressed: () =>
+                    Navigator.of(context).pushNamed(OtaRoutes.adminProfile),
+                style: IconButton.styleFrom(
+                  backgroundColor: OtaColors.white,
+                  foregroundColor: OtaColors.maroon,
+                  side: const BorderSide(color: Color(0xFFE9D2D7)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                icon: const Icon(Icons.person_outline_rounded),
+                tooltip: 'Admin profile',
+              );
+              final logo = Container(
                 width: 34,
                 height: 34,
                 margin: const EdgeInsets.only(right: 10),
@@ -303,70 +375,81 @@ class _AdminTopHeader extends StatelessWidget {
                   color: OtaColors.white,
                   size: 20,
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              );
+              if (constraints.maxWidth < 500) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      'Admin',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: OtaColors.ink,
-                        fontWeight: FontWeight.w800,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'OTA Cheshire Control Panel',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: OtaColors.mutedText,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Row(children: [logo, identity, profileButton]),
+                    const SizedBox(height: 8),
+                    Align(alignment: Alignment.centerLeft, child: badge),
                   ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF3CD),
-                  border: Border.all(color: const Color(0xFFE9D28E)),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'ota-cheshire',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: OtaColors.ink,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filledTonal(
-                onPressed: () {
-                  Navigator.of(context).pushNamed(OtaRoutes.adminProfile);
-                },
-                style: IconButton.styleFrom(
-                  backgroundColor: OtaColors.white,
-                  foregroundColor: OtaColors.maroon,
-                  side: const BorderSide(color: Color(0xFFE9D2D7)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                icon: const Icon(Icons.person_outline_rounded),
-                tooltip: 'Admin profile',
-              ),
-            ],
+                );
+              }
+              return Row(
+                children: [
+                  logo,
+                  identity,
+                  badge,
+                  const SizedBox(width: 8),
+                  profileButton,
+                ],
+              );
+            },
           ),
         ),
       ),
     );
   }
+}
+
+class AdminHeaderPresentation {
+  const AdminHeaderPresentation({
+    required this.title,
+    required this.subtitle,
+    required this.badge,
+  });
+
+  final String title;
+  final String subtitle;
+  final String badge;
+}
+
+AdminHeaderPresentation adminHeaderPresentation(
+  AdminLocationController controller,
+) {
+  if (controller.isDebugAdmin) {
+    return const AdminHeaderPresentation(
+      title: 'OTA Cheshire',
+      subtitle: 'Sample Admin View',
+      badge: 'Development Mock Data',
+    );
+  }
+  if (controller.isSuperAdmin) {
+    final selected = controller.selectedLocation;
+    return AdminHeaderPresentation(
+      title: 'OTA Administration',
+      subtitle: selected?.name ?? 'All locations',
+      badge: selected == null
+          ? 'Select a location for edits'
+          : _locationSecondaryText(selected),
+    );
+  }
+  final assigned = controller.assignedLocation;
+  return AdminHeaderPresentation(
+    title: assigned?.name ?? 'OTA Administration',
+    subtitle: assigned == null
+        ? 'Academy location unavailable'
+        : assigned.isActive
+        ? _locationSecondaryText(assigned)
+        : 'Academy unavailable',
+    badge: 'Location Admin',
+  );
+}
+
+String _locationSecondaryText(AcademyLocation location) {
+  final address = location.formattedAddress;
+  return address.isEmpty ? location.id : address.replaceAll('\n', ', ');
 }
 
 class _AdminPageTitle extends StatelessWidget {

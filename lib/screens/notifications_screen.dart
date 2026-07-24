@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/notification_item.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/firebase/notification_read_exception.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/notifications/notification_card.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -18,6 +19,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
   _NotificationFilter _selectedFilter = _NotificationFilter.all;
+  bool _markingAll = false;
 
   List<NotificationItem> get _filteredNotifications {
     return switch (_selectedFilter) {
@@ -60,6 +62,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               unreadCount: appDataService.notifications
                                   .where((notification) => !notification.isRead)
                                   .length,
+                              isMarkingAll: _markingAll,
+                              onMarkAll: _markAllRead,
                             ),
                             const SizedBox(height: 16),
                             _NotificationFilters(
@@ -88,16 +92,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               for (final notification in notifications) ...[
                                 NotificationCard(
                                   notification: notification,
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute<void>(
-                                        builder: (_) =>
-                                            NotificationDetailScreen(
-                                              notification: notification,
-                                            ),
-                                      ),
-                                    );
-                                  },
+                                  onTap: () => _openNotification(notification),
                                 ),
                                 if (notification != notifications.last)
                                   const SizedBox(height: 12),
@@ -118,12 +113,65 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       },
     );
   }
+
+  Future<void> _openNotification(NotificationItem notification) async {
+    final detail = Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationDetailScreen(notification: notification),
+      ),
+    );
+    if (!notification.isRead) {
+      try {
+        await appDataService.markNotificationRead(notification.id);
+      } on NotificationReadException catch (error) {
+        if (mounted) _showReadError(error.message);
+      } catch (_) {
+        if (mounted) _showReadError();
+      }
+    }
+    await detail;
+  }
+
+  Future<void> _markAllRead() async {
+    if (_markingAll) return;
+    setState(() => _markingAll = true);
+    try {
+      await appDataService.markAllNotificationsRead();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All visible notifications marked read.'),
+          ),
+        );
+      }
+    } on NotificationReadException catch (error) {
+      if (mounted) _showReadError(error.message);
+    } catch (_) {
+      if (mounted) _showReadError();
+    } finally {
+      if (mounted) setState(() => _markingAll = false);
+    }
+  }
+
+  void _showReadError([
+    String message = 'Unable to update notification read state. Try again.',
+  ]) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _NotificationsHeader extends StatelessWidget {
-  const _NotificationsHeader({required this.unreadCount});
+  const _NotificationsHeader({
+    required this.unreadCount,
+    required this.isMarkingAll,
+    required this.onMarkAll,
+  });
 
   final int unreadCount;
+  final bool isMarkingAll;
+  final VoidCallback onMarkAll;
 
   @override
   Widget build(BuildContext context) {
@@ -189,11 +237,14 @@ class _NotificationsHeader extends StatelessWidget {
             ),
           ),
           IconButton.filledTonal(
-            onPressed: () {
-              // TODO: Mark all notifications as read when persistence exists.
-            },
+            onPressed: unreadCount == 0 || isMarkingAll ? null : onMarkAll,
             tooltip: 'Mark all read',
-            icon: const Icon(Icons.done_all_rounded),
+            icon: isMarkingAll
+                ? const SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.done_all_rounded),
             style: IconButton.styleFrom(
               backgroundColor: OtaColors.softRed,
               foregroundColor: OtaColors.maroon,

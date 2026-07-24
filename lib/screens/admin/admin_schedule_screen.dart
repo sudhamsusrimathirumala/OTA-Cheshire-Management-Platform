@@ -5,8 +5,10 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/schedule_time_field.dart';
 import '../../services/location_time_service.dart';
+import '../../widgets/unsaved_changes_guard.dart';
 
 class AdminScheduleScreen extends StatefulWidget {
   const AdminScheduleScreen({super.key});
@@ -22,11 +24,20 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
-        final sessions = [
-          ...appDataService.scheduleForWeekday(_selectedWeekday),
-        ]..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+        final selectedLocationId = adminLocationController.selectedLocationId;
+        final sessions =
+            appDataService
+                .scheduleForWeekday(_selectedWeekday)
+                .where(
+                  (session) =>
+                      !adminLocationController.isSuperAdmin ||
+                      selectedLocationId == null ||
+                      session.locationId == selectedLocationId,
+                )
+                .toList()
+              ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
 
         return AdminPageShell(
           selectedDestination: AdminNavDestination.schedule,
@@ -35,6 +46,7 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const AdminLocationSelector(),
               _ScheduleToolbar(
                 onAddClass: () => _openClassSheet(),
                 onBulkAction: _openBulkActionSheet,
@@ -66,6 +78,8 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
     final result = await showModalBottomSheet<ClassSessionWriteData>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       useSafeArea: true,
       backgroundColor: OtaColors.white,
       shape: const RoundedRectangleBorder(
@@ -451,8 +465,10 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   int? _startMinutes;
   int? _endMinutes;
   late bool _isActive;
-  late bool _isPreferred;
   String? _validationMessage;
+  late final String _initialFingerprint;
+  final _closeController = UnsavedChangesController();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -474,7 +490,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       text: session?.eligibilityNote ?? '',
     );
     _isActive = session?.isPublished ?? true;
-    _isPreferred = session?.isPreferred ?? false;
+    _initialFingerprint = _formFingerprint;
   }
 
   @override
@@ -490,146 +506,150 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   Widget build(BuildContext context) {
     final isEditing = widget.session != null;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SheetHeader(
-              title: isEditing ? 'Edit Class' : 'Add Class',
-              subtitle: 'Class sessions save to the Firestore schedule.',
-            ),
-            const SizedBox(height: 14),
-            _AdminTextField(
-              controller: _classNameController,
-              label: 'Class name',
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<int>(
-              initialValue: _weekday,
-              decoration: _fieldDecoration('Day'),
-              items: [
-                for (final weekday in _weekdaysSundayFirst)
-                  DropdownMenuItem<int>(
-                    value: weekday,
-                    child: Text(_weekdayLabel(weekday)),
-                  ),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _weekday = value);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns = constraints.maxWidth >= 560;
-                final fields = [
-                  ScheduleTimeField(
-                    label: 'Start time',
-                    minutes: _startMinutes,
-                    onChanged: (value) => setState(() => _startMinutes = value),
-                  ),
-                  ScheduleTimeField(
-                    label: 'End time',
-                    minutes: _endMinutes,
-                    onChanged: (value) => setState(() => _endMinutes = value),
-                  ),
-                ];
+    return UnsavedChangesGuard(
+      controller: _closeController,
+      isDirty: () => _formFingerprint != _initialFingerprint,
+      isSaving: _submitting,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHeader(
+                title: isEditing ? 'Edit Class' : 'Add Class',
+                subtitle: 'Class sessions save to the Firestore schedule.',
+              ),
+              const SizedBox(height: 14),
+              _AdminTextField(
+                controller: _classNameController,
+                label: 'Class name',
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<int>(
+                initialValue: _weekday,
+                decoration: _fieldDecoration('Day'),
+                items: [
+                  for (final weekday in _weekdaysSundayFirst)
+                    DropdownMenuItem<int>(
+                      value: weekday,
+                      child: Text(_weekdayLabel(weekday)),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _weekday = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final twoColumns = constraints.maxWidth >= 560;
+                  final fields = [
+                    ScheduleTimeField(
+                      label: 'Start time',
+                      minutes: _startMinutes,
+                      onChanged: (value) =>
+                          setState(() => _startMinutes = value),
+                    ),
+                    ScheduleTimeField(
+                      label: 'End time',
+                      minutes: _endMinutes,
+                      onChanged: (value) => setState(() => _endMinutes = value),
+                    ),
+                  ];
 
-                if (!twoColumns) {
-                  return Column(
+                  if (!twoColumns) {
+                    return Column(
+                      children: [
+                        fields.first,
+                        const SizedBox(height: 10),
+                        fields.last,
+                      ],
+                    );
+                  }
+
+                  return Row(
                     children: [
-                      fields.first,
-                      const SizedBox(height: 10),
-                      fields.last,
+                      Expanded(child: fields.first),
+                      const SizedBox(width: 10),
+                      Expanded(child: fields.last),
                     ],
                   );
-                }
-
-                return Row(
-                  children: [
-                    Expanded(child: fields.first),
-                    const SizedBox(width: 10),
-                    Expanded(child: fields.last),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Class times are entered in ${const LocationTimeService().friendlyTimeZoneLabelFor(_adminLocationId())}.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: OtaColors.mutedText,
-                fontWeight: FontWeight.w700,
+                },
               ),
-            ),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _beltsController,
-              label: 'Eligible belts',
-              helperText: 'Comma-separated belt ranks.',
-            ),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _descriptionController,
-              label: 'Description',
-              maxLines: 2,
-            ),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _eligibilityNoteController,
-              label: 'Eligibility note',
-            ),
-            const SizedBox(height: 10),
-            _SwitchRow(
-              title: 'Active class',
-              value: _isActive,
-              onChanged: (value) => setState(() => _isActive = value),
-            ),
-            _SwitchRow(
-              title: 'Preferred class',
-              value: _isPreferred,
-              onChanged: (value) => setState(() => _isPreferred = value),
-            ),
-            const SizedBox(height: 16),
-            if (_validationMessage != null) ...[
-              _ValidationMessage(message: _validationMessage!),
               const SizedBox(height: 10),
-            ],
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
+              Text(
+                'Class times are entered in ${const LocationTimeService().friendlyTimeZoneLabelFor(_adminLocationId())}.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w700,
                 ),
-                FilledButton(
-                  onPressed: _submit,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: OtaColors.maroon,
-                    foregroundColor: OtaColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: Text(isEditing ? 'Update Class' : 'Save Class'),
-                ),
+              ),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _beltsController,
+                label: 'Eligible belts',
+                helperText: 'Comma-separated belt ranks.',
+              ),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _descriptionController,
+                label: 'Description',
+                maxLines: 2,
+              ),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _eligibilityNoteController,
+                label: 'Eligibility note',
+              ),
+              const SizedBox(height: 10),
+              _SwitchRow(
+                title: 'Active class',
+                value: _isActive,
+                onChanged: (value) => setState(() => _isActive = value),
+              ),
+              const SizedBox(height: 16),
+              if (_validationMessage != null) ...[
+                _ValidationMessage(message: _validationMessage!),
+                const SizedBox(height: 10),
               ],
-            ),
-          ],
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: _closeController.requestClose,
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    onPressed: _submit,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtaColors.maroon,
+                      foregroundColor: OtaColors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    child: Text(isEditing ? 'Update Class' : 'Save Class'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _submit() {
+    if (_submitting) return;
     final className = _classNameController.text.trim();
     final startMinutes = _startMinutes;
     final endMinutes = _endMinutes;
@@ -662,7 +682,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       id: session?.id,
       className: className,
       classTypeId: classTypeId,
-      bulkGroupId: session?.bulkGroupId ?? '$classTypeId-standard',
+      bulkGroupId: preferredClassGroupIdForClassName(className),
       locationId: _adminLocationId(),
       weekday: _weekday,
       startMinutes: startMinutes,
@@ -673,22 +693,27 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
           ? null
           : _eligibilityNoteController.text.trim(),
       isActive: _isActive,
-      isPreferred: _isPreferred,
       resumesOn: session?.resumesOn,
       createdAt: session?.createdAt,
     );
 
+    _submitting = true;
     Navigator.of(context).pop(data);
   }
 
-  String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId
-        .trim();
-    if (accountLocationId.isNotEmpty) {
-      return accountLocationId;
-    }
+  String get _formFingerprint => [
+    _classNameController.text,
+    _beltsController.text,
+    _descriptionController.text,
+    _eligibilityNoteController.text,
+    _weekday,
+    _startMinutes ?? '',
+    _endMinutes ?? '',
+    _isActive,
+  ].join('\u0000');
 
-    return appDataService.selectedStudentProfile.locationId;
+  String _adminLocationId() {
+    return adminWriteLocationId();
   }
 }
 

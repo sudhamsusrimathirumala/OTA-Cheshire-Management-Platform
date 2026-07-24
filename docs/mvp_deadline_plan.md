@@ -19,7 +19,8 @@ Use [Project Backlog](Project_Backlog.md) for current work.
 ## Still Incomplete
 
 - Firebase Authentication and real user/role routing.
-- User approval and Firestore security rules.
+- The original user-approval design and Firestore security rules (the final
+  release later simplified access to active accounts, profiles, and locations).
 - Device push notifications and persistent per-user read state.
 - Parent/student profile switching.
 - Write-capable bulk schedule actions; the current bulk sheet is preview-only.

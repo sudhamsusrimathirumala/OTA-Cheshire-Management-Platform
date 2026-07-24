@@ -8,6 +8,12 @@ class OtaAuthTextField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.textInputAction,
+    this.controller,
+    this.validator,
+    this.suffixIcon,
+    this.autofillHints,
+    this.onFieldSubmitted,
+    this.onChanged,
     super.key,
   });
 
@@ -15,15 +21,26 @@ class OtaAuthTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final TextInputAction? textInputAction;
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final Widget? suffixIcon;
+  final Iterable<String>? autofillHints;
+  final ValueChanged<String>? onFieldSubmitted;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     final radius = BorderRadius.circular(18);
 
-    return TextField(
+    return TextFormField(
+      controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
       textInputAction: textInputAction,
+      validator: validator,
+      autofillHints: autofillHints,
+      onFieldSubmitted: onFieldSubmitted,
+      onChanged: onChanged,
       style: const TextStyle(color: OtaColors.navy),
       decoration: InputDecoration(
         labelText: label,
@@ -46,6 +63,8 @@ class OtaAuthTextField extends StatelessWidget {
           horizontal: 18,
           vertical: 18,
         ),
+        suffixIcon: suffixIcon,
+        errorStyle: const TextStyle(color: Color(0xFFFFD8D8)),
       ),
     );
   }

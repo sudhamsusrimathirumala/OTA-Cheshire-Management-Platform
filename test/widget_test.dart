@@ -6,10 +6,14 @@ import 'package:ota_cheshire_management_platform/data/sample_student.dart';
 import 'package:ota_cheshire_management_platform/data/sample_curriculum.dart'
     as curriculum_data;
 import 'package:ota_cheshire_management_platform/models/academy_event.dart';
+import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/main.dart';
 import 'package:ota_cheshire_management_platform/models/academy_resource.dart';
 import 'package:ota_cheshire_management_platform/models/curriculum_requirement.dart';
+import 'package:ota_cheshire_management_platform/models/class_session.dart';
+import 'package:ota_cheshire_management_platform/models/notification_item.dart';
+import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
@@ -21,6 +25,7 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_students_sc
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/events_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/manage_profiles_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/resource_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/resources_screen.dart';
@@ -30,7 +35,10 @@ import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_admin_write_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/admin_location_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/notification_read_exception.dart';
 import 'package:ota_cheshire_management_platform/services/event_resource_rules.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 import 'package:ota_cheshire_management_platform/services/mock_app_data_service.dart';
@@ -39,12 +47,15 @@ import 'package:ota_cheshire_management_platform/services/firestore/firestore_sc
 import 'package:ota_cheshire_management_platform/services/firestore/firestore_seed_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
 import 'package:ota_cheshire_management_platform/widgets/admin/admin_bottom_nav_bar.dart';
+import 'package:ota_cheshire_management_platform/widgets/admin/admin_location_selector.dart';
 import 'package:ota_cheshire_management_platform/widgets/ota_bottom_nav_bar.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/general_resources_view.dart';
 import 'package:ota_cheshire_management_platform/widgets/resources/resources_landing_view.dart';
 import 'package:ota_cheshire_management_platform/widgets/schedule_time_field.dart';
 
 void main() {
+  initializeMockAppDataServiceForTests();
+
   test(
     'teen adult sparring is stored in mock data but hidden from active schedule',
     () {
@@ -86,29 +97,91 @@ void main() {
 
     expect(find.text('WELCOME'), findsOneWidget);
     expect(find.text('Olympic Taekwondo Academy'), findsOneWidget);
-    expect(find.text('Student View'), findsOneWidget);
-    expect(find.text('Admin View'), findsOneWidget);
+    expect(find.text('Student View'), findsNothing);
+    expect(find.text('Admin View'), findsNothing);
     expect(find.text('LOGIN'), findsOneWidget);
     expect(find.text('SIGN UP'), findsOneWidget);
   });
 
-  testWidgets('welcome debug view buttons open student and admin dashboards', (
+  testWidgets('welcome screen exposes no authentication bypass', (
     tester,
   ) async {
-    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
+    await tester.pumpWidget(const OTAApp());
 
-    await tester.tap(find.text('Student View'));
+    expect(find.text('Student View'), findsNothing);
+    expect(find.text('Admin View'), findsNothing);
+    expect(find.text('LOGIN'), findsOneWidget);
+    expect(find.text('SIGN UP'), findsOneWidget);
+  });
+
+  testWidgets('admin selector and header use location metadata', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+      addressLine1: '12 Main Street',
+    );
+    const chicago = AcademyLocation(
+      id: 'chicago',
+      name: 'OTA Chicago',
+      timeZoneId: 'America/Chicago',
+      isActive: true,
+      city: 'Chicago',
+      state: 'IL',
+    );
+    const inactive = AcademyLocation(
+      id: 'inactive',
+      name: 'Closed Academy',
+      timeZoneId: 'America/New_York',
+      isActive: false,
+    );
+    final superAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.superAdmin,
+      locations: const [cheshire, chicago, inactive],
+    );
+    adminLocationController = superAdmin;
+    addTearDown(() {
+      superAdmin.dispose();
+      initializeMockAppDataServiceForTests();
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Column(children: [AdminTopHeader(), AdminLocationSelector()]),
+        ),
+      ),
+    );
+    expect(find.text('OTA Administration'), findsOneWidget);
+    expect(find.text('All locations'), findsOneWidget);
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
+    await tester.pumpAndSettle();
+    expect(find.text('OTA Cheshire'), findsOneWidget);
+    expect(find.text('12 Main Street'), findsOneWidget);
+    expect(find.text('Closed Academy'), findsNothing);
+
+    await tester.tap(find.text('OTA Chicago'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(StudentDashboardScreen), findsOneWidget);
+    expect(find.text('OTA Chicago'), findsWidgets);
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(const _WelcomeViewButtonTestApp());
-
-    await tester.tap(find.text('Admin View'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(AdminDashboardScreen), findsOneWidget);
+    final cheshireAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: 'cheshire',
+    );
+    final chicagoAdmin = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [chicago],
+      assignedLocationId: 'chicago',
+    );
+    addTearDown(cheshireAdmin.dispose);
+    addTearDown(chicagoAdmin.dispose);
+    expect(adminHeaderPresentation(cheshireAdmin).title, 'OTA Cheshire');
+    expect(adminHeaderPresentation(chicagoAdmin).title, 'OTA Chicago');
   });
 
   testWidgets('student dashboard displays key student information', (
@@ -116,7 +189,9 @@ void main() {
   ) async {
     await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
 
-    expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
+    expect(find.textContaining(', OTA'), findsOneWidget);
+    expect(find.text('Viewing Sudhamsu \u2022 Red-Black Belt'), findsOneWidget);
+    expect(find.textContaining('â€¢'), findsNothing);
     expect(find.text('Teen & Black Belt Class'), findsOneWidget);
     expect(find.text('Black'), findsOneWidget);
     expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
@@ -140,6 +215,74 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('dashboard uses the intended separator for student accounts', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService(role: UserAccountRole.student);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+
+    expect(
+      find.text('Your student profile \u2022 Red-Black Belt'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Ã¢â‚¬Â¢'), findsNothing);
+  });
+
+  testWidgets('dashboard profile menu updates the selected student', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentDashboardScreen(selectProfile: service.selectProfile),
+      ),
+    );
+
+    await tester.tap(find.textContaining(', OTA'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sudhamsu'), findsOneWidget);
+    expect(find.text('Maya Patel'), findsOneWidget);
+    await tester.tap(find.text('Maya Patel'));
+    await tester.pumpAndSettle();
+
+    expect(service.selectedId, 'student_maya');
+    expect(
+      find.text('Viewing Maya Patel \u2022 Yellow-Green Belt'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('dashboard profile selection failure stays friendly', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StudentDashboardScreen(
+          selectProfile: (_) async => throw const ProfileServiceException(
+            ProfileServiceError.networkFailure,
+            'Unable to switch right now.',
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.textContaining(', OTA'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Maya Patel'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Unable to switch right now.'), findsOneWidget);
+    expect(service.selectedId, 'student_sudhamsu');
+  });
+
   testWidgets('schedule screen displays timeline and class blocks', (
     tester,
   ) async {
@@ -155,7 +298,7 @@ void main() {
     await tester.ensureVisible(find.text('Level 3'));
 
     expect(find.text('Level 3'), findsWidgets);
-    expect(find.textContaining('Next eligible class:'), findsOneWidget);
+    expect(find.textContaining('Next recommended class:'), findsOneWidget);
   });
 
   testWidgets('schedule defaults to Day and keeps Week optional', (
@@ -170,6 +313,86 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('12 AM'), findsNothing);
     expect(find.text('Sunday'), findsWidgets);
+  });
+
+  testWidgets('preferred-class update stays on Schedule', (tester) async {
+    ClassSession? updatedSession;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ScheduleScreen(
+          initialDate: DateTime(2026, 6, 22),
+          updatePreferredClass: (profile, session) async {
+            updatedSession = session;
+          },
+        ),
+      ),
+    );
+
+    final level = find.text('Level 3').first;
+    await tester.ensureVisible(level);
+    await tester.tap(level);
+    await tester.pumpAndSettle();
+    final replacePreference = find.text('Replace preferred class');
+    await tester.ensureVisible(replacePreference);
+    await tester.pumpAndSettle();
+    await tester.tap(replacePreference);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Replace'));
+    await tester.pumpAndSettle();
+
+    expect(updatedSession?.className, 'Level 3');
+    expect(find.byType(ScheduleScreen), findsOneWidget);
+  });
+
+  testWidgets('schedule distinguishes loading error and empty states', (
+    tester,
+  ) async {
+    final service = _ScheduleStateTestService(isLoadingState: true);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: ScheduleScreen()));
+    expect(find.text('Loading schedule'), findsOneWidget);
+
+    service.setState(
+      isLoading: false,
+      errorMessage: 'Unable to load schedule from Firestore.',
+    );
+    await tester.pump();
+    expect(find.text('Schedule unavailable'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    await tester.tap(find.text('Retry'));
+    expect(service.retryCount, 1);
+
+    service.setState(isLoading: false, errorMessage: null);
+    await tester.pump();
+    expect(find.text('No published classes'), findsOneWidget);
+    expect(find.text('No classes scheduled today.'), findsNothing);
+  });
+
+  testWidgets('zero sticker target shows configuration message', (
+    tester,
+  ) async {
+    final student = Student(
+      id: 'student-zero-target',
+      name: 'Zero Target',
+      locationId: 'ota-cheshire',
+      belt: 'White',
+      dateOfBirth: DateTime.utc(2010),
+      stickerCount: 7,
+      stickersRequired: 0,
+      nextRank: 'Yellow',
+    );
+    appDataService = _DashboardStateTestService(student: student);
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+
+    expect(
+      find.text('Sticker tracking has not been configured yet.'),
+      findsOneWidget,
+    );
+    expect(find.byType(LinearProgressIndicator), findsNothing);
   });
 
   testWidgets('bottom navigation opens every primary destination', (
@@ -199,7 +422,7 @@ void main() {
 
     await tester.tap(find.text('Dashboard'));
     await tester.pumpAndSettle();
-    expect(find.text('Good Evening, Sudhamsu'), findsOneWidget);
+    expect(find.textContaining(', OTA'), findsOneWidget);
   });
 
   testWidgets('admin navigation opens every admin destination', (tester) async {
@@ -232,7 +455,122 @@ void main() {
     expect(find.byType(AdminDashboardScreen), findsOneWidget);
   });
 
-  testWidgets('admin profile icon opens profile and exits to welcome', (
+  testWidgets('admin student directory shows account and linked profiles', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    final students = [
+      Student(
+        id: 'child-a',
+        name: 'Child A',
+        locationId: cheshire.id,
+        belt: 'Yellow',
+        dateOfBirth: DateTime.utc(2014, 2, 3),
+        stickerCount: 2,
+        stickersRequired: 5,
+        nextRank: 'Yellow-Green',
+        guardianUserIds: const ['parent-1'],
+      ),
+      Student(
+        id: 'child-b',
+        name: 'Child B',
+        locationId: cheshire.id,
+        belt: 'Blue',
+        dateOfBirth: DateTime.utc(2012, 4, 5),
+        stickerCount: 0,
+        stickersRequired: 0,
+        nextRank: 'Blue-Red',
+        guardianUserIds: const ['parent-1'],
+      ),
+    ];
+    final parent = UserAccount(
+      id: 'parent-1',
+      firstName: 'Alex',
+      lastName: 'Parent',
+      email: 'parent@example.com',
+      role: UserAccountRole.parent,
+      locationId: cheshire.id,
+      linkedStudentProfileIds: const ['child-a', 'child-b'],
+      selectedStudentProfileId: 'child-a',
+    );
+    appDataService = _AdminStudentsTestService(
+      profiles: students,
+      users: [parent],
+    );
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    );
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+
+    expect(find.text('Student Directory'), findsOneWidget);
+    expect(find.text('Alex Parent'), findsNWidgets(2));
+    await tester.tap(find.text('Child A'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Account holder or parent'), findsOneWidget);
+    expect(find.text('parent@example.com'), findsOneWidget);
+    expect(find.textContaining('Phone'), findsNothing);
+    expect(find.text('Child B'), findsWidgets);
+    expect(find.text('Approve'), findsNothing);
+    expect(find.text('Reject'), findsNothing);
+  });
+
+  testWidgets('admin dashboard uses live sections without review controls', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const _AdminNavigationTestApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text("Today's Schedule"), findsOneWidget);
+    expect(find.text('Active Announcements'), findsOneWidget);
+    expect(find.text('Upcoming Events'), findsOneWidget);
+    expect(find.text('Review applications'), findsNothing);
+    expect(find.text('Approve'), findsNothing);
+    expect(find.text('Reject'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('pending-application-badge')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('admin student directory shows listener errors truthfully', (
+    tester,
+  ) async {
+    const cheshire = AcademyLocation(
+      id: 'ota-cheshire',
+      name: 'OTA Cheshire',
+      timeZoneId: 'America/New_York',
+      isActive: true,
+    );
+    appDataService = _AdminStudentsTestService(
+      errorMessage: 'Unable to load student profiles from Firestore.',
+    );
+    adminLocationController = AdminLocationController.forTesting(
+      role: UserAccountRole.admin,
+      locations: const [cheshire],
+      assignedLocationId: cheshire.id,
+    );
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
+
+    expect(
+      find.text('Unable to load student profiles from Firestore.'),
+      findsOneWidget,
+    );
+    expect(find.text('No students found.'), findsNothing);
+  });
+
+  testWidgets('admin profile icon opens profile with real sign out', (
     tester,
   ) async {
     await tester.pumpWidget(const _AdminNavigationTestApp());
@@ -242,12 +580,8 @@ void main() {
 
     expect(find.byType(AdminProfileScreen), findsOneWidget);
     expect(find.text('Admin Profile'), findsOneWidget);
-    expect(find.text('Exit to Welcome'), findsOneWidget);
-
-    await tester.tap(find.text('Exit to Welcome'));
-    await tester.pumpAndSettle();
-
-    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.text('Sign Out'), findsOneWidget);
+    expect(find.text('Exit to Welcome'), findsNothing);
   });
 
   testWidgets('admin schedule page displays class management controls', (
@@ -272,7 +606,8 @@ void main() {
     expect(find.text('Class name'), findsOneWidget);
     expect(find.text('Save Class'), findsOneWidget);
 
-    await tester.tapAt(const Offset(20, 20));
+    await tester.ensureVisible(find.text('Cancel'));
+    await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Bulk Actions'));
     await tester.tap(find.text('Bulk Actions'));
@@ -863,7 +1198,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: EventsScreen(
-          dataService: const MockAppDataService(),
+          dataService: MockAppDataService(),
           now: DateTime.utc(2026, 7, 12, 16),
         ),
       ),
@@ -1066,7 +1401,7 @@ void main() {
           home: origin,
           routes: {
             OtaRoutes.events: (_) => EventsScreen(
-              dataService: const MockAppDataService(),
+              dataService: MockAppDataService(),
               now: DateTime.utc(2026, 7, 12, 16),
             ),
           },
@@ -1094,7 +1429,7 @@ void main() {
       key: 'dashboard-events-back',
       origin: const StudentDashboardScreen(),
       openLabel: 'Events',
-      originLabel: 'Good Evening, Sudhamsu',
+      originLabel: 'Viewing Sudhamsu \u2022 Red-Black Belt',
     );
     await verifyCaller(
       key: 'resources-events-back',
@@ -1385,7 +1720,7 @@ void main() {
     expect(visible.map((resource) => resource.id), ['published']);
   });
 
-  test('dashboard next class never falls back to an ineligible class', () {
+  test('dashboard class recommendation remains advisory', () {
     final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
     final ineligibleClass = mondayClasses.firstWhere(
       (session) => session.className == 'Little Tiger (Age 3-5)',
@@ -1403,7 +1738,7 @@ void main() {
         currentWeekday: DateTime.sunday,
         currentMinutes: 0,
       ),
-      isNull,
+      same(ineligibleClass),
     );
     expect(
       nextEligibleClassFromSchedule(
@@ -1415,6 +1750,144 @@ void main() {
         currentMinutes: 0,
       ),
       same(eligibleClass),
+    );
+  });
+
+  test('dashboard next class prioritizes preference then falls back', () {
+    final student = Student(
+      id: 'preferred-student',
+      name: 'Preferred Student',
+      locationId: 'cheshire',
+      belt: 'Blue',
+      dateOfBirth: DateTime(2000),
+      stickerCount: 0,
+      stickersRequired: 0,
+      nextRank: 'Blue-Red',
+      preferredClassGroupIds: const ['preferred-group'],
+    );
+    ClassSession session(String id, String group, int start) => ClassSession(
+      id: id,
+      className: id,
+      classTypeId: id,
+      bulkGroupId: group,
+      locationId: 'cheshire',
+      startTime: DateTime(2026, 1, 1, start),
+      endTime: DateTime(2026, 1, 1, start + 1),
+      eligibleBelts: const ['Blue'],
+      description: '',
+    );
+    final earlier = session('earlier', 'other-group', 10);
+    final preferred = session('preferred', 'preferred-group', 12);
+
+    expect(
+      nextEligibleClassFromSchedule(
+        {
+          DateTime.monday: [earlier, preferred],
+        },
+        student,
+        currentWeekday: DateTime.monday,
+        currentMinutes: 0,
+      ),
+      same(preferred),
+    );
+    expect(
+      nextEligibleClassFromSchedule(
+        {
+          DateTime.monday: [earlier],
+        },
+        student,
+        currentWeekday: DateTime.monday,
+        currentMinutes: 0,
+      ),
+      same(earlier),
+    );
+  });
+
+  test('academy-local greeting uses morning afternoon and evening periods', () {
+    expect(academyGreeting(DateTime(2026, 1, 1, 11, 59)), 'Good morning');
+    expect(academyGreeting(DateTime(2026, 1, 1, 12)), 'Good afternoon');
+    expect(academyGreeting(DateTime(2026, 1, 1, 16, 59)), 'Good afternoon');
+    expect(academyGreeting(DateTime(2026, 1, 1, 17)), 'Good evening');
+  });
+
+  test('dashboard next class states remain distinct', () {
+    final session = sampleSummerSchedule[DateTime.monday]!.first;
+    expect(
+      dashboardNextClassState(
+        isLoading: true,
+        errorMessage: null,
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.loading,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: 'permission-denied',
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.error,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: const {},
+        nextClass: null,
+      ),
+      DashboardNextClassState.noSchedule,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: {
+          DateTime.monday: [session],
+        },
+        nextClass: null,
+      ),
+      DashboardNextClassState.noEligibleClass,
+    );
+    expect(
+      dashboardNextClassState(
+        isLoading: false,
+        errorMessage: null,
+        schedule: {
+          DateTime.monday: [session],
+        },
+        nextClass: session,
+      ),
+      DashboardNextClassState.found,
+    );
+  });
+
+  test('schedule passed-state uses academy-local date and time', () {
+    final session = sampleSummerSchedule[DateTime.monday]!.first;
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 14),
+        academyNow: DateTime(2026, 7, 15, 12),
+      ),
+      isTrue,
+    );
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 16),
+        academyNow: DateTime(2026, 7, 15, 12),
+      ),
+      isFalse,
+    );
+    expect(
+      classHasPassed(
+        session: session,
+        selectedDate: DateTime(2026, 7, 15),
+        academyNow: DateTime(2026, 7, 15, 23, 59),
+      ),
+      isTrue,
     );
   });
 
@@ -1778,7 +2251,7 @@ void main() {
   });
 
   test('schedule write data preserves wall clock minutes', () {
-    const data = ClassSessionWriteData(
+    final data = ClassSessionWriteData(
       className: 'Teen/Adult Sparring',
       classTypeId: 'teen-adult-sparring',
       bulkGroupId: 'teen-adult-sparring-standard',
@@ -1789,10 +2262,47 @@ void main() {
       eligibleBelts: [],
       description: '',
       isActive: true,
-      isPreferred: false,
     );
 
     expect(data.startMinutes, 1160);
+    expect(data.bulkGroupId, 'teen-adult-sparring-standard');
+
+    final adult = ClassSessionWriteData(
+      className: 'Adult',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.monday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+    );
+    final blackBelt = ClassSessionWriteData(
+      className: 'Black Belt',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.tuesday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+    );
+    final teenBlackBelt = ClassSessionWriteData(
+      className: 'Teen & Black Belt',
+      classTypeId: 'teen-adult',
+      locationId: 'ota-cheshire',
+      weekday: DateTime.wednesday,
+      startMinutes: 18 * 60,
+      endMinutes: 19 * 60,
+      eligibleBelts: const [],
+      description: '',
+      isActive: true,
+    );
+    expect(adult.bulkGroupId, 'adult-standard');
+    expect(blackBelt.bulkGroupId, 'black-belt-standard');
+    expect(teenBlackBelt.bulkGroupId, 'teen-black-belt-standard');
     expect(data.startTime.hour, 19);
     expect(data.startTime.minute, 20);
     expect(data.bulkGroupId, 'teen-adult-sparring-standard');
@@ -1995,7 +2505,6 @@ void main() {
       description: 'Sparring',
       eligibilityNote: 'Instructor approval',
       isActive: true,
-      isPreferred: false,
       createdAt: createdAt,
     );
     final fields = classSessionWriteFields(data, now: now);
@@ -2019,11 +2528,11 @@ void main() {
         'description',
         'eligibilityNote',
         'isActive',
-        'isPreferred',
         'createdAt',
         'updatedAt',
       }),
     );
+    expect(fields, isNot(contains('isPreferred')));
   });
 
   testWidgets('combined date time field preserves value when canceled', (
@@ -2188,6 +2697,54 @@ void main() {
     expect(find.text('Notifications'), findsWidgets);
   });
 
+  testWidgets('opening and Mark All Read update notification state', (
+    tester,
+  ) async {
+    final service = _NotificationReadTestService();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+
+    final firstUnread = service.notifications.firstWhere(
+      (item) => !item.isRead,
+    );
+    await tester.tap(find.text(firstUnread.title));
+    await tester.pumpAndSettle();
+    expect(service.markedIds, contains(firstUnread.id));
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Mark all read'));
+    await tester.pumpAndSettle();
+    expect(service.markAllCount, 1);
+    expect(service.notifications.every((item) => item.isRead), isTrue);
+    expect(find.text('0 unread announcements'), findsOneWidget);
+  });
+
+  testWidgets('failed notification write restores optimistic unread state', (
+    tester,
+  ) async {
+    final service = _NotificationReadTestService(failWrites: true);
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(const MaterialApp(home: NotificationsScreen()));
+
+    final firstUnread = service.notifications.firstWhere(
+      (item) => !item.isRead,
+    );
+    final initialUnread = service.notifications
+        .where((item) => !item.isRead)
+        .length;
+    await tester.tap(find.text(firstUnread.title));
+    await tester.pumpAndSettle();
+
+    expect(
+      service.notifications.where((item) => !item.isRead).length,
+      initialUnread,
+    );
+    expect(find.textContaining('not available yet'), findsOneWidget);
+  });
+
   testWidgets('profile screen displays student and account settings', (
     tester,
   ) async {
@@ -2212,18 +2769,69 @@ void main() {
 
     expect(find.text('Settings & Actions'), findsOneWidget);
     expect(find.text('Sign Out'), findsOneWidget);
-    expect(find.text('Exit to Welcome'), findsOneWidget);
+  });
 
-    await tester.scrollUntilVisible(
-      find.text('Exit to Welcome'),
-      240,
-      scrollable: find.byType(Scrollable),
+  testWidgets('profile management opens as a dedicated full screen', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const ProfileScreen(managementAvailableOverride: true),
+        routes: {OtaRoutes.manageProfiles: (_) => const ManageProfilesScreen()},
+      ),
     );
+
+    final action = find.text('Manage Account & Student Profiles');
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Exit to Welcome'));
+    await tester.tap(action);
     await tester.pumpAndSettle();
 
-    expect(find.byType(WelcomeScreen), findsOneWidget);
+    expect(find.byType(ManageProfilesScreen), findsOneWidget);
+    expect(find.text('Account Information'), findsOneWidget);
+    expect(find.text('Student Profiles'), findsOneWidget);
+    expect(find.text('Selected'), findsOneWidget);
+  });
+
+  testWidgets('profile management fits a narrow phone and lists profiles', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const MaterialApp(home: ManageProfilesScreen()));
+    expect(find.text('Account Information'), findsOneWidget);
+    for (final profile in appDataService.linkedStudentProfiles) {
+      expect(find.text(profile.name), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('explicit profile switching still resets to Dashboard', (
+    tester,
+  ) async {
+    final service = _DashboardProfileTestService();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ManageProfilesScreen(selectProfile: service.selectProfile),
+        routes: {
+          OtaRoutes.dashboard: (_) => const Scaffold(body: Text('DASHBOARD')),
+        },
+      ),
+    );
+
+    final switchButton = find.text('Switch to profile');
+    await tester.ensureVisible(switchButton);
+    await tester.pumpAndSettle();
+    await tester.tap(switchButton);
+    await tester.pumpAndSettle();
+
+    expect(service.selectedId, 'student_maya');
+    expect(find.text('DASHBOARD'), findsOneWidget);
   });
 
   test('event writes use only General Resource registration fields', () {
@@ -2368,11 +2976,25 @@ void main() {
       'locationId': 'ota-cheshire',
       'beltRank': 'Black',
       'age': 17,
+      'isActive': true,
     });
 
     expect(student, isNotNull);
     expect(student!.dateOfBirth, isNull);
     expect(student.legacyAge, 17);
+    expect(student.isActive, isTrue);
+  });
+
+  test('admin student parser rejects a malformed active field', () {
+    final student = studentProfileFromFirestoreData('student', {
+      'fullName': 'Student',
+      'locationId': 'ota-cheshire',
+      'beltRank': 'Black',
+      'age': 17,
+      'isActive': 'yes',
+    });
+
+    expect(student, isNull);
   });
 
   test('approved schema update contains targeted updates and no deletes', () {
@@ -2471,6 +3093,113 @@ class _CurriculumTestService extends MockAppDataService {
       curriculum_data.beltDisplayLabel(belt);
 }
 
+class _NotificationReadTestService extends MockAppDataService {
+  _NotificationReadTestService({this.failWrites = false})
+    : _notifications = [
+        for (final item in MockAppDataService().notifications) item,
+      ];
+
+  List<NotificationItem> _notifications;
+  final ChangeNotifier _notifier = ChangeNotifier();
+  final Set<String> markedIds = {};
+  final bool failWrites;
+  int markAllCount = 0;
+
+  @override
+  void addListener(VoidCallback listener) => _notifier.addListener(listener);
+
+  @override
+  void removeListener(VoidCallback listener) =>
+      _notifier.removeListener(listener);
+
+  @override
+  List<NotificationItem> get notifications => _notifications;
+
+  @override
+  Future<void> markNotificationRead(String announcementId) async {
+    final previous = _notifications;
+    markedIds.add(announcementId);
+    _notifications = [
+      for (final item in _notifications)
+        _notificationWithRead(item, item.id == announcementId || item.isRead),
+    ];
+    _notifier.notifyListeners();
+    if (failWrites) {
+      _notifications = previous;
+      _notifier.notifyListeners();
+      throw const NotificationReadException(
+        NotificationReadError.permissionDenied,
+        'permission-denied',
+        'Notification read state is not available yet. Please try again later.',
+      );
+    }
+  }
+
+  @override
+  Future<void> markAllNotificationsRead() async {
+    markAllCount++;
+    _notifications = [
+      for (final item in _notifications) _notificationWithRead(item, true),
+    ];
+    _notifier.notifyListeners();
+  }
+}
+
+class _DashboardProfileTestService extends MockAppDataService {
+  _DashboardProfileTestService({this.role = UserAccountRole.parent})
+    : profiles = [sampleStudentProfiles[0], sampleStudentProfiles[1]];
+
+  final List<Student> profiles;
+  final UserAccountRole role;
+  final ChangeNotifier _notifier = ChangeNotifier();
+  String selectedId = 'student_sudhamsu';
+
+  @override
+  void addListener(VoidCallback listener) => _notifier.addListener(listener);
+
+  @override
+  void removeListener(VoidCallback listener) =>
+      _notifier.removeListener(listener);
+
+  @override
+  List<Student> get linkedStudentProfiles => profiles;
+
+  @override
+  Student get selectedStudentProfile =>
+      profiles.firstWhere((profile) => profile.id == selectedId);
+
+  @override
+  UserAccount get currentUserAccount => UserAccount(
+    id: 'user_parent_demo',
+    firstName: 'OTA',
+    lastName: 'Parent',
+    email: 'parent@example.com',
+    role: role,
+    linkedStudentProfileIds: profiles.map((profile) => profile.id).toList(),
+    selectedStudentProfileId: selectedId,
+    locationId: 'ota-cheshire',
+  );
+
+  Future<void> selectProfile(String id) async {
+    selectedId = id;
+    _notifier.notifyListeners();
+  }
+}
+
+NotificationItem _notificationWithRead(NotificationItem item, bool isRead) =>
+    NotificationItem(
+      id: item.id,
+      locationId: item.locationId,
+      title: item.title,
+      summary: item.summary,
+      body: item.body,
+      timestamp: item.timestamp,
+      isRead: isRead,
+      category: item.category,
+      priority: item.priority,
+      requiresAction: item.requiresAction,
+    );
+
 AcademyEvent _testEvent({
   required String id,
   required String title,
@@ -2520,13 +3249,66 @@ AcademyResource _testResource({
 }
 
 class _EventsTestService extends MockAppDataService {
-  const _EventsTestService({required this.events});
+  _EventsTestService({required this.events});
 
   @override
   final List<AcademyEvent> events;
 
   @override
   List<AcademyResource> get resources => const <AcademyResource>[];
+}
+
+class _ScheduleStateTestService extends MockAppDataService {
+  _ScheduleStateTestService({required this.isLoadingState});
+
+  final Set<VoidCallback> _listeners = {};
+  bool isLoadingState;
+  String? _errorMessage;
+  int retryCount = 0;
+
+  @override
+  Map<int, List<ClassSession>> get schedule => const {};
+
+  @override
+  bool get isScheduleLoading => isLoadingState;
+
+  @override
+  String? get scheduleErrorMessage => _errorMessage;
+
+  @override
+  void retryLiveData() => retryCount++;
+
+  @override
+  void addListener(VoidCallback listener) => _listeners.add(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _listeners.remove(listener);
+
+  void setState({required bool isLoading, required String? errorMessage}) {
+    isLoadingState = isLoading;
+    _errorMessage = errorMessage;
+    for (final listener in List<VoidCallback>.of(_listeners)) {
+      listener();
+    }
+  }
+}
+
+class _DashboardStateTestService extends MockAppDataService {
+  _DashboardStateTestService({required this.student});
+
+  final Student student;
+
+  @override
+  Student get selectedStudentProfile => student;
+
+  @override
+  List<Student> get linkedStudentProfiles => [student];
+
+  @override
+  Map<int, List<ClassSession>> get schedule => const {};
+
+  @override
+  ClassSession? nextClassForDashboard() => null;
 }
 
 class _LiveEventsTestService extends MockAppDataService {
@@ -2593,6 +3375,30 @@ class _StudentNavigationTestApp extends StatelessWidget {
   }
 }
 
+class _AdminStudentsTestService extends MockAppDataService {
+  _AdminStudentsTestService({
+    this.profiles = const [],
+    this.users = const [],
+    this.errorMessage,
+  });
+
+  final List<Student> profiles;
+  final List<UserAccount> users;
+  final String? errorMessage;
+
+  @override
+  List<Student> get adminStudentProfiles => profiles;
+
+  @override
+  List<UserAccount> get adminUserAccounts => users;
+
+  @override
+  bool get isAdminStudentsLoading => false;
+
+  @override
+  String? get adminStudentsErrorMessage => errorMessage;
+}
+
 class _AdminNavigationTestApp extends StatelessWidget {
   const _AdminNavigationTestApp();
 
@@ -2609,22 +3415,6 @@ class _AdminNavigationTestApp extends StatelessWidget {
         OtaRoutes.adminResources: (_) => const AdminResourcesScreen(),
         OtaRoutes.adminProfile: (_) => const AdminProfileScreen(),
         OtaRoutes.welcome: (_) => const WelcomeScreen(),
-      },
-    );
-  }
-}
-
-class _WelcomeViewButtonTestApp extends StatelessWidget {
-  const _WelcomeViewButtonTestApp();
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      initialRoute: OtaRoutes.welcome,
-      routes: {
-        OtaRoutes.welcome: (_) => const WelcomeScreen(),
-        OtaRoutes.dashboard: (_) => const StudentDashboardScreen(),
-        OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
       },
     );
   }

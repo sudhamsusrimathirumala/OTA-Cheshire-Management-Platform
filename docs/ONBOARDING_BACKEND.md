@@ -1,65 +1,105 @@
-# Spark-Compatible Onboarding
+# Authentication, Profiles, and Academy Access
 
-The onboarding foundation uses Firebase Authentication and client-side
-Firestore atomic writes. It does not use Cloud Functions or another paid
-Google Cloud service.
+The OTA identity flow uses Firebase Authentication and direct,
+Spark-compatible Firestore writes. It deploys no Cloud Functions and requires
+no billing account or paid Google Cloud service.
 
-## Applicant submission
+## Authentication and routing
 
-`FirestoreOnboardingService.submitApplication` requires the current Firebase
-Auth user, loads the selected active location, evaluates the age gate against
-that location's IANA time zone, and validates all application fields. It derives
-the UID and normalized account email from Auth. A Google account ID is included
-only when it appears in the authenticated user's `google.com` provider entry.
+`FirebaseAuthenticationService` supports email/password signup and login,
+Google Sign-In, neutral password reset, refresh, sign out, and safe error
+mapping. Email verification is not required to create profiles. Firebase UID
+is the permanent identity; email is contact data. A Google provider UID comes
+only from the authenticated `google.com` provider entry.
 
-One `WriteBatch` creates exactly:
+`FirebaseSessionController` observes Auth, `users/{uid}`, linked profiles, the
+selected profile, and its location. `AuthGate` is the routing authority. Its
+runtime stages are `loading`, `signedOut`, `needsProfiles`, `member`,
+`disabled`, `adminDisabled`, `admin`, and `error`.
 
-- `users/{firebaseUid}`
-- `onboardingApplications/{firebaseUid}`
+## Atomic profile creation
 
-The UID is both document IDs. No student profile or permanent family
-relationship is created before review. Firestore Rules use `getAfter()` to
-require both documents in the same atomic operation. If the batch fails, the
-Auth account remains and the user can retry; the service never deletes Auth
-users and never uses email as an identity key. `loadCurrentAccountState`
-returns `needsOnboarding` when both records are absent, so a later login can
-route the authenticated user back into onboarding.
+Authenticated users complete the existing three-step flow with a 16+ account
+holder gate. Students create one self-linked profile. Parents may create their
+own student profile and up to ten additional children, or one through ten
+children without a personal student profile.
 
-Applications support student applicants and parent applicants with up to ten
-additional students. Every future student has a date of birth, belt rank, and
-explicit guardian email. The application contains pending data only and cannot
-include finalized IDs, guardian user relationships, or approval overrides.
+Profile setup reads active `locations` documents:
 
-## Admin review
+- Exactly one active location is assigned automatically.
+- More than one active location displays one account-level selector.
+- No active location blocks creation and presents Retry and Sign out.
 
-Approved location admins may review pending applications for their own
-location. Super Admin may review any location. Approval runs in one Firestore
-transaction: it revalidates the reviewer, application, and active location;
-creates every approved student profile; writes reciprocal user links; and marks
-the user and application approved. Parent approvals generate one shared family
-application ID. The parent's own profile is selected first when applicable.
+The final review shows the academy name and available address. One Firestore
+`WriteBatch` creates `users/{uid}` and every `studentProfiles` document. The
+user and all profiles receive the same `locationId` and `isActive: true`, so
+partial or unassigned onboarding records are not created.
 
-Rejection atomically marks the user and application rejected, records reviewer
-metadata and an optional short reason, and creates no profiles. Failed or
-duplicate reviews leave no partial writes.
+After the batch succeeds, the app shows **Your account is ready**, the academy
+location, created profiles, **Continue to Dashboard**, and **Sign out**. The
+user then has immediate academy access.
 
-## Local validation
+### Parent self-profile defaults
 
-Use the demo project ID so emulator tests cannot reach live Firebase:
+When a parent does not create a personal student profile during onboarding,
+the already-collected account-holder birth date and belt are retained in the
+optional `users/{uid}.studentProfileDefaults` map. An optional contact email
+and initialized sticker progress are stored there as well. Account name,
+account email, and `locationId` remain canonical user fields and are not
+duplicated in the defaults.
 
-```powershell
-npm --prefix tool/firebase_emulator_tests install
-$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
-$env:Path="$env:JAVA_HOME\bin;$env:Path"
-firebase emulators:exec --only firestore --project demo-ota-onboarding "npm --prefix tool/firebase_emulator_tests test"
-```
+These defaults are form data only: they do not grant profile access and are
+not a student profile. When the parent later chooses **Add my student
+profile**, the app reuses the account fields and defaults, asks only for a
+genuinely missing birth date or belt, and atomically creates one self-linked
+profile while appending its ID to the existing user document. Parents who
+create their own profile during onboarding do not receive a duplicate defaults
+map because their self-linked profile is immediately canonical.
 
-## Release
+Reads also recognize the former top-level birth-date, belt, contact-email, and
+sticker-progress field names for compatibility. Canonical nested defaults take
+priority, and normal reads never rewrite or migrate legacy records.
 
-Only Firestore Security Rules are deployed for this architecture:
+## Active-access checks
 
-```powershell
-firebase deploy --only firestore:rules --project ota-management-platform
-```
+A student or parent may access academy data only when:
 
-No database seed, migration, or data deployment is part of onboarding release.
+- the Firebase-authenticated UID has a valid user document;
+- the account role is `student` or `parent` and `isActive` is true;
+- the selected profile is linked to that account and exists;
+- the selected profile has `isActive` true;
+- the user and profile `locationId` values match; and
+- the referenced academy location exists and is active.
+
+Missing or malformed data fails closed. Profile switching updates only
+`selectedStudentProfileId`; every profile under the account remains at the
+same academy location.
+
+Admin accounts are configured manually and are never publicly selectable.
+Location Admin access requires role `admin`, `isActive: true`, and an active
+assigned location. Super Admin retains the controlled multi-location model.
+
+## Historical Design Decision: Membership Approval (Inactive)
+
+An earlier, intentional design kept permanent profiles separate from academy
+membership. Families submitted profile applications to a location, and an
+administrator reviewed them before academy content became available. That
+approach anticipated controlled enrollment and multiple independently managed
+locations.
+
+The final workflow was simplified after reviewing actual release needs. There
+is currently one active academy location. Requiring review for every household
+adds friction for parents, students, and staff, while authentication and linked
+account/profile records already provide the needed identity and household
+structure. Young siblings are unlikely to attend unrelated OTA locations, and
+older independent students can create and manage their own account. The review
+workflow also introduced substantial UI, routing, Firestore Rules,
+administrative, backend, and testing complexity.
+
+Immediate access better fits the current academy and helps the application
+reach a reliable release state without removing authentication, privacy,
+role restrictions, active-record controls, or location isolation. The idea may
+be reconsidered if actual expansion or identity-verification needs justify it.
+
+This workflow is retained here as project design history. It is not part of the
+current runtime, Firestore schema, security rules, or user experience.

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/academy_location.dart';
 import '../../models/academy_resource.dart';
 import '../../models/student.dart';
+import '../../models/class_session.dart';
 import '../../models/user_account.dart';
 
 const firebaseGoogleProviderId = 'google.com';
@@ -17,11 +18,6 @@ String normalizeRequiredEmail(String value) {
   return normalized;
 }
 
-String? normalizeOptionalPhoneNumber(String? value) {
-  final normalized = value?.trim();
-  return normalized == null || normalized.isEmpty ? null : normalized;
-}
-
 UserAccountRole parseUserAccountRole(Object? value) {
   return switch (value) {
     'student' => UserAccountRole.student,
@@ -32,28 +28,6 @@ UserAccountRole parseUserAccountRole(Object? value) {
   };
 }
 
-UserAccountApprovalStatus parseUserAccountApprovalStatus(Object? value) {
-  return switch (value) {
-    'incomplete' => UserAccountApprovalStatus.incomplete,
-    'pending' => UserAccountApprovalStatus.pending,
-    'approved' => UserAccountApprovalStatus.approved,
-    'rejected' => UserAccountApprovalStatus.rejected,
-    'disabled' => UserAccountApprovalStatus.disabled,
-    _ => throw FormatException('Unsupported approval status: $value'),
-  };
-}
-
-StudentApprovalStatus parseStudentApprovalStatus(Object? value) {
-  return switch (value) {
-    'incomplete' => StudentApprovalStatus.incomplete,
-    'pending' => StudentApprovalStatus.pending,
-    'approved' => StudentApprovalStatus.approved,
-    'rejected' => StudentApprovalStatus.rejected,
-    'disabled' => StudentApprovalStatus.disabled,
-    _ => throw FormatException('Unsupported approval status: $value'),
-  };
-}
-
 UserAccount userAccountFromFirestoreData(
   String firebaseUid,
   Map<String, dynamic> data,
@@ -61,23 +35,67 @@ UserAccount userAccountFromFirestoreData(
   if (firebaseUid.trim().isEmpty) {
     throw const FormatException('Firebase UID is required.');
   }
+  final role = parseUserAccountRole(data['role']);
+  final locationId = _optionalString(data['locationId']) ?? '';
+  if (role != UserAccountRole.superAdmin && locationId.isEmpty) {
+    throw const FormatException('locationId is required.');
+  }
   return UserAccount(
     id: firebaseUid,
     firstName: _requiredString(data['firstName'], 'firstName'),
     lastName: _requiredString(data['lastName'], 'lastName'),
     email: normalizeRequiredEmail(_requiredString(data['email'], 'email')),
-    role: parseUserAccountRole(data['role']),
-    approvalStatus: parseUserAccountApprovalStatus(data['approvalStatus']),
+    role: role,
+    isActive: _requiredBool(data['isActive'], 'isActive'),
     linkedStudentProfileIds: _stringList(data['linkedStudentProfileIds']),
-    phoneNumber: normalizeOptionalPhoneNumber(
-      _optionalString(data['phoneNumber']),
-    ),
-    locationId: _optionalString(data['locationId']) ?? '',
+    locationId: locationId,
     selectedStudentProfileId: _optionalString(data['selectedStudentProfileId']),
     googleAccountId: _optionalString(data['googleAccountId']),
-    familyApplicationId: _optionalString(data['familyApplicationId']),
     createdAt: _requiredDateTime(data['createdAt'], 'createdAt'),
     updatedAt: _requiredDateTime(data['updatedAt'], 'updatedAt'),
+    studentProfileDefaults: studentProfileDefaultsFromUserData(data),
+  );
+}
+
+StudentProfileDefaults? studentProfileDefaultsFromUserData(
+  Map<String, dynamic> data,
+) {
+  final canonical = data['studentProfileDefaults'];
+  final defaults = canonical is Map ? canonical : const <String, Object?>{};
+  final stickerValue = defaults['stickerProgress'] ?? data['stickerProgress'];
+  final sticker = stickerValue is Map
+      ? stickerValue
+      : const <String, Object?>{};
+  final dateOfBirth = _dateTime(
+    defaults['dateOfBirth'] ??
+        data['dateOfBirth'] ??
+        data['birthDate'] ??
+        data['applicantDateOfBirth'],
+  );
+  final beltRank = _optionalString(
+    defaults['beltRank'] ?? data['beltRank'] ?? data['applicantBeltRank'],
+  );
+  final guardianEmailValue = _optionalString(
+    defaults['guardianEmail'] ?? data['guardianEmail'],
+  );
+  final current = sticker['current'] is int ? sticker['current'] as int : 0;
+  final required = sticker['required'] is int ? sticker['required'] as int : 0;
+  final nextRank = _optionalString(sticker['nextRank']);
+  if (dateOfBirth == null &&
+      beltRank == null &&
+      guardianEmailValue == null &&
+      stickerValue == null) {
+    return null;
+  }
+  return StudentProfileDefaults(
+    dateOfBirth: dateOfBirth,
+    beltRank: beltRank,
+    guardianEmail: guardianEmailValue == null
+        ? null
+        : normalizeRequiredEmail(guardianEmailValue),
+    stickerCurrent: current < 0 ? 0 : current,
+    stickerRequired: required < 0 ? 0 : required,
+    nextRank: nextRank,
   );
 }
 
@@ -86,23 +104,32 @@ Map<String, Object?> userAccountWriteFields(
   required DateTime now,
   bool isCreate = false,
 }) {
-  final phoneNumber = normalizeOptionalPhoneNumber(account.phoneNumber);
   final googleAccountId = _optionalString(account.googleAccountId);
-  final familyApplicationId = _optionalString(account.familyApplicationId);
+  final defaults = account.studentProfileDefaults;
   return <String, Object?>{
     'firstName': _requiredString(account.firstName, 'firstName'),
     'lastName': _requiredString(account.lastName, 'lastName'),
     'email': normalizeRequiredEmail(account.email),
     'role': account.role.name,
-    'approvalStatus': account.approvalStatus.name,
+    'isActive': account.isActive,
     'linkedStudentProfileIds': account.linkedStudentProfileIds,
-    'phoneNumber': ?phoneNumber,
-    if (!isCreate && phoneNumber == null) 'phoneNumber': FieldValue.delete(),
     if (account.locationId.trim().isNotEmpty)
       'locationId': account.locationId.trim(),
     'selectedStudentProfileId': ?account.selectedStudentProfileId,
     'googleAccountId': ?googleAccountId,
-    'familyApplicationId': ?familyApplicationId,
+    if (defaults != null)
+      'studentProfileDefaults': <String, Object?>{
+        if (defaults.dateOfBirth != null)
+          'dateOfBirth': Timestamp.fromDate(defaults.dateOfBirth!),
+        if (defaults.beltRank != null) 'beltRank': defaults.beltRank,
+        if (defaults.guardianEmail != null)
+          'guardianEmail': normalizeRequiredEmail(defaults.guardianEmail!),
+        'stickerProgress': <String, Object?>{
+          'current': defaults.stickerCurrent,
+          'required': defaults.stickerRequired,
+          if (defaults.nextRank != null) 'nextRank': defaults.nextRank,
+        },
+      },
     if (isCreate) 'createdAt': Timestamp.fromDate(account.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };
@@ -125,13 +152,14 @@ Student studentProfileFromCanonicalData(String id, Map<String, dynamic> data) {
         ? null
         : normalizeRequiredEmail(guardianEmailValue),
     guardianUserIds: _stringList(data['guardianUserIds']),
-    approvalStatus: parseStudentApprovalStatus(data['approvalStatus']),
     linkedUserId: _optionalString(data['linkedUserId']),
-    familyApplicationId: _optionalString(data['familyApplicationId']),
-    preferredClassGroupIds: _stringList(data['preferredClassGroupIds']),
+    preferredClassGroupIds: resolvedSavedPreferredClassGroupIds(
+      _stringList(data['preferredClassGroupIds']),
+    ),
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'Next rank',
+    isActive: _requiredBool(data['isActive'], 'isActive'),
     createdAt: _requiredDateTime(data['createdAt'], 'createdAt'),
     updatedAt: _requiredDateTime(data['updatedAt'], 'updatedAt'),
   );
@@ -145,24 +173,26 @@ Map<String, Object?> studentProfileWriteFields(
   final dateOfBirth = profile.dateOfBirth;
   final guardianEmail = profile.guardianEmail;
   final linkedUserId = _optionalString(profile.linkedUserId);
-  final familyApplicationId = _optionalString(profile.familyApplicationId);
+  final locationId = _optionalString(profile.locationId);
   if (dateOfBirth == null) {
     throw ArgumentError('dateOfBirth is required for new student profiles.');
   }
-  if (guardianEmail == null) {
-    throw ArgumentError('guardianEmail is required for new student profiles.');
+  if (guardianEmail == null && linkedUserId == null) {
+    throw ArgumentError(
+      'guardianEmail is required for parent-managed student profiles.',
+    );
   }
   return <String, Object?>{
     'firstName': _requiredString(profile.firstName, 'firstName'),
     'lastName': _requiredString(profile.lastName, 'lastName'),
     'dateOfBirth': Timestamp.fromDate(dateOfBirth),
     'beltRank': _requiredString(profile.beltRank, 'beltRank'),
-    'locationId': _requiredString(profile.locationId, 'locationId'),
-    'guardianEmail': normalizeRequiredEmail(guardianEmail),
+    'locationId': ?locationId,
+    if (guardianEmail != null)
+      'guardianEmail': normalizeRequiredEmail(guardianEmail),
     'guardianUserIds': profile.guardianUserIds,
-    'approvalStatus': profile.approvalStatus.name,
+    'isActive': profile.isActive,
     'linkedUserId': ?linkedUserId,
-    'familyApplicationId': ?familyApplicationId,
     'preferredClassGroupIds': profile.preferredClassGroupIds,
     if (isCreate) 'createdAt': Timestamp.fromDate(profile.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
@@ -367,4 +397,9 @@ DateTime _requiredDateTime(Object? value, String fieldName) {
   final result = _dateTime(value);
   if (result == null) throw FormatException('$fieldName is required.');
   return result;
+}
+
+bool _requiredBool(Object? value, String fieldName) {
+  if (value is! bool) throw FormatException('$fieldName is required.');
+  return value;
 }

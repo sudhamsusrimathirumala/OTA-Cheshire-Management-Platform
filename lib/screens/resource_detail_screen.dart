@@ -3,65 +3,106 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/academy_resource.dart';
+import '../services/app_data_service_provider.dart';
 import '../theme/ota_colors.dart';
 
 typedef ResourceLinkLauncher = Future<bool> Function(Uri uri);
 
 class ResourceDetailScreen extends StatelessWidget {
-  const ResourceDetailScreen({
-    required this.resource,
+  ResourceDetailScreen({
+    required AcademyResource resource,
     this.showAdminStatus = false,
     this.linkLauncher,
     super.key,
-  });
+  }) : resource = resource,
+       resourceId = resource.id;
 
-  final AcademyResource resource;
+  const ResourceDetailScreen.fromId({
+    required this.resourceId,
+    this.showAdminStatus = false,
+    this.linkLauncher,
+    super.key,
+  }) : resource = null;
+
+  final AcademyResource? resource;
+  final String resourceId;
   final bool showAdminStatus;
   final ResourceLinkLauncher? linkLauncher;
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      appBar: AppBar(
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: appDataService,
+    builder: (context, _) {
+      final liveResource = appDataService.resources
+          .where((item) => item.id == resourceId)
+          .firstOrNull;
+      final current = showAdminStatus ? liveResource ?? resource : liveResource;
+      if (current == null) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('Resource Detail')),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'This item is no longer available.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Back'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+      return Scaffold(
         backgroundColor: OtaColors.blush,
-        foregroundColor: OtaColors.ink,
-        elevation: 0,
-        title: const Text('Resource Detail'),
-      ),
-      body: SafeArea(
-        top: false,
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ResourceHeroCard(
-                          resource: resource,
-                          showAdminStatus: showAdminStatus,
-                        ),
-                        const SizedBox(height: 16),
-                        _ResourceContentCard(
-                          resource: resource,
-                          linkLauncher: linkLauncher,
-                        ),
-                      ],
+        appBar: AppBar(
+          backgroundColor: OtaColors.blush,
+          foregroundColor: OtaColors.ink,
+          elevation: 0,
+          title: const Text('Resource Detail'),
+        ),
+        body: SafeArea(
+          top: false,
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                sliver: SliverToBoxAdapter(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 760),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _ResourceHeroCard(
+                            resource: current,
+                            showAdminStatus: showAdminStatus,
+                          ),
+                          const SizedBox(height: 16),
+                          _ResourceContentCard(
+                            resource: current,
+                            linkLauncher: linkLauncher,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
-  }
+      );
+    },
+  );
 }
 
 class _ResourceHeroCard extends StatelessWidget {

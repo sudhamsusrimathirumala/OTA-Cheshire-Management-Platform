@@ -13,8 +13,6 @@ class Student {
     this.selfUserId,
     String? linkedUserId,
     this.guardianEmail,
-    this.approvalStatus = StudentApprovalStatus.approved,
-    this.familyApplicationId,
     this.canonicalFirstName,
     this.canonicalLastName,
     this.canonicalBeltRank,
@@ -39,8 +37,6 @@ class Student {
   final String? guardianEmail;
   final String? selfUserId;
   final String? linkedUserId;
-  final StudentApprovalStatus approvalStatus;
-  final String? familyApplicationId;
   final String? canonicalFirstName;
   final String? canonicalLastName;
   final String? canonicalBeltRank;
@@ -91,5 +87,3 @@ class Student {
     return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
   }
 }
-
-enum StudentApprovalStatus { incomplete, pending, approved, rejected, disabled }

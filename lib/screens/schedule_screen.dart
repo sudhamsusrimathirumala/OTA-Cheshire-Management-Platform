@@ -3,15 +3,25 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/class_recommendation_service.dart';
+import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
 enum _ScheduleViewMode { day, week }
 
 class ScheduleScreen extends StatefulWidget {
-  const ScheduleScreen({this.initialDate, super.key});
+  const ScheduleScreen({
+    this.initialDate,
+    this.updatePreferredClass,
+    super.key,
+  });
 
   final DateTime? initialDate;
+  final Future<void> Function(StudentProfile profile, ClassSession? session)?
+  updatePreferredClass;
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -26,10 +36,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   late DateTime _selectedDate;
   var _viewMode = _ScheduleViewMode.day;
 
+  DateTime get _academyNow => const LocationTimeService().toLocationTime(
+    DateTime.now(),
+    appDataService.selectedStudentProfile.locationId,
+  );
+
   @override
   void initState() {
     super.initState();
-    _selectedDate = DateUtils.dateOnly(widget.initialDate ?? DateTime.now());
+    _selectedDate = DateUtils.dateOnly(widget.initialDate ?? _academyNow);
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrentTime());
   }
 
@@ -39,8 +54,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     super.dispose();
   }
 
-  bool get _isViewingToday =>
-      DateUtils.isSameDay(_selectedDate, DateTime.now());
+  bool get _isViewingToday => DateUtils.isSameDay(_selectedDate, _academyNow);
 
   StudentProfile get _student => appDataService.selectedStudentProfile;
 
@@ -49,15 +63,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
   ClassSession? get _nextEligibleClass {
     final classes = _selectedDayClasses.where((session) {
-      if (!session.isEligibleFor(_student)) {
+      if (!session.isPublished || session.locationId != _student.locationId) {
         return false;
       }
-
-      if (!_isViewingToday) {
-        return true;
-      }
-
-      return session.startDateTime(_selectedDate).isAfter(DateTime.now());
+      if (!_isViewingToday) return true;
+      final academyNow = _academyNow;
+      return session.endMinutes > academyNow.hour * 60 + academyNow.minute;
     }).toList();
 
     if (classes.isEmpty) {
@@ -65,7 +76,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     }
 
     classes.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    return classes.first;
+    return classes.firstWhere(
+      (session) => matchesResolvedPreferredClassGroup(
+        _student.preferredClassGroupIds,
+        session.bulkGroupId,
+      ),
+      orElse: () => classes.firstWhere(
+        (session) => isTypicallyRecommendedFor(session, _student),
+        orElse: () => classes.first,
+      ),
+    );
   }
 
   void _goToPreviousDay() {
@@ -98,11 +118,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   Future<void> _pickDate() async {
+    final academyToday = _academyNow;
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
-      firstDate: DateTime(2026),
-      lastDate: DateTime(2027, 12, 31),
+      firstDate: DateTime(academyToday.year - 2),
+      lastDate: DateTime(academyToday.year + 5, 12, 31),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -145,7 +166,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       return;
     }
 
-    final now = DateTime.now();
+    final now = _academyNow;
     final currentMinutes = now.hour * 60 + now.minute;
     final targetOffset = ((currentMinutes / 60) * _hourHeight) - 180;
     final clampedOffset = targetOffset.clamp(
@@ -220,6 +241,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         eventGap: _eventGap,
                         student: _student,
                         nextEligibleSession: _nextEligibleClass,
+                        academyNow: _academyNow,
                         onClassTap: _showClassDetails,
                       ),
                     ),
@@ -237,9 +259,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
   }
 
   void _showClassDetails(ClassSession session) {
-    final isEligible = session.isEligibleFor(_student);
-    final timeLabel = session.timeRangeLabel;
-
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -247,84 +266,233 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      builder: (context) => AnimatedBuilder(
+        animation: appDataService,
+        builder: (context, _) {
+          final liveSession = appDataService.schedule.values
+              .expand((sessions) => sessions)
+              .where((item) => item.id == session.id)
+              .firstOrNull;
+          if (liveSession == null) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: isEligible ? OtaColors.softRed : OtaColors.blush,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(
-                        isEligible
-                            ? Icons.star_rounded
-                            : Icons.info_outline_rounded,
-                        color: isEligible
-                            ? const Color(0xFFD9A441)
-                            : OtaColors.mutedText,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            session.className,
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  color: OtaColors.ink,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            timeLabel,
-                            style: Theme.of(context).textTheme.bodyLarge
-                                ?.copyWith(
-                                  color: OtaColors.mutedText,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                        ],
-                      ),
+                    const Text('This item is no longer available.'),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Back'),
                     ),
                   ],
                 ),
-                const SizedBox(height: 22),
-                _DetailRow(
-                  icon: Icons.verified_user_rounded,
-                  label: 'Belt Eligibility',
-                  value: session.eligibilityLabel,
+              ),
+            );
+          }
+          return _buildClassDetailContent(context, liveSession);
+        },
+      ),
+    );
+  }
+
+  Widget _buildClassDetailContent(BuildContext context, ClassSession session) {
+    final isRecommended = isTypicallyRecommendedFor(session, _student);
+    final isPreferred = matchesResolvedPreferredClassGroup(
+      _student.preferredClassGroupIds,
+      session.bulkGroupId,
+    );
+    final canSelect = canSetPreferredClass(_student, session);
+    final unavailableReason = preferredClassUnavailableReason(
+      profile: _student,
+      session: session,
+    );
+    final timeLabel = session.timeRangeLabel;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: isRecommended ? OtaColors.softRed : OtaColors.blush,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Icon(
+                    isRecommended
+                        ? Icons.star_rounded
+                        : Icons.info_outline_rounded,
+                    color: isRecommended
+                        ? const Color(0xFFD9A441)
+                        : OtaColors.mutedText,
+                  ),
                 ),
-                const SizedBox(height: 12),
-                _DetailRow(
-                  icon: Icons.description_rounded,
-                  label: 'Description',
-                  value: session.description,
-                ),
-                const SizedBox(height: 12),
-                _DetailRow(
-                  icon: Icons.favorite_rounded,
-                  label: 'Preferred Class',
-                  value: session.isPreferred ? 'Yes' : 'No',
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        session.className,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: OtaColors.ink,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        timeLabel,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: OtaColors.mutedText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 22),
+            _DetailRow(
+              icon: Icons.verified_user_rounded,
+              label: 'Typical Student Group',
+              value: classGuidanceFor(session, _student),
+            ),
+            const SizedBox(height: 12),
+            _DetailRow(
+              icon: Icons.description_rounded,
+              label: 'Description',
+              value: session.description,
+            ),
+            const SizedBox(height: 12),
+            _DetailRow(
+              icon: Icons.favorite_rounded,
+              label: 'Preferred Class',
+              value: isPreferred ? 'Yes' : 'No',
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: canSelect
+                    ? () {
+                        Navigator.pop(context);
+                        _changePreferredClass(session);
+                      }
+                    : null,
+                icon: Icon(
+                  isPreferred
+                      ? Icons.heart_broken_rounded
+                      : Icons.favorite_rounded,
+                ),
+                label: Text(
+                  isPreferred
+                      ? 'Remove preferred class'
+                      : _student.preferredClassGroupIds.isNotEmpty
+                      ? 'Replace preferred class'
+                      : 'Set as preferred class',
+                ),
+              ),
+            ),
+            if (!canSelect && unavailableReason != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                unavailableReason,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: OtaColors.mutedText,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
+
+  Future<void> _changePreferredClass(ClassSession session) async {
+    final student = _student;
+    final existing = student.preferredClassGroupIds.firstOrNull;
+    final removing = existing == session.bulkGroupId;
+    if (!removing && existing != null) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Replace preferred class?'),
+          content: const Text(
+            'This student already has a preferred class. Replace it with this class group?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+      if (replace != true) return;
+    }
+    try {
+      final update = widget.updatePreferredClass;
+      if (update == null) {
+        await firebaseSessionController.profileService.updatePreferredClass(
+          profile: student,
+          session: removing ? null : session,
+        );
+      } else {
+        await update(student, removing ? null : session);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            removing
+                ? 'Preferred class removed.'
+                : 'Preferred class updated for ${student.name}.',
+          ),
+        ),
+      );
+    } on ProfileServiceException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update preferred class.')),
+        );
+      }
+    }
+  }
+}
+
+String? preferredClassUnavailableReason({
+  required StudentProfile profile,
+  required ClassSession session,
+}) {
+  if (!session.isPublished) return 'This class has not been published.';
+  if (session.locationId != profile.locationId) {
+    return 'This class belongs to another academy location.';
+  }
+  if (session.bulkGroupId.trim().isEmpty) {
+    return 'This class is missing a recurring class-group setting.';
+  }
+  if (!profile.isActive) return 'This profile is not available for changes.';
+  return null;
 }
 
 class _ScheduleContent extends StatelessWidget {
@@ -339,6 +507,7 @@ class _ScheduleContent extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onClassTap,
   });
 
@@ -352,6 +521,7 @@ class _ScheduleContent extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final ValueChanged<ClassSession> onClassTap;
 
   @override
@@ -372,6 +542,18 @@ class _ScheduleContent extends StatelessWidget {
         icon: Icons.cloud_off_rounded,
         title: 'Schedule unavailable',
         detail: scheduleErrorMessage,
+        onRetry: appDataService.retryLiveData,
+      );
+    }
+
+    final hasPublishedClasses = appDataService.schedule.values.any(
+      (sessions) => sessions.isNotEmpty,
+    );
+    if (!hasPublishedClasses) {
+      return const _ScheduleStatusState(
+        icon: Icons.event_busy_rounded,
+        title: 'No published classes',
+        detail: 'The academy has not published a class schedule yet.',
       );
     }
 
@@ -397,6 +579,7 @@ class _ScheduleContent extends StatelessWidget {
       eventGap: eventGap,
       student: student,
       nextEligibleSession: nextEligibleSession,
+      academyNow: academyNow,
       onClassTap: onClassTap,
     );
   }
@@ -531,7 +714,7 @@ class _NextEligibleBanner extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Next eligible class: ${nextClass!.className} • ${nextClass!.startLabel}',
+              'Next recommended class: ${nextClass!.className} • ${nextClass!.startLabel}',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: OtaColors.white,
                 fontWeight: FontWeight.w800,
@@ -668,7 +851,7 @@ class _WeekClassRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isEligible = session.isEligibleFor(student);
+    final isEligible = isTypicallyRecommendedFor(session, student);
 
     return InkWell(
       onTap: onTap,
@@ -721,7 +904,6 @@ class _WeekClassRow extends StatelessWidget {
                   icon: Icons.workspace_premium_rounded,
                   label: session.eligibilityLabel,
                 ),
-                if (session.isPreferred) const _WeekBadge(label: 'Preferred'),
               ],
             ),
           ],
@@ -763,30 +945,6 @@ class _WeekMeta extends StatelessWidget {
   }
 }
 
-class _WeekBadge extends StatelessWidget {
-  const _WeekBadge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: OtaColors.white,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: OtaColors.maroon,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
 class _ScheduleTimeline extends StatelessWidget {
   const _ScheduleTimeline({
     required this.classes,
@@ -798,6 +956,7 @@ class _ScheduleTimeline extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onClassTap,
   });
 
@@ -810,6 +969,7 @@ class _ScheduleTimeline extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final ValueChanged<ClassSession> onClassTap;
 
   @override
@@ -858,11 +1018,12 @@ class _ScheduleTimeline extends StatelessWidget {
                       eventGap: eventGap,
                       student: student,
                       nextEligibleSession: nextEligibleSession,
+                      academyNow: academyNow,
                       onTap: () => onClassTap(positionedEvent.session),
                     ),
                   if (isViewingToday)
                     _CurrentTimeIndicator(
-                      top: _currentTimeTop(hourHeight),
+                      top: _currentTimeTop(hourHeight, academyNow),
                       timelineGutterWidth: timelineGutterWidth,
                     ),
                 ],
@@ -932,6 +1093,7 @@ class _PositionedClassBlock extends StatelessWidget {
     required this.eventGap,
     required this.student,
     required this.nextEligibleSession,
+    required this.academyNow,
     required this.onTap,
   });
 
@@ -943,6 +1105,7 @@ class _PositionedClassBlock extends StatelessWidget {
   final double eventGap;
   final StudentProfile student;
   final ClassSession? nextEligibleSession;
+  final DateTime academyNow;
   final VoidCallback onTap;
 
   @override
@@ -957,9 +1120,17 @@ class _PositionedClassBlock extends StatelessWidget {
         (positionedEvent.column * (columnWidth + eventGap));
     final top = (session.startMinutes / 60) * hourHeight;
     final height = (session.durationMinutes / 60) * hourHeight;
-    final isEligible = session.isEligibleFor(student);
-    final isPast = session.endDateTime(selectedDate).isBefore(DateTime.now());
+    final isEligible = isTypicallyRecommendedFor(session, student);
+    final isPast = classHasPassed(
+      session: session,
+      selectedDate: selectedDate,
+      academyNow: academyNow,
+    );
     final isNext = session == nextEligibleSession;
+    final isPreferred = matchesResolvedPreferredClassGroup(
+      student.preferredClassGroupIds,
+      session.bulkGroupId,
+    );
 
     return Positioned(
       top: top + 4,
@@ -971,6 +1142,7 @@ class _PositionedClassBlock extends StatelessWidget {
         isEligible: isEligible,
         isPast: isPast,
         isNext: isNext,
+        isPreferred: isPreferred,
         onTap: onTap,
       ),
     );
@@ -983,6 +1155,7 @@ class _ClassBlock extends StatelessWidget {
     required this.isEligible,
     required this.isPast,
     required this.isNext,
+    required this.isPreferred,
     required this.onTap,
   });
 
@@ -990,6 +1163,7 @@ class _ClassBlock extends StatelessWidget {
   final bool isEligible;
   final bool isPast;
   final bool isNext;
+  final bool isPreferred;
   final VoidCallback onTap;
 
   @override
@@ -1037,11 +1211,15 @@ class _ClassBlock extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        if (isEligible) ...[
-                          const Icon(
-                            Icons.star_rounded,
+                        if (isEligible || isPreferred) ...[
+                          Icon(
+                            isPreferred
+                                ? Icons.favorite_rounded
+                                : Icons.star_rounded,
                             size: 15,
-                            color: Color(0xFFD9A441),
+                            color: isPreferred
+                                ? OtaColors.maroon
+                                : const Color(0xFFD9A441),
                           ),
                           const SizedBox(width: 4),
                         ],
@@ -1076,11 +1254,24 @@ class _ClassBlock extends StatelessWidget {
                     if (isNext && !isCompact) ...[
                       const SizedBox(height: 3),
                       Text(
-                        'Next eligible',
+                        'Next recommended',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: OtaColors.navy,
+                          fontWeight: FontWeight.w900,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                    if (isPreferred && !isCompact && !isNext) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        'Preferred class',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: OtaColors.maroon,
                           fontWeight: FontWeight.w900,
                           height: 1,
                         ),
@@ -1135,12 +1326,14 @@ class _ScheduleStatusState extends StatelessWidget {
     required this.title,
     required this.detail,
     this.showProgress = false,
+    this.onRetry,
   });
 
   final IconData icon;
   final String title;
   final String detail;
   final bool showProgress;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -1193,6 +1386,14 @@ class _ScheduleStatusState extends StatelessWidget {
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
               ),
+              if (onRetry != null) ...[
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
             ],
           ),
         ),
@@ -1360,9 +1561,21 @@ bool _sessionsOverlap(ClassSession a, ClassSession b) {
   return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes;
 }
 
-double _currentTimeTop(double hourHeight) {
-  final now = DateTime.now();
-  return ((now.hour * 60 + now.minute) / 60) * hourHeight;
+double _currentTimeTop(double hourHeight, DateTime academyNow) {
+  return ((academyNow.hour * 60 + academyNow.minute) / 60) * hourHeight;
+}
+
+@visibleForTesting
+bool classHasPassed({
+  required ClassSession session,
+  required DateTime selectedDate,
+  required DateTime academyNow,
+}) {
+  final selectedDay = DateUtils.dateOnly(selectedDate);
+  final academyToday = DateUtils.dateOnly(academyNow);
+  if (selectedDay.isBefore(academyToday)) return true;
+  if (selectedDay.isAfter(academyToday)) return false;
+  return session.endMinutes <= academyNow.hour * 60 + academyNow.minute;
 }
 
 String _formatFullDate(DateTime date) {

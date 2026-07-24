@@ -24,12 +24,13 @@ constraint.
 
 ### Student and Parent Experience
 
-- Dashboard with the selected student's next eligible class, belt progress,
-  and academy updates.
+- Dashboard with account-holder greeting, linked-profile switching, the
+  selected student's preferred/next eligible class, belt progress, and academy
+  updates.
 - Day and week schedule views with recurrence, overlap, eligibility, and class
   detail presentation.
-- Firestore-backed announcements, notification filters, and notification
-  details.
+- Firestore-backed announcements, per-account persistent read state,
+  notification filters, and notification details.
 - Firestore-backed published events in a seven-column month calendar, using
   academy-local dates and retaining published past events for browsing. Events
   open from Dashboard or Resources, and the Events page intentionally has no
@@ -39,11 +40,12 @@ constraint.
 - Local, read-only curriculum organized by belt, including No Belt and five
   canonical sections. Each form item independently supports an optional
   embedded YouTube video; unavailable videos show a coming-soon fallback.
-- Student profile and linked account presentation.
-
-The selected user account, linked profiles, and active student profile are
-still supplied by mock data. Authentication and real profile switching are not
-implemented.
+- Firebase email/password and Google authentication, password reset, profile
+  creation without mandatory email verification, immediate academy access,
+  and persisted profile switching.
+- Student profile, linked account, academy location, preferred class, family
+  child management, contact/profile editing, and profile switching backed by
+  the authenticated Firebase UID.
 
 ### Administrator Experience
 
@@ -58,21 +60,24 @@ implemented.
   in the existing list-management interface.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
-- Firestore-backed student directory and details. Student profile editing is
-  not implemented.
+- Firestore-backed, location-scoped student directory with account-holder and
+  linked-profile details. Generic student profile editing is not implemented.
 - Read-only curriculum view backed by local sample curriculum.
 
-Admin routes currently have no authentication or role guard.
+Normal startup routes active Admin and Super Admin accounts through the
+Firebase session gate; no public role-escalation route exists.
 
 ### Data Layer
 
 `AppDataService` defines the data consumed by screens. The provider switch in
 `lib/services/app_data_service_provider.dart` currently selects
 `FirebaseAppDataService`. It maintains Firestore snapshot listeners for
-`classSessions`, `announcements`, `events`, `resources`, and
-`studentProfiles`. `MockAppDataService` supplies local data when Firebase is
-unavailable and continues to supply the current user, linked/selected profiles,
-and curriculum.
+`classSessions`, `announcements`, `events`, `resources`, `studentProfiles`,
+per-account notification reads, and same-location `users`.
+`MockAppDataService` is limited to isolated tests and internal development
+harnesses; the Welcome page exposes no sample-view shortcut. An authenticated Firebase
+session never falls back to sample data when a listener fails; the affected UI
+keeps its loading, empty, and error states distinct.
 
 `FirebaseAdminWriteService` performs the implemented admin writes. Existing
 documents are written with merge semantics, and cleared canonical optional
@@ -125,13 +130,9 @@ for the current data flow and fallback boundaries.
 
 ### Partially Implemented
 
-- Firebase UID/user-document identity, Email/Password and Google dependency
-  preparation, Spark-compatible pending onboarding writes, admin approval
-  transactions, canonical account/profile parsing, and Firestore Rules are
-  present, but Authentication is not connected to login or signup UI.
-- User roles, approval status, guardian links, family application grouping,
-  and selected-profile fields are modeled, but approval UI and role routing
-  are not implemented.
+- Firebase authentication, atomic profile creation, active-account/location
+  routing, and security rules are implemented. Provider linking and production
+  release validation remain out of scope.
 - Firestore data is location-aware, but administration is currently centered
   on OTA Cheshire rather than a complete multi-location workflow.
 - Announcements are live Firestore data, but device push notifications are not
@@ -144,12 +145,9 @@ for the current data flow and fallback boundaries.
 
 ### Planned or Remaining
 
-- Authentication, account recovery, onboarding screens, role guards, and admin
-  approval.
 - Production deployment and broader authorization testing for Firestore rules.
-- Firebase-backed user identity, profile ownership/switching, and guardian name
-  resolution.
-- Admin student profile editing and production curriculum data.
+- Guardian display-name resolution and broader academy history management.
+- Obtain the academy-approved bundled curriculum wording and optional videos.
 - End-to-end release validation, production signing, and content review.
 
 See [Project backlog](docs/Project_Backlog.md) for prioritized remaining work.
@@ -165,7 +163,7 @@ lib/
   theme/      OTA color system
   utils/      Presentation helpers
   widgets/    Shared UI components
-  main.dart   Normal application entrypoint
+  main_dev.dart / main_prod.dart   Environment-specific entrypoints
   *_main.dart Development-only Firestore entrypoints
 docs/         Schema, architecture, operations, and backlog documentation
 test/         Unit, service-helper, and widget tests
@@ -178,7 +176,7 @@ assets/       OTA image assets
 
 ```powershell
 flutter pub get
-flutter run
+flutter run --flavor dev -t lib/main_dev.dart
 ```
 
 Android development is supported through Android Studio and an Android
@@ -189,20 +187,59 @@ See [Development guide](docs/DEVELOPMENT.md) for run targets and build commands.
 
 ## Firebase Setup
 
-Firebase initialization uses `lib/firebase_options.dart`. The configured
-project ID is `ota-management-platform`, and the Android application ID is
-`com.otamanagement.app`. Running against Firebase requires valid platform
-configuration and Firestore permissions. Do not place credentials in
-documentation or source control.
+Firebase initialization is explicit by environment. Development uses
+`lib/main_dev.dart` and `lib/firebase_options_dev.dart` for the
+`ota-management-platform` project. Production uses `lib/main_prod.dart` and a
+deliberately unconfigured `lib/firebase_options_prod.dart`; it cannot fall back
+to development. Native flavors and schemes pin their matching target, while
+`lib/main.dart` fails rather than selecting a default. See
+[Firebase environments](docs/FIREBASE_ENVIRONMENTS.md).
 
-`firestore.rules` protects atomic pending applications and admin review writes.
+`firestore.rules` protects atomic account/profile creation, active-account
+access, location isolation, administrator roles, and publication state.
 Firebase deployments are limited to explicit Firestore Rules releases; no
 database data or server code is deployed.
+
+## Historical Design Decision: Membership Approval (Inactive)
+
+An approval-based membership workflow was a reasonable part of the original
+architecture. Families would create permanent accounts and profiles, apply to
+an academy, and wait for an administrator to review the application. That
+design anticipated controlled enrollment and a future with independently
+managed locations.
+
+The final application intentionally uses a simpler model. There is currently
+one active academy location, and requiring a review for every family would add
+friction for families, students, and academy staff. Authentication plus linked
+account/profile records already provides the required identity and household
+structure. Young siblings are unlikely to attend unrelated OTA locations, and
+older students attending independently can manage their own account. The
+review flow also added substantial UI, routing, Firestore Rules,
+administrative, and test complexity without enough benefit for this release.
+
+The active design retains Firebase Authentication, `isActive` account/profile
+controls, location isolation, linked-profile authorization, administrative
+role restrictions, and Firestore Rules. Basic student-profile edits and
+preferred-class changes no longer depend on account role, guardian metadata,
+linked-user metadata, or which linked profile is currently selected. An active
+authenticated account may update an active same-location profile only when its
+ID is present in that account's `linkedStudentProfileIds`.
+
+Originally, basic profile authorization layered parent/student roles,
+`guardianUserIds`, `linkedUserId`, and selected-profile state on top of the
+account/profile link. The current design treats the explicit linked-profile ID
+as the access boundary and keeps ownership, activation, location, and protected
+fields enforced separately. This follows the same simplification used when the
+approval process was removed: barriers that did not improve the release's
+security boundary added user friction and unnecessary Rules, client, and test
+complexity. The earlier workflows may be reconsidered if real expansion or
+identity-review needs justify them; they are not part of the current runtime,
+Firestore schema, security rules, or user experience.
 
 ## Testing and Validation
 
 ```powershell
-dart format lib test
+dart format lib test tool
 flutter analyze
 flutter test
 git diff --check

@@ -10,19 +10,15 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(uid);
     }
 
-    function applicationPath(uid) {
-      return /databases/$(database)/documents/onboardingApplications/$(uid);
+    function profilePath(profileId) {
+      return /databases/$(database)/documents/studentProfiles/$(profileId);
     }
 
     function locationPath(locationId) {
       return /databases/$(database)/documents/locations/$(locationId);
     }
 
-    function studentProfilePath(profileId) {
-      return /databases/$(database)/documents/studentProfiles/$(profileId);
-    }
-
-    function hasUserDocument() {
+    function hasUser() {
       return signedIn() && exists(userPath(request.auth.uid));
     }
 
@@ -30,29 +26,36 @@ service cloud.firestore {
       return get(userPath(request.auth.uid)).data;
     }
 
-    function isApproved() {
-      return hasUserDocument() && currentUser().approvalStatus == 'approved';
+    function activeUser() {
+      return hasUser() && currentUser().isActive == true;
     }
 
-    function isSuperAdmin() {
-      return isApproved() && currentUser().role == 'superAdmin';
+    function superAdmin() {
+      return activeUser() && currentUser().role == 'superAdmin';
     }
 
-    function isLocationAdmin() {
-      return isApproved() && currentUser().role == 'admin';
+    function assignedAdmin() {
+      return activeUser() && currentUser().role == 'admin';
+    }
+
+    function activeLocation(locationId) {
+      return locationId is string &&
+          exists(locationPath(locationId)) &&
+          get(locationPath(locationId)).data.isActive == true;
+    }
+
+    function locationAdmin() {
+      return assignedAdmin() &&
+          activeLocation(currentUser().locationId);
     }
 
     function canAdminLocation(locationId) {
-      return isSuperAdmin() ||
-          (isLocationAdmin() && currentUser().locationId == locationId);
-    }
-
-    function canAccessAcademyDocument(locationId) {
-      return isSuperAdmin() || currentUser().locationId == locationId;
+      return superAdmin() ||
+          (locationAdmin() && currentUser().locationId == locationId);
     }
 
     function authEmail() {
-      return request.auth.token.email.lower();
+      return request.auth.token.get('email', '').lower();
     }
 
     function googleIdentities() {
@@ -60,263 +63,706 @@ service cloud.firestore {
           .get('identities', {}).get('google.com', []);
     }
 
-    function activeLocation(locationId) {
-      return exists(locationPath(locationId)) &&
-          get(locationPath(locationId)).data.isActive == true;
+    function managesProfile(profileId) {
+      return activeUser() &&
+          profileId in currentUser().linkedStudentProfileIds;
+    }
+
+    function userManagesProfile(profileId, profileData) {
+      return activeUser() &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          profileData.isActive == true &&
+          profileData.locationId == currentUser().locationId;
+    }
+
+    function canonicalBelt(belt) {
+      return belt in [
+        'No Belt', 'White', 'White-Yellow', 'Yellow', 'Yellow-Green',
+        'Green', 'Green-Blue', 'Blue', 'Blue-Red', 'Red', 'Red-Yellow',
+        'Red-Green', 'Red-Blue', 'Red-Black', 'Black'
+      ];
+    }
+
+    function expectedNextRank(belt) {
+      return belt == 'No Belt' ? 'White' :
+          belt == 'White' ? 'White-Yellow' :
+          belt == 'White-Yellow' ? 'Yellow' :
+          belt == 'Yellow' ? 'Yellow-Green' :
+          belt == 'Yellow-Green' ? 'Green' :
+          belt == 'Green' ? 'Green-Blue' :
+          belt == 'Green-Blue' ? 'Blue' :
+          belt == 'Blue' ? 'Blue-Red' :
+          belt == 'Blue-Red' ? 'Red' :
+          belt == 'Red' ? 'Red-Yellow' :
+          belt == 'Red-Yellow' ? 'Red-Green' :
+          belt == 'Red-Green' ? 'Red-Blue' :
+          belt == 'Red-Blue' ? 'Red-Black' :
+          belt == 'Red-Black' ? 'Black' : 'Black';
+    }
+
+    function validGuardianEmail(data) {
+      return data.keys().hasAny(['linkedUserId'])
+          ? (!data.keys().hasAny(['guardianEmail']) ||
+             (data.guardianEmail is string && data.guardianEmail.size() > 3))
+          : data.guardianEmail is string && data.guardianEmail.size() > 3;
+    }
+
+    function validPreferredClasses(data) {
+      return data.preferredClassGroupIds is list &&
+          data.preferredClassGroupIds.size() <= 1 &&
+          (data.preferredClassGroupIds.size() == 0 ||
+           (data.preferredClassGroupIds[0] is string &&
+            data.preferredClassGroupIds[0].size() > 0));
+    }
+
+    function validStickerProgress(data) {
+      return data.stickerProgress is map &&
+          data.stickerProgress.keys().hasOnly(['current', 'required', 'nextRank']) &&
+          data.stickerProgress.keys().hasAll(['current', 'required', 'nextRank']) &&
+          data.stickerProgress.current is int &&
+          data.stickerProgress.current >= 0 &&
+          data.stickerProgress.required is int &&
+          data.stickerProgress.required >= 0 &&
+          data.stickerProgress.nextRank == expectedNextRank(data.beltRank);
+    }
+
+    function validStudentProfileDefaults(data) {
+      return data is map &&
+          data.keys().hasOnly([
+            'dateOfBirth', 'beltRank', 'guardianEmail', 'stickerProgress'
+          ]) &&
+          data.keys().hasAll(['dateOfBirth', 'beltRank', 'stickerProgress']) &&
+          data.dateOfBirth is timestamp &&
+          canonicalBelt(data.beltRank) &&
+          (!data.keys().hasAny(['guardianEmail']) ||
+           (data.guardianEmail is string && data.guardianEmail.size() > 3)) &&
+          validStickerProgress({
+            'beltRank': data.beltRank,
+            'stickerProgress': data.stickerProgress
+          });
+    }
+
+    function selectedProfileOwnedByUser() {
+      return activeUser() &&
+          currentUser().role in ['student', 'parent'] &&
+          currentUser().selectedStudentProfileId is string &&
+          currentUser().selectedStudentProfileId in
+              currentUser().linkedStudentProfileIds &&
+          exists(profilePath(currentUser().selectedStudentProfileId));
+    }
+
+    function selectedProfile() {
+      return get(profilePath(currentUser().selectedStudentProfileId)).data;
+    }
+
+    function activeSelectedProfileAccess() {
+      return selectedProfileOwnedByUser() &&
+          selectedProfile().isActive == true &&
+          selectedProfile().locationId == currentUser().locationId &&
+          activeLocation(currentUser().locationId);
+    }
+
+    function canAccessAcademyLocation(locationId) {
+      return activeLocation(locationId) &&
+          (canAdminLocation(locationId) ||
+           (activeSelectedProfileAccess() &&
+            currentUser().locationId == locationId));
+    }
+
+    function canReadReferencedLocation(locationId) {
+      return superAdmin() ||
+          (hasUser() && currentUser().locationId == locationId);
+    }
+
+    function allInitialProfilesExist(ids) {
+      return ids is list &&
+          ids.size() >= 1 && ids.size() <= 11 &&
+          ids.toSet().size() == ids.size() &&
+          existsAfter(profilePath(ids[0])) &&
+          (ids.size() < 2 || existsAfter(profilePath(ids[1]))) &&
+          (ids.size() < 3 || existsAfter(profilePath(ids[2]))) &&
+          (ids.size() < 4 || existsAfter(profilePath(ids[3]))) &&
+          (ids.size() < 5 || existsAfter(profilePath(ids[4]))) &&
+          (ids.size() < 6 || existsAfter(profilePath(ids[5]))) &&
+          (ids.size() < 7 || existsAfter(profilePath(ids[6]))) &&
+          (ids.size() < 8 || existsAfter(profilePath(ids[7]))) &&
+          (ids.size() < 9 || existsAfter(profilePath(ids[8]))) &&
+          (ids.size() < 10 || existsAfter(profilePath(ids[9]))) &&
+          (ids.size() < 11 || existsAfter(profilePath(ids[10])));
+    }
+
+    function initialProfileRelationship(uid, profileId, userData) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.locationId == userData.locationId &&
+          profile.isActive == true &&
+          (userData.role == 'student'
+            ? userData.linkedStudentProfileIds.size() == 1 &&
+              profileId == userData.selectedStudentProfileId &&
+              profile.linkedUserId == uid &&
+              profile.guardianUserIds.size() == 0
+            : ((profile.keys().hasAny(['linkedUserId']) &&
+                profileId == userData.selectedStudentProfileId &&
+                profile.linkedUserId == uid &&
+                profile.guardianUserIds.size() == 0) ||
+               (!profile.keys().hasAny(['linkedUserId']) &&
+                profile.guardianUserIds == [uid])));
+    }
+
+    function allInitialProfilesMatch(uid, ids, userData) {
+      return initialProfileRelationship(uid, ids[0], userData) &&
+          (ids.size() < 2 || initialProfileRelationship(uid, ids[1], userData)) &&
+          (ids.size() < 3 || initialProfileRelationship(uid, ids[2], userData)) &&
+          (ids.size() < 4 || initialProfileRelationship(uid, ids[3], userData)) &&
+          (ids.size() < 5 || initialProfileRelationship(uid, ids[4], userData)) &&
+          (ids.size() < 6 || initialProfileRelationship(uid, ids[5], userData)) &&
+          (ids.size() < 7 || initialProfileRelationship(uid, ids[6], userData)) &&
+          (ids.size() < 8 || initialProfileRelationship(uid, ids[7], userData)) &&
+          (ids.size() < 9 || initialProfileRelationship(uid, ids[8], userData)) &&
+          (ids.size() < 10 || initialProfileRelationship(uid, ids[9], userData)) &&
+          (ids.size() < 11 || initialProfileRelationship(uid, ids[10], userData));
     }
 
     function validInitialUser(uid, data) {
       return data.keys().hasOnly([
-            'firstName', 'lastName', 'email', 'role', 'approvalStatus',
-            'locationId', 'linkedStudentProfileIds', 'phoneNumber',
-            'googleAccountId', 'createdAt', 'updatedAt'
+            'firstName', 'lastName', 'email', 'role', 'isActive',
+            'locationId', 'linkedStudentProfileIds',
+            'selectedStudentProfileId', 'phoneNumber', 'googleAccountId',
+            'studentProfileDefaults',
+            'createdAt', 'updatedAt'
           ]) &&
           data.keys().hasAll([
-            'firstName', 'lastName', 'email', 'role', 'approvalStatus',
-            'locationId', 'linkedStudentProfileIds', 'createdAt', 'updatedAt'
+            'firstName', 'lastName', 'email', 'role', 'isActive',
+            'locationId', 'linkedStudentProfileIds',
+            'selectedStudentProfileId', 'createdAt', 'updatedAt'
           ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
-          data.email is string && data.email == authEmail() &&
+          data.email == authEmail() &&
           data.role in ['student', 'parent'] &&
-          data.approvalStatus == 'pending' &&
-          data.locationId is string && activeLocation(data.locationId) &&
+          data.isActive == true &&
+          activeLocation(data.locationId) &&
           data.linkedStudentProfileIds is list &&
-          data.linkedStudentProfileIds.size() == 0 &&
+          data.selectedStudentProfileId == data.linkedStudentProfileIds[0] &&
           (!data.keys().hasAny(['phoneNumber']) ||
             (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
           (!data.keys().hasAny(['googleAccountId']) ||
-            (data.googleAccountId is string &&
-             data.googleAccountId in googleIdentities())) &&
+            data.googleAccountId in googleIdentities()) &&
+          (!data.keys().hasAny(['studentProfileDefaults']) ||
+            (data.role == 'parent' &&
+             validStudentProfileDefaults(data.studentProfileDefaults))) &&
           data.createdAt == request.time && data.updatedAt == request.time &&
-          getAfter(applicationPath(uid)).data.applicantUid == uid &&
-          getAfter(applicationPath(uid)).data.email == data.email &&
-          getAfter(applicationPath(uid)).data.role == data.role &&
-          getAfter(applicationPath(uid)).data.locationId == data.locationId;
+          allInitialProfilesExist(data.linkedStudentProfileIds) &&
+          allInitialProfilesMatch(uid, data.linkedStudentProfileIds, data);
     }
 
-    function validAdditionalStudentFields(student) {
-      return student is map && student.keys().hasOnly([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'guardianEmail'
-          ]) && student.keys().hasAll([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'guardianEmail'
-          ]);
-    }
-
-    function validAdditionalStudents(students) {
-      // Keep nested validation within the Rules expression budget: Rules
-      // reject unknown/missing child fields, while the submission and approval
-      // services strictly validate each value and type.
-      return students is list && students.size() <= 10 &&
-          (students.size() < 1 || validAdditionalStudentFields(students[0])) &&
-          (students.size() < 2 || validAdditionalStudentFields(students[1])) &&
-          (students.size() < 3 || validAdditionalStudentFields(students[2])) &&
-          (students.size() < 4 || validAdditionalStudentFields(students[3])) &&
-          (students.size() < 5 || validAdditionalStudentFields(students[4])) &&
-          (students.size() < 6 || validAdditionalStudentFields(students[5])) &&
-          (students.size() < 7 || validAdditionalStudentFields(students[6])) &&
-          (students.size() < 8 || validAdditionalStudentFields(students[7])) &&
-          (students.size() < 9 || validAdditionalStudentFields(students[8])) &&
-          (students.size() < 10 || validAdditionalStudentFields(students[9]));
-    }
-
-    function validInitialApplication(uid, data) {
+    function validInitialProfile(profileId, data) {
+      let user = getAfter(userPath(request.auth.uid)).data;
       return data.keys().hasOnly([
-            'applicantUid', 'firstName', 'lastName', 'email', 'phoneNumber',
-            'dateOfBirth', 'role', 'locationId', 'status', 'parentIsStudent',
-            'applicantBeltRank', 'guardianEmail', 'additionalStudents',
-            'createdAt', 'updatedAt'
-          ]) && data.keys().hasAll([
-            'applicantUid', 'firstName', 'lastName', 'email', 'dateOfBirth',
-            'role', 'locationId', 'status', 'parentIsStudent',
-            'additionalStudents', 'createdAt', 'updatedAt'
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
           ]) &&
-          data.applicantUid == uid && data.email == authEmail() &&
+          data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianUserIds', 'preferredClassGroupIds',
+            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
+            'createdAt', 'updatedAt'
+          ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
           data.dateOfBirth is timestamp &&
-          data.role in ['student', 'parent'] && data.status == 'pending' &&
-          data.locationId is string && activeLocation(data.locationId) &&
-          data.parentIsStudent is bool &&
-          validAdditionalStudents(data.additionalStudents) &&
-          (!data.keys().hasAny(['phoneNumber']) ||
-            (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
-          (data.role == 'student'
-            ? data.parentIsStudent == false &&
-              data.additionalStudents.size() == 0 &&
-              data.applicantBeltRank is string &&
-              data.applicantBeltRank.size() > 0 &&
-              data.guardianEmail is string && data.guardianEmail.size() > 3
-            : ((!data.parentIsStudent ||
-                  (data.applicantBeltRank is string &&
-                   data.applicantBeltRank.size() > 0)) &&
-               (data.parentIsStudent || data.additionalStudents.size() > 0))) &&
+          canonicalBelt(data.beltRank) &&
+          data.locationId == user.locationId &&
+          validGuardianEmail(data) &&
+          data.guardianUserIds is list &&
+          validPreferredClasses(data) &&
+          validStickerProgress(data) &&
+          data.promotionHistory is list &&
+          data.testingNotes is list &&
+          data.isActive == true &&
           data.createdAt == request.time && data.updatedAt == request.time &&
-          getAfter(userPath(uid)).data.email == data.email &&
-          getAfter(userPath(uid)).data.role == data.role &&
-          getAfter(userPath(uid)).data.locationId == data.locationId &&
-          getAfter(userPath(uid)).data.approvalStatus == 'pending';
+          profileId in user.linkedStudentProfileIds &&
+          initialProfileRelationship(request.auth.uid, profileId, user);
     }
 
-    function validApplicantSelfUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['firstName', 'lastName', 'phoneNumber', 'updatedAt']) &&
+    function validOwnAccountUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'phoneNumber',
+            'selectedStudentProfileId', 'updatedAt'
+          ]) &&
+          request.resource.data.selectedStudentProfileId in
+              resource.data.linkedStudentProfileIds &&
+          request.resource.data.firstName is string &&
+          request.resource.data.firstName.size() > 0 &&
+          request.resource.data.lastName is string &&
+          request.resource.data.lastName.size() > 0 &&
+          (!request.resource.data.keys().hasAny(['phoneNumber']) ||
+           (request.resource.data.phoneNumber is string &&
+            request.resource.data.phoneNumber.size() > 0)) &&
           request.resource.data.updatedAt == request.time;
     }
 
-    function validReviewUserUpdate(uid) {
-      return canAdminLocation(resource.data.locationId) &&
-          resource.data.approvalStatus == 'pending' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'approvalStatus', 'linkedStudentProfileIds',
-            'selectedStudentProfileId', 'familyApplicationId', 'updatedAt'
+    function validOwnContactUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'phoneNumber', 'updatedAt'
           ]) &&
-          request.resource.data.approvalStatus in ['approved', 'rejected'] &&
-          request.resource.data.updatedAt == request.time &&
-          getAfter(applicationPath(uid)).data.status ==
-              request.resource.data.approvalStatus &&
-          getAfter(applicationPath(uid)).data.reviewedBy == request.auth.uid &&
-          (request.resource.data.approvalStatus == 'approved'
-            ? request.resource.data.linkedStudentProfileIds is list &&
-              request.resource.data.linkedStudentProfileIds.size() > 0 &&
-              request.resource.data.selectedStudentProfileId in
-                request.resource.data.linkedStudentProfileIds
-            : request.resource.data.linkedStudentProfileIds.size() == 0 &&
-              !request.resource.data.keys().hasAny([
-                'selectedStudentProfileId', 'familyApplicationId'
-              ]));
+          request.resource.data.firstName is string &&
+          request.resource.data.firstName.size() > 0 &&
+          request.resource.data.lastName is string &&
+          request.resource.data.lastName.size() > 0 &&
+          (!request.resource.data.keys().hasAny(['phoneNumber']) ||
+           (request.resource.data.phoneNumber is string &&
+            request.resource.data.phoneNumber.size() > 0)) &&
+          request.resource.data.updatedAt == request.time;
     }
 
-    function validRoutineAdminUserUpdate() {
-      return canAdminLocation(resource.data.locationId) &&
+    function validAdminAccountActivation() {
+      return ((superAdmin()) ||
+              (locationAdmin() &&
+               resource.data.role in ['student', 'parent'] &&
+               resource.data.locationId == currentUser().locationId)) &&
           request.resource.data.locationId == resource.data.locationId &&
-          request.resource.data.role != 'superAdmin' &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'role', 'approvalStatus', 'locationId', 'linkedStudentProfileIds',
-            'selectedStudentProfileId', 'familyApplicationId',
-            'googleAccountId', 'createdAt'
-          ]);
-    }
-
-    function validApplicationReview(uid) {
-      return canAdminLocation(resource.data.locationId) &&
-          resource.data.status == 'pending' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'status', 'reviewedAt', 'reviewedBy', 'rejectionReason', 'updatedAt'
+            'isActive', 'updatedAt'
           ]) &&
-          request.resource.data.status in ['approved', 'rejected'] &&
-          request.resource.data.reviewedAt == request.time &&
-          request.resource.data.updatedAt == request.time &&
-          request.resource.data.reviewedBy == request.auth.uid &&
-          (!request.resource.data.keys().hasAny(['rejectionReason']) ||
-            (request.resource.data.status == 'rejected' &&
-             request.resource.data.rejectionReason is string &&
-             request.resource.data.rejectionReason.size() <= 500)) &&
-          getAfter(userPath(uid)).data.approvalStatus ==
-              request.resource.data.status;
+          request.resource.data.isActive is bool &&
+          request.resource.data.updatedAt == request.time;
     }
 
-    function validApprovedProfile(profileId, data) {
-      return data.keys().hasOnly([
-            'applicationUid', 'firstName', 'lastName', 'dateOfBirth',
-            'beltRank', 'locationId', 'guardianEmail', 'guardianUserIds',
-            'linkedUserId', 'familyApplicationId', 'approvalStatus',
-            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
-            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
-          ]) && data.keys().hasAll([
-            'applicationUid', 'firstName', 'lastName', 'dateOfBirth',
-            'beltRank', 'locationId', 'guardianEmail', 'guardianUserIds',
-            'approvalStatus', 'preferredClassGroupIds', 'stickerProgress',
-            'promotionHistory', 'testingNotes', 'isActive', 'createdAt',
+    function validManagedStickerUpdate() {
+      let stickerChanged = request.resource.data.stickerProgress
+          .diff(resource.data.stickerProgress).affectedKeys();
+      return request.resource.data.stickerProgress is map &&
+          resource.data.stickerProgress is map &&
+          stickerChanged.hasOnly(['current', 'required', 'nextRank']) &&
+          request.resource.data.stickerProgress.current is int &&
+          request.resource.data.stickerProgress.current >= 0 &&
+          request.resource.data.stickerProgress.required is int &&
+          request.resource.data.stickerProgress.required >= 0 &&
+          (!stickerChanged.hasAny(['nextRank']) ||
+           request.resource.data.stickerProgress.nextRank ==
+               expectedNextRank(request.resource.data.beltRank));
+    }
+
+    function validManagedProfileUpdate(profileId) {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      return userManagesProfile(profileId, resource.data) &&
+          changed.hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
+            'guardianEmail', 'stickerProgress',
             'updatedAt'
-          ]) && canAdminLocation(data.locationId) &&
-          data.applicationUid is string &&
-          getAfter(applicationPath(data.applicationUid)).data.status ==
-            'approved' &&
-          getAfter(applicationPath(data.applicationUid)).data.reviewedBy ==
-            request.auth.uid &&
-          getAfter(applicationPath(data.applicationUid)).data.locationId ==
-            data.locationId &&
-          profileId in getAfter(userPath(data.applicationUid)).data
-            .linkedStudentProfileIds &&
-          data.approvalStatus == 'approved' && data.isActive == true &&
+          ]) &&
+          (!changed.hasAny(['firstName']) ||
+           (request.resource.data.firstName is string &&
+            request.resource.data.firstName.size() > 0)) &&
+          (!changed.hasAny(['lastName']) ||
+           (request.resource.data.lastName is string &&
+            request.resource.data.lastName.size() > 0)) &&
+          (!changed.hasAny(['dateOfBirth']) ||
+           request.resource.data.dateOfBirth is timestamp) &&
+          (!changed.hasAny(['beltRank']) ||
+           canonicalBelt(request.resource.data.beltRank)) &&
+          (!changed.hasAny(['guardianEmail']) ||
+           validGuardianEmail(request.resource.data)) &&
+          (!changed.hasAny(['stickerProgress']) ||
+           validManagedStickerUpdate()) &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validPreferredClassUpdate(profileId) {
+      return userManagesProfile(profileId, resource.data) &&
+          resource.data.isActive == true &&
+          resource.data.locationId == currentUser().locationId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'preferredClassGroupIds', 'updatedAt'
+          ]) &&
+          validPreferredClasses(request.resource.data) &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function linkedProfileValidAfter(uid, profileId, userData) {
+      let profile = getAfter(profilePath(profileId)).data;
+      return profile.isActive == true &&
+          profile.locationId == userData.locationId &&
+          ((profile.get('linkedUserId', '') == uid &&
+            profile.guardianUserIds.size() == 0) ||
+           (profile.get('linkedUserId', '') == '' &&
+            profile.guardianUserIds == [uid]));
+    }
+
+    function allLinkedProfilesValidAfter(uid, ids, userData) {
+      return ids.size() >= 1 && ids.size() <= 11 &&
+          ids.toSet().size() == ids.size() &&
+          linkedProfileValidAfter(uid, ids[0], userData) &&
+          (ids.size() < 2 || linkedProfileValidAfter(uid, ids[1], userData)) &&
+          (ids.size() < 3 || linkedProfileValidAfter(uid, ids[2], userData)) &&
+          (ids.size() < 4 || linkedProfileValidAfter(uid, ids[3], userData)) &&
+          (ids.size() < 5 || linkedProfileValidAfter(uid, ids[4], userData)) &&
+          (ids.size() < 6 || linkedProfileValidAfter(uid, ids[5], userData)) &&
+          (ids.size() < 7 || linkedProfileValidAfter(uid, ids[6], userData)) &&
+          (ids.size() < 8 || linkedProfileValidAfter(uid, ids[7], userData)) &&
+          (ids.size() < 9 || linkedProfileValidAfter(uid, ids[8], userData)) &&
+          (ids.size() < 10 || linkedProfileValidAfter(uid, ids[9], userData)) &&
+          (ids.size() < 11 || linkedProfileValidAfter(uid, ids[10], userData));
+    }
+
+    function removedProfileSafe(uid, profileId, remainingIds, locationId) {
+      let before = get(profilePath(profileId)).data;
+      let after = getAfter(profilePath(profileId)).data;
+      return profileId in remainingIds ||
+          (before.isActive == true &&
+           before.locationId == locationId &&
+           after.isActive == false &&
+           after.locationId == locationId &&
+           after.get('linkedUserId', '') == before.get('linkedUserId', '') &&
+           after.guardianUserIds == before.guardianUserIds);
+    }
+
+    function allRemovedProfilesSafe(uid, oldIds, newIds, locationId) {
+      return removedProfileSafe(uid, oldIds[0], newIds, locationId) &&
+          (oldIds.size() < 2 || removedProfileSafe(uid, oldIds[1], newIds, locationId)) &&
+          (oldIds.size() < 3 || removedProfileSafe(uid, oldIds[2], newIds, locationId)) &&
+          (oldIds.size() < 4 || removedProfileSafe(uid, oldIds[3], newIds, locationId)) &&
+          (oldIds.size() < 5 || removedProfileSafe(uid, oldIds[4], newIds, locationId)) &&
+          (oldIds.size() < 6 || removedProfileSafe(uid, oldIds[5], newIds, locationId)) &&
+          (oldIds.size() < 7 || removedProfileSafe(uid, oldIds[6], newIds, locationId)) &&
+          (oldIds.size() < 8 || removedProfileSafe(uid, oldIds[7], newIds, locationId)) &&
+          (oldIds.size() < 9 || removedProfileSafe(uid, oldIds[8], newIds, locationId)) &&
+          (oldIds.size() < 10 || removedProfileSafe(uid, oldIds[9], newIds, locationId)) &&
+          (oldIds.size() < 11 || removedProfileSafe(uid, oldIds[10], newIds, locationId));
+    }
+
+    function validParentFamilyUpdate() {
+      let oldIds = resource.data.linkedStudentProfileIds;
+      let newIds = request.resource.data.linkedStudentProfileIds;
+      let adding = newIds.size() == oldIds.size() + 1 && newIds.hasAll(oldIds);
+      let removing = newIds.size() == oldIds.size() - 1 && oldIds.hasAll(newIds);
+      return activeUser() && currentUser().role == 'parent' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'linkedStudentProfileIds', 'selectedStudentProfileId', 'updatedAt'
+          ]) &&
+          request.resource.data.updatedAt == request.time &&
+          request.resource.data.selectedStudentProfileId in newIds &&
+          (adding || removing) &&
+          allLinkedProfilesValidAfter(request.auth.uid, newIds, request.resource.data) &&
+          (adding ||
+           (removing &&
+            allRemovedProfilesSafe(request.auth.uid, oldIds, newIds,
+              resource.data.locationId)));
+    }
+
+    function validParentChildCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'preferredClassGroupIds',
+            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
+            'createdAt', 'updatedAt'
+          ]) &&
           data.firstName is string && data.firstName.size() > 0 &&
           data.lastName is string && data.lastName.size() > 0 &&
-          data.dateOfBirth is timestamp &&
-          data.beltRank is string && data.beltRank.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
           data.guardianEmail is string && data.guardianEmail.size() > 3 &&
-          data.guardianUserIds is list &&
-          data.preferredClassGroupIds is list &&
+          data.guardianUserIds == [request.auth.uid] &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          data.stickerProgress.current == 0 &&
+          data.stickerProgress.required == 0 &&
           data.promotionHistory is list && data.testingNotes is list &&
-          data.stickerProgress is map &&
+          data.isActive == true &&
           data.createdAt == request.time && data.updatedAt == request.time;
     }
 
-    match /users/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid &&
-          !exists(userPath(uid)) && validInitialUser(uid, request.resource.data);
-      allow read: if signedIn() &&
-          (request.auth.uid == uid || isSuperAdmin() ||
-           (isLocationAdmin() &&
-            resource.data.locationId == currentUser().locationId));
-      allow update: if signedIn() &&
-          ((request.auth.uid == uid && validApplicantSelfUpdate()) ||
-           validReviewUserUpdate(uid) || validRoutineAdminUserUpdate());
-      allow delete: if isSuperAdmin();
+    function activeLinkedSelfProfile(profileId) {
+      return exists(profilePath(profileId)) &&
+          get(profilePath(profileId)).data.isActive == true &&
+          get(profilePath(profileId)).data.get('linkedUserId', '') ==
+              request.auth.uid;
     }
 
-    match /onboardingApplications/{uid} {
-      allow create: if signedIn() && request.auth.uid == uid &&
-          !exists(applicationPath(uid)) &&
-          validInitialApplication(uid, request.resource.data);
+    function hasActiveLinkedSelfProfile(ids) {
+      return activeLinkedSelfProfile(ids[0]) ||
+          (ids.size() > 1 && activeLinkedSelfProfile(ids[1])) ||
+          (ids.size() > 2 && activeLinkedSelfProfile(ids[2])) ||
+          (ids.size() > 3 && activeLinkedSelfProfile(ids[3])) ||
+          (ids.size() > 4 && activeLinkedSelfProfile(ids[4])) ||
+          (ids.size() > 5 && activeLinkedSelfProfile(ids[5])) ||
+          (ids.size() > 6 && activeLinkedSelfProfile(ids[6])) ||
+          (ids.size() > 7 && activeLinkedSelfProfile(ids[7])) ||
+          (ids.size() > 8 && activeLinkedSelfProfile(ids[8])) ||
+          (ids.size() > 9 && activeLinkedSelfProfile(ids[9])) ||
+          (ids.size() > 10 && activeLinkedSelfProfile(ids[10]));
+    }
+
+    function validParentSelfProfileCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds) &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianUserIds', 'linkedUserId', 'preferredClassGroupIds',
+            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
+            'createdAt', 'updatedAt'
+          ]) &&
+          data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
+          validGuardianEmail(data) &&
+          data.guardianUserIds.size() == 0 &&
+          data.linkedUserId == request.auth.uid &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.isActive == true &&
+          data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
+    function validParentManagedProfileCreate(profileId, data) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      let selfProfile = data.get('linkedUserId', '') == request.auth.uid;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in afterUser.linkedStudentProfileIds &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() + 1 &&
+          (!selfProfile ||
+           !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds)) &&
+          data.keys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianEmail', 'guardianUserIds', 'linkedUserId',
+            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
+            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
+            'guardianUserIds', 'preferredClassGroupIds', 'stickerProgress',
+            'promotionHistory', 'testingNotes', 'isActive', 'createdAt',
+            'updatedAt'
+          ]) &&
+          data.firstName is string && data.firstName.size() > 0 &&
+          data.lastName is string && data.lastName.size() > 0 &&
+          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
+          data.locationId == currentUser().locationId &&
+          validGuardianEmail(data) &&
+          data.guardianUserIds == (selfProfile ? [] : [request.auth.uid]) &&
+          (selfProfile || !data.keys().hasAny(['linkedUserId'])) &&
+          validPreferredClasses(data) &&
+          data.preferredClassGroupIds.size() == 0 &&
+          validStickerProgress(data) &&
+          (selfProfile ||
+           (data.stickerProgress.current == 0 &&
+            data.stickerProgress.required == 0)) &&
+          data.promotionHistory is list && data.testingNotes is list &&
+          data.isActive == true &&
+          data.createdAt == request.time && data.updatedAt == request.time;
+    }
+
+    function validParentLinkedProfileDeactivation(profileId) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
+      return activeUser() && currentUser().role == 'parent' &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          resource.data.isActive == true &&
+          resource.data.locationId == currentUser().locationId &&
+          !(profileId in afterUser.linkedStudentProfileIds) &&
+          afterUser.linkedStudentProfileIds.size() >= 1 &&
+          afterUser.selectedStudentProfileId in
+              afterUser.linkedStudentProfileIds &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isActive', 'updatedAt'
+          ]) &&
+          request.resource.data.isActive == false &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validAdminProfileUpdate() {
+      return canAdminLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
+            'guardianEmail', 'preferredClassGroupIds', 'stickerProgress',
+            'promotionHistory', 'testingNotes', 'isActive', 'updatedAt'
+          ]) &&
+          canonicalBelt(request.resource.data.beltRank) &&
+          validGuardianEmail(request.resource.data) &&
+          validPreferredClasses(request.resource.data) &&
+          validStickerProgress(request.resource.data) &&
+          request.resource.data.isActive is bool &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function publishedClassSession() {
+      return resource.data.isActive == true;
+    }
+
+    function publishedAnnouncement() {
+      return resource.data.status == 'published';
+    }
+
+    function publishedEvent() {
+      return resource.data.isPublished == true &&
+          resource.data.isArchived == false;
+    }
+
+    function publishedResource() {
+      return resource.data.isPublished == true &&
+          resource.data.isArchived == false;
+    }
+
+    function activePushDeviceOwner(uid) {
+      return signedIn() && request.auth.uid == uid &&
+          exists(userPath(uid)) && get(userPath(uid)).data.isActive == true;
+    }
+
+    function validPushDevice(data) {
+      return data.keys().hasOnly([
+            'fcmToken', 'platform', 'appEnvironment', 'enabled',
+            'createdAt', 'updatedAt', 'lastSeenAt'
+          ]) &&
+          data.keys().hasAll([
+            'fcmToken', 'platform', 'appEnvironment', 'enabled',
+            'createdAt', 'updatedAt', 'lastSeenAt'
+          ]) &&
+          data.fcmToken is string && data.fcmToken.size() > 0 &&
+          data.platform in ['android', 'ios'] &&
+          data.appEnvironment in ['dev', 'prod'] &&
+          data.enabled is bool;
+    }
+
+    match /users/{uid} {
+      allow create: if signedIn() &&
+          request.auth.uid == uid &&
+          !exists(userPath(uid)) &&
+          validInitialUser(uid, request.resource.data);
       allow read: if signedIn() &&
-          (request.auth.uid == uid || isSuperAdmin() ||
-           (isLocationAdmin() &&
-            resource.data.locationId == currentUser().locationId));
-      allow update: if signedIn() && validApplicationReview(uid);
-      allow delete: if false;
+          (request.auth.uid == uid ||
+           superAdmin() ||
+           (locationAdmin() &&
+            resource.data.get('locationId', '') == currentUser().locationId));
+      allow update: if signedIn() &&
+          ((request.auth.uid == uid &&
+            (validParentFamilyUpdate() || validOwnContactUpdate() ||
+             validOwnAccountUpdate())) ||
+           validAdminAccountActivation());
+      allow delete: if superAdmin();
+
+      match /notificationReads/{announcementId} {
+        allow read, delete: if signedIn() && request.auth.uid == uid;
+        allow create, update: if signedIn() && request.auth.uid == uid &&
+            request.resource.data.keys().hasOnly(['readAt']) &&
+            request.resource.data.keys().hasAll(['readAt']) &&
+            request.resource.data.readAt == request.time;
+      }
+
+      match /pushDevices/{installationId} {
+        allow read, delete: if activePushDeviceOwner(uid);
+        allow create: if activePushDeviceOwner(uid) &&
+            validPushDevice(request.resource.data) &&
+            request.resource.data.createdAt == request.time &&
+            request.resource.data.updatedAt == request.time &&
+            request.resource.data.lastSeenAt == request.time;
+        allow update: if activePushDeviceOwner(uid) &&
+            validPushDevice(request.resource.data) &&
+            request.resource.data.createdAt == resource.data.createdAt &&
+            request.resource.data.updatedAt == request.time &&
+            request.resource.data.lastSeenAt == request.time;
+      }
+    }
+
+    match /pushDispatches/{dispatchId} {
+      allow read, write: if false;
     }
 
     match /studentProfiles/{profileId} {
-      allow read: if isApproved() && (
-          ((isLocationAdmin() || isSuperAdmin()) &&
-            !exists(studentProfilePath(profileId))) ||
-          resource.data.get('linkedUserId', '') == request.auth.uid ||
-          profileId in currentUser().linkedStudentProfileIds ||
-          request.auth.uid in resource.data.get('guardianUserIds', []) ||
-          canAdminLocation(resource.data.locationId)
-        );
-      allow create: if isApproved() &&
-          validApprovedProfile(profileId, request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId &&
-          !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'applicationUid', 'familyApplicationId', 'linkedUserId',
-            'guardianUserIds'
-          ]);
-      allow delete: if isSuperAdmin();
+      allow create: if signedIn() &&
+          (validParentManagedProfileCreate(profileId, request.resource.data) ||
+           validInitialProfile(profileId, request.resource.data));
+      allow read: if signedIn() &&
+          (managesProfile(profileId) ||
+           superAdmin() ||
+           (locationAdmin() &&
+            resource.data.get('locationId', '') == currentUser().locationId));
+      allow update: if signedIn() &&
+          (validManagedProfileUpdate(profileId) ||
+           validPreferredClassUpdate(profileId) ||
+           validParentLinkedProfileDeactivation(profileId) ||
+           validAdminProfileUpdate());
+      allow delete: if superAdmin();
     }
 
     match /locations/{locationId} {
-      allow read: if signedIn() && resource.data.isActive == true;
-      allow create, update, delete: if isSuperAdmin();
+      allow read: if signedIn() &&
+          (resource.data.isActive == true ||
+           canReadReferencedLocation(locationId));
+      allow create, update, delete: if superAdmin();
     }
 
-    match /{collectionName}/{documentId} {
-      allow read: if collectionName in [
-          'classSessions', 'announcements', 'events', 'resources'
-        ] && isApproved() &&
-        canAccessAcademyDocument(resource.data.locationId);
-      allow create: if collectionName in [
-          'classSessions', 'announcements', 'events', 'resources'
-        ] && canAdminLocation(request.resource.data.locationId);
-      allow update: if collectionName in [
-          'classSessions', 'announcements', 'events', 'resources'
-        ] && canAdminLocation(resource.data.locationId) &&
-        request.resource.data.locationId == resource.data.locationId;
-      allow delete: if collectionName in [
-          'classSessions', 'announcements', 'events', 'resources'
-        ] && canAdminLocation(resource.data.locationId);
+    match /classSessions/{documentId} {
+      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+          (canAdminLocation(resource.data.locationId) || publishedClassSession());
+      allow create: if canAdminLocation(request.resource.data.locationId) &&
+          activeLocation(request.resource.data.locationId);
+      allow update: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId;
+      allow delete: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId);
+    }
+
+    match /announcements/{documentId} {
+      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+          (canAdminLocation(resource.data.locationId) || publishedAnnouncement());
+      allow create: if canAdminLocation(request.resource.data.locationId) &&
+          activeLocation(request.resource.data.locationId);
+      allow update: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId;
+      allow delete: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId);
+    }
+
+    match /events/{documentId} {
+      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+          (canAdminLocation(resource.data.locationId) || publishedEvent());
+      allow create: if canAdminLocation(request.resource.data.locationId) &&
+          activeLocation(request.resource.data.locationId);
+      allow update: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId;
+      allow delete: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId);
+    }
+
+    match /resources/{documentId} {
+      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+          (canAdminLocation(resource.data.locationId) || publishedResource());
+      allow create: if canAdminLocation(request.resource.data.locationId) &&
+          activeLocation(request.resource.data.locationId);
+      allow update: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId) &&
+          request.resource.data.locationId == resource.data.locationId;
+      allow delete: if canAdminLocation(resource.data.locationId) &&
+          activeLocation(resource.data.locationId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
