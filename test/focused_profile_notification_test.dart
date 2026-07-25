@@ -150,26 +150,34 @@ void main() {
     expect(changes.last, isNotNull);
   });
 
-  testWidgets(
-    'notification detail marks unread and updates without reopening',
-    (tester) async {
-      final service = _ReactiveNotificationService();
-      appDataService = service;
-      addTearDown(initializeMockAppDataServiceForTests);
-      await tester.pumpWidget(
-        MaterialApp(
-          home: NotificationDetailScreen(
-            notification: service.notifications.single,
-          ),
+  testWidgets('notification detail marks unread and returns to notifications', (
+    tester,
+  ) async {
+    final service = _ReactiveNotificationService();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: navigatorKey,
+        home: const Scaffold(body: Center(child: Text('Notifications'))),
+      ),
+    );
+    navigatorKey.currentState!.push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationDetailScreen(
+          notification: service.notifications.single,
         ),
-      );
-      expect(find.text('Mark as unread'), findsOneWidget);
-      await tester.tap(find.text('Mark as unread'));
-      await tester.pump();
-      expect(find.text('Mark as read'), findsOneWidget);
-      expect(service.unreadCalls, 1);
-    },
-  );
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Mark as unread'), findsOneWidget);
+    await tester.tap(find.text('Mark as unread'));
+    await tester.pumpAndSettle();
+    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.byType(NotificationDetailScreen), findsNothing);
+    expect(service.unreadCalls, 1);
+  });
 
   test('mock notification state changes locally without Firestore', () async {
     final service = MockAppDataService();

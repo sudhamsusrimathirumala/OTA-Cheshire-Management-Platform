@@ -111,6 +111,7 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
     try {
       if (notification.isRead) {
         await appDataService.markNotificationUnread(notification.id);
+        if (mounted) Navigator.of(context).pop();
       } else {
         await appDataService.markNotificationRead(notification.id);
       }
