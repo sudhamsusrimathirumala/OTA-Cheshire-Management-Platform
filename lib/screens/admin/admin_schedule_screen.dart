@@ -217,7 +217,7 @@ class _ScheduleToolbar extends StatelessWidget {
         children: [
           Container(width: 4, height: 34, color: OtaColors.maroon),
           ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 220, maxWidth: 420),
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Text(
               'Class schedule management',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -1193,27 +1193,44 @@ class _PanelHeader extends StatelessWidget {
         ),
         borderRadius: BorderRadius.vertical(top: Radius.circular(3)),
       ),
-      child: Row(
-        children: [
-          Icon(icon, color: OtaColors.white, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: OtaColors.white,
-                fontWeight: FontWeight.w900,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final titleRow = Row(
+            children: [
+              Icon(icon, color: OtaColors.white, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ),
-            ),
-          ),
-          Text(
+            ],
+          );
+          final detailText = Text(
             detail,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
               color: OtaColors.white.withValues(alpha: 0.78),
               fontWeight: FontWeight.w700,
             ),
-          ),
-        ],
+          );
+          if (constraints.maxWidth < 420) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [titleRow, const SizedBox(height: 4), detailText],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: titleRow),
+              const SizedBox(width: 12),
+              detailText,
+            ],
+          );
+        },
       ),
     );
   }

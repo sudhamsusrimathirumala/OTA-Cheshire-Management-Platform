@@ -7,7 +7,10 @@ const projectId = process.env.GCLOUD_PROJECT ?? 'demo-ota-active-access';
 let env;
 
 before(async () => {
-  env = await initializeTestEnvironment({projectId, firestore: {rules: fs.readFileSync('firestore.rules', 'utf8')}});
+  env = await initializeTestEnvironment({
+    projectId,
+    firestore: {rules: fs.readFileSync('../../firestore.rules', 'utf8')},
+  });
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
     await setDoc(doc(db, 'locations', 'cheshire'), {name: 'Cheshire', isActive: true, timeZoneId: 'America/New_York'});

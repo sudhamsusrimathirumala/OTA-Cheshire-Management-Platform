@@ -111,9 +111,10 @@ firebase deploy --only firestore:rules --project prod
 
 Production deployment is forbidden until the academy project ID replaces the
 placeholder and a human explicitly confirms the production target. Verify the
-resolved project in the CLI output before approving any deployment. This
-repository remains Spark-only: do not add billing, Cloud Functions, or paid
-services.
+resolved project in the CLI output before approving any deployment. The
+development project currently remains on Spark. Blaze billing and Cloud
+Functions deployment remain pending explicit academy approval and must never be
+inferred from the presence of Functions code in this repository.
 
 ## Academy-provided items still required
 
@@ -125,3 +126,5 @@ services.
 - Android debug/release SHA fingerprints and OAuth clients.
 - iOS reversed-client-ID URL scheme and Apple signing/team configuration.
 - Private Android and Apple release-signing material, stored outside Git.
+- Explicit Blaze billing approval and authorization for the reviewed Functions
+  deployment target.

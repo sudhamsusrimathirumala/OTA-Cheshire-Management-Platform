@@ -32,8 +32,14 @@ cleanup and schema-update work is not listed as active work.
 
 ### Release Readiness
 
+- [ ] Provision and verify the academy-owned production Firebase project
+  without reusing development configuration.
+- [ ] Obtain explicit Blaze approval and deploy the reviewed push Functions to
+  the authorized project.
 - [ ] Configure production Android signing; the current release build uses the
   debug signing configuration.
+- [ ] Configure production iOS signing and connect APNs without committing
+  signing or authentication secrets.
 - [ ] Validate a release-mode Android build on supported devices.
 - [ ] Complete end-to-end tests for authentication, role access, Firestore
   permissions, student/parent reads, and admin writes.
@@ -66,8 +72,14 @@ cleanup and schema-update work is not listed as active work.
 ### Announcements and Notifications
 
 - [ ] Add attachments, links, and deep-link destinations to announcements.
-- [ ] Add device push delivery. The current notification center is an in-app
-  presentation of Firestore announcements.
+- [x] Add Android push permission, installation registration, token refresh,
+  foreground/background handling, and safe tap routing.
+- [x] Implement automated push-delivery Functions with bounded audiences,
+  retries, deduplication, and dispatch records.
+- [ ] Deploy the Functions after Blaze approval and validate real delivery in
+  the authorized development and production environments.
+- [ ] Connect APNs and validate iOS foreground, background, and terminated
+  delivery on a physical device.
 - [x] Persist read/unread state per authenticated user.
 
 ### Curriculum
@@ -92,7 +104,8 @@ cleanup and schema-update work is not listed as active work.
 
 ## Post-Launch
 
-- [ ] iOS signing and distribution.
+- [ ] Sign in with Apple.
+- [ ] In-app account deletion.
 - [ ] Analytics and operational monitoring with an approved privacy plan.
 - [ ] Advanced reporting for attendance, promotions, communications, and
   engagement.
@@ -125,3 +138,11 @@ cleanup and schema-update work is not listed as active work.
 - [x] Approved one-time Firestore schema update and targeted cleanup tooling.
 - [x] Unit/helper and widget coverage for core navigation, data mapping, write
   payloads, audit/cleanup safeguards, and primary student/admin flows.
+- [x] Firebase Authentication, role routing, profile management, linked-profile
+  switching, and notification-read persistence.
+- [x] Android push client registration and handling plus automated
+  push-delivery code.
+- [x] iOS Firebase environment, remote-notification mode, and entitlement
+  groundwork.
+- [ ] Real TestFlight and Play internal testing.
+- [ ] Final production curriculum/content approval and store submission.

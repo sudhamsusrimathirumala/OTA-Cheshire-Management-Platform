@@ -40,7 +40,7 @@ void main() {
     expect(find.byTooltip('Back to Events & Resources'), findsOneWidget);
   });
 
-  for (final size in const [Size(320, 568), Size(360, 640)]) {
+  for (final size in const [Size(320, 568), Size(360, 640), Size(412, 915)]) {
     for (final textScale in const [1.0, 1.5]) {
       testWidgets(
         'admin curriculum header fits ${size.width}x${size.height} at $textScale',

@@ -261,6 +261,7 @@ class _CurriculumHeader extends StatelessWidget {
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: selectedBelt,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Select Belt Level',
               border: OutlineInputBorder(),
@@ -269,7 +270,11 @@ class _CurriculumHeader extends StatelessWidget {
               for (final belt in beltOrder)
                 DropdownMenuItem(
                   value: belt,
-                  child: Text(beltDisplayLabel(belt)),
+                  child: Text(
+                    beltDisplayLabel(belt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onChanged: beltOrder.isEmpty ? null : onBeltChanged,

@@ -512,14 +512,19 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
 
     expect(find.text('Student Directory'), findsOneWidget);
-    expect(find.text('Alex Parent'), findsNWidgets(2));
+    expect(find.text('Child A'), findsOneWidget);
+    expect(find.text('Child B'), findsOneWidget);
     await tester.tap(find.text('Child A'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Account holder or parent'), findsOneWidget);
+    expect(find.text('Profile type'), findsOneWidget);
+    expect(find.text('Child profile'), findsOneWidget);
+    expect(find.text('Parent name'), findsOneWidget);
+    expect(find.text('Alex Parent'), findsOneWidget);
+    expect(find.text('Parent email'), findsOneWidget);
     expect(find.text('parent@example.com'), findsOneWidget);
+    expect(find.text('Account role'), findsNothing);
     expect(find.textContaining('Phone'), findsNothing);
-    expect(find.text('Child B'), findsWidgets);
     expect(find.text('Approve'), findsNothing);
     expect(find.text('Reject'), findsNothing);
   });
@@ -728,8 +733,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(nestedFinder, findsOneWidget);
 
-      await tester.ensureVisible(find.text('Back to Events & Resources'));
-      await tester.tap(find.text('Back to Events & Resources'));
+      final back = cardLabel == 'Curriculum'
+          ? find.byTooltip('Back to Events & Resources')
+          : find.text('Back to Events & Resources');
+      await tester.ensureVisible(back);
+      await tester.tap(back);
       await tester.pumpAndSettle();
       expect(find.byType(AdminResourcesScreen), findsOneWidget);
       await tester.binding.handlePopRoute();
@@ -759,8 +767,11 @@ void main() {
           },
         ),
       );
-      await tester.ensureVisible(find.text('Back to Events & Resources'));
-      await tester.tap(find.text('Back to Events & Resources'));
+      final back = nested is CurriculumScreen
+          ? find.byTooltip('Back to Events & Resources')
+          : find.text('Back to Events & Resources');
+      await tester.ensureVisible(back);
+      await tester.tap(back);
       await tester.pumpAndSettle();
       expect(find.byType(AdminResourcesScreen), findsOneWidget);
     }
@@ -1092,6 +1103,8 @@ void main() {
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
     );
+    appDataService = _LiveEventsTestService([], resources: [resource]);
+    addTearDown(initializeMockAppDataServiceForTests);
     await tester.pumpWidget(
       MaterialApp(
         home: ResourceDetailScreen(
@@ -1118,6 +1131,8 @@ void main() {
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
     );
+    appDataService = _LiveEventsTestService([], resources: [resource]);
+    addTearDown(initializeMockAppDataServiceForTests);
     await tester.pumpWidget(
       MaterialApp(
         home: ResourceDetailScreen(

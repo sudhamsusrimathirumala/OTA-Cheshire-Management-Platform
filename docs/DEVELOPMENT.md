@@ -35,16 +35,17 @@ Manual Firebase/platform setup still required:
 1. In Firebase Console Authentication, enable Email/Password.
 2. Set **Authentication -> Settings -> Password policy -> Minimum length** to
    **8**, and set **Enforcement mode** to **Require**. The app also validates an
-   eight-character minimum during signup; the hosted Firebase reset page handles
-   choosing the replacement password.
-2. Enable Google, select a project support email, and save the provider.
-3. Add Android debug/release SHA-1 and SHA-256 fingerprints when required,
+   eight-character minimum during signup; it does not claim uppercase,
+   lowercase, number, or symbol requirements. The hosted Firebase reset page
+   handles choosing the replacement password.
+3. Enable Google, select a project support email, and save the provider.
+4. Add Android debug/release SHA-1 and SHA-256 fingerprints when required,
    then refresh `google-services.json` and generated FlutterFire options.
-4. For iOS/macOS, refresh `GoogleService-Info.plist` and configure the reversed
+5. For iOS/macOS, refresh `GoogleService-Info.plist` and configure the reversed
    client-ID URL scheme. Do not commit private keys or client secrets.
-5. For web, add authorized domains and configure the correct OAuth web client,
+6. For web, add authorized domains and configure the correct OAuth web client,
    then refresh Firebase platform configuration.
-6. Re-run `flutterfire configure` after Firebase app/provider configuration
+7. Re-run `flutterfire configure` after Firebase app/provider configuration
    changes and review generated files before committing.
 
 Profile creation derives identity from `FirebaseAuth.currentUser` and uses
@@ -52,9 +53,11 @@ Profile creation derives identity from `FirebaseAuth.currentUser` and uses
 permanent active profiles at one academy location. See
 [Authentication, profiles, and academy access](ONBOARDING_BACKEND.md).
 
-This project permanently targets the no-cost Firebase Spark plan. Do not link a
-billing account, add a paid service, deploy server functions, or add
-monetization. Deploy only Firestore Rules when explicitly required.
+The development project currently remains on Firebase Spark. Do not change
+billing or deploy server Functions without explicit academy approval for Blaze
+and the exact target project. Do not add monetization. Deploy Firestore Rules,
+indexes, or Functions only when that specific action has been reviewed and
+authorized.
 
 ## Common Run Targets
 

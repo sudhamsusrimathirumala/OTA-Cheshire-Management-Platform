@@ -215,11 +215,13 @@ class _NotificationHeroCard extends StatelessWidget {
                 size: 18,
               ),
               const SizedBox(width: 6),
-              Text(
-                notification.timestamp.displayLabel,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: OtaColors.mutedText,
-                  fontWeight: FontWeight.w800,
+              Expanded(
+                child: Text(
+                  notification.timestamp.displayLabel,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: OtaColors.mutedText,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],

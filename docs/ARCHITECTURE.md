@@ -1,13 +1,13 @@
 # Architecture
 
-## Permanent Spark-Only Constraint
+## Current Deployment Constraint
 
-The app must remain on Firebase's no-cost Spark plan without a billing account
-or payment method. It uses Firebase Authentication and Firestore client SDKs,
-but no deployed Cloud Functions or paid Google Cloud services. The product has
-no advertising, subscriptions, purchases, paid memberships, donations, fees,
-or revenue features. Spark quota exhaustion causes temporary service limitation,
-not paid overage.
+The development project currently uses Firebase's no-cost Spark plan and has no
+deployed Cloud Functions. Authentication, Firestore client access, Android push
+registration/handling, and automated push-delivery code are implemented.
+Deploying the Functions requires explicit academy approval for Blaze billing
+and a reviewed target project. The product has no advertising, subscriptions,
+purchases, paid memberships, donations, fees, or revenue features.
 
 ## Application Layers
 

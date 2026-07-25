@@ -10,15 +10,14 @@ sample data are centered on the `ota-cheshire` location.
 
 The application is under active development and is not production-ready.
 
-## Permanent Cost and Service Constraint
+## Current Cost and Service Constraint
 
-This project must remain on Firebase's no-cost Spark plan with no billing
-account or payment method. It uses no deployed Cloud Functions or paid Google
-Cloud services and includes no advertisements, subscriptions, in-app
-purchases, paid memberships, donations, fees, or other monetization. If a
-Spark quota is exceeded, service is limited until the quota resets; there is no
-paid overage because billing is not linked. This is a permanent architectural
-constraint.
+The development Firebase project currently remains on the no-cost Spark plan
+with no deployed Cloud Functions. Automated push-delivery code exists in this
+repository, but deployment requires explicit academy approval for Blaze billing
+and a reviewed target project. The application includes no advertisements,
+subscriptions, in-app purchases, paid memberships, donations, fees, or other
+monetization.
 
 ## Current Capabilities
 
@@ -61,7 +60,7 @@ constraint.
 - Firestore-backed General Resource create, edit, publish, archive, and delete
   operations.
 - Firestore-backed, location-scoped student directory with account-holder and
-  linked-profile details. Generic student profile editing is not implemented.
+  linked-profile details, profile-type labels, and belt/sticker editing.
 - Read-only curriculum view backed by local sample curriculum.
 
 Normal startup routes active Admin and Super Admin accounts through the
@@ -127,16 +126,22 @@ for the current data flow and fallback boundaries.
   that become unavailable show an in-sheet unavailable state instead of stale
   details.
 - Read-only Firestore audit/export utilities and guarded write utilities.
+- Firebase Authentication, role routing, profile creation and management,
+  profile switching, password reset, and per-account notification-read
+  persistence.
+- Android push permission, installation registration, token refresh, sign-out
+  cleanup, foreground presentation, and deep-link handling.
+- Automated announcement, event, and General Resource push-delivery code with
+  bounded audiences, retries, deduplication, and dispatch records.
+- iOS Firebase environment, remote-notification mode, and entitlement
+  groundwork without production Apple credentials.
 
 ### Partially Implemented
 
-- Firebase authentication, atomic profile creation, active-account/location
-  routing, and security rules are implemented. Provider linking and production
-  release validation remain out of scope.
 - Firestore data is location-aware, but administration is currently centered
   on OTA Cheshire rather than a complete multi-location workflow.
-- Announcements are live Firestore data, but device push notifications are not
-  implemented.
+- Automated push delivery is implemented in code but is not deployed or
+  production-validated. The development project remains on Spark.
 - Curriculum is functional, section-based UI backed by bundled data rather
   than Firestore. The local data supports zero or multiple forms per belt and
   an independent optional video URL per form; approved curriculum text and
@@ -145,10 +150,16 @@ for the current data flow and fallback boundaries.
 
 ### Planned or Remaining
 
-- Production deployment and broader authorization testing for Firestore rules.
+- Academy-owned production Firebase project and reviewed production
+  configuration.
+- Explicit Blaze approval and authorized Cloud Functions deployment.
+- Production Android and iOS signing, APNs connection, and physical-device push
+  validation.
+- Sign in with Apple and in-app account deletion.
 - Guardian display-name resolution and broader academy history management.
 - Obtain the academy-approved bundled curriculum wording and optional videos.
-- End-to-end release validation, production signing, and content review.
+- Real TestFlight and Play internal testing, final content review, and store
+  submission.
 
 See [Project backlog](docs/Project_Backlog.md) for prioritized remaining work.
 
@@ -197,8 +208,9 @@ to development. Native flavors and schemes pin their matching target, while
 
 `firestore.rules` protects atomic account/profile creation, active-account
 access, location isolation, administrator roles, and publication state.
-Firebase deployments are limited to explicit Firestore Rules releases; no
-database data or server code is deployed.
+No Cloud Functions are currently deployed. Any Rules, indexes, Functions, or
+production deployment requires explicit review and authorization; repository
+utilities must never be treated as permission to modify live data.
 
 ## Historical Design Decision: Membership Approval (Inactive)
 
