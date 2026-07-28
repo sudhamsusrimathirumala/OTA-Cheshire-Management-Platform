@@ -3,13 +3,34 @@ import 'package:flutter/material.dart';
 import '../models/class_session.dart';
 import '../models/notification_item.dart';
 import '../models/student_profile.dart';
+import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
-class StudentDashboardScreen extends StatelessWidget {
-  const StudentDashboardScreen({super.key});
+enum DashboardNextClassState {
+  loading,
+  error,
+  noSchedule,
+  noEligibleClass,
+  found,
+}
+
+class StudentDashboardScreen extends StatefulWidget {
+  const StudentDashboardScreen({super.key, this.selectProfile});
+
+  final Future<void> Function(String profileId)? selectProfile;
+
+  @override
+  State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  bool _switchingProfile = false;
 
   @override
   Widget build(BuildContext context) {
@@ -17,8 +38,23 @@ class StudentDashboardScreen extends StatelessWidget {
       animation: appDataService,
       builder: (context, child) {
         final student = appDataService.selectedStudentProfile;
+        final account = appDataService.currentUserAccount;
         final notifications = appDataService.notifications;
-        final nextClass = appDataService.nextClassForDashboard();
+        final scheduleLoading = appDataService.isScheduleLoading;
+        final scheduleError = appDataService.scheduleErrorMessage;
+        final hasSchedule = appDataService.schedule.values.any(
+          (sessions) => sessions.isNotEmpty,
+        );
+        final nextClass =
+            !scheduleLoading && scheduleError == null && hasSchedule
+            ? appDataService.nextClassForDashboard()
+            : null;
+        final nextClassState = dashboardNextClassState(
+          isLoading: scheduleLoading,
+          errorMessage: scheduleError,
+          schedule: appDataService.schedule,
+          nextClass: nextClass,
+        );
         final nextClassWeekday = nextClass == null
             ? null
             : appDataService.schedule.entries
@@ -44,11 +80,21 @@ class StudentDashboardScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            _DashboardHeader(student: student),
+                            _DashboardHeader(
+                              account: account,
+                              student: student,
+                              profileCount: appDataService.linkedStudentProfiles
+                                  .where((profile) => profile.isActive)
+                                  .length,
+                              isSwitching: _switchingProfile,
+                              onTap: _showProfileSwitcher,
+                            ),
                             const SizedBox(height: 22),
                             _NextClassCard(
                               nextClass: nextClass,
                               weekday: nextClassWeekday,
+                              state: nextClassState,
+                              errorMessage: scheduleError,
                             ),
                             const SizedBox(height: 16),
                             _BeltProgressCard(student: student),
@@ -86,83 +132,232 @@ class StudentDashboardScreen extends StatelessWidget {
       },
     );
   }
+
+  Future<void> _showProfileSwitcher() async {
+    if (_switchingProfile) return;
+    final profiles = appDataService.linkedStudentProfiles
+        .where((profile) => profile.isActive)
+        .toList(growable: false);
+    if (profiles.isEmpty) return;
+    final selected = appDataService.selectedStudentProfile;
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.only(bottom: 12),
+          children: [
+            ListTile(
+              title: Text(
+                profiles.length == 1 ? 'Student profile' : 'Switch student',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: profiles.length == 1
+                  ? const Text('This is the only active linked profile.')
+                  : const Text('Dashboard content updates for your selection.'),
+            ),
+            for (final profile in profiles)
+              ListTile(
+                leading: Icon(
+                  profile.id == selected.id
+                      ? Icons.check_circle_rounded
+                      : Icons.circle_outlined,
+                  color: profile.id == selected.id
+                      ? OtaColors.maroon
+                      : OtaColors.mutedText,
+                ),
+                title: Text(profile.name),
+                subtitle: Text('${profile.belt} Belt'),
+                selected: profile.id == selected.id,
+                onTap: profile.id == selected.id
+                    ? () => Navigator.pop(context)
+                    : () => Navigator.pop(context, profile.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (id == null || !mounted) return;
+    setState(() => _switchingProfile = true);
+    try {
+      await (widget.selectProfile?.call(id) ??
+          firebaseSessionController.selectProfile(id));
+    } on ProfileServiceException catch (error) {
+      if (mounted) _showProfileError(error.message);
+    } catch (_) {
+      if (mounted) {
+        _showProfileError('Unable to switch profiles. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _switchingProfile = false);
+    }
+  }
+
+  void _showProfileError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.student});
+  const _DashboardHeader({
+    required this.account,
+    required this.student,
+    required this.profileCount,
+    required this.isSwitching,
+    required this.onTap,
+  });
 
+  final UserAccount account;
   final StudentProfile student;
+  final int profileCount;
+  final bool isSwitching;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final academyNow = const LocationTimeService().toLocationTime(
+      DateTime.now(),
+      student.locationId,
+    );
+    final subtitle = account.role == UserAccountRole.parent
+        ? 'Viewing ${student.name} \u2022 ${student.belt} Belt'
+        : 'Your student profile \u2022 ${student.belt} Belt';
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
             children: [
-              Text(
-                'Good Evening, ${student.name}',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w900,
-                  height: 1.08,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${academyGreeting(academyNow)}, ${account.firstName}',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(
+                            color: OtaColors.ink,
+                            fontWeight: FontWeight.w900,
+                            height: 1.08,
+                          ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: OtaColors.mutedText,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 6),
-              Text(
-                '${student.belt} Student',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  color: OtaColors.mutedText,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(width: 16),
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: OtaColors.navy,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: OtaColors.white, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: OtaColors.navy.withValues(alpha: 0.16),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
+                alignment: Alignment.center,
+                child: isSwitching
+                    ? const SizedBox.square(
+                        dimension: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: OtaColors.white,
+                        ),
+                      )
+                    : Text(
+                        account.displayName.isEmpty
+                            ? student.initials
+                            : account.displayName
+                                  .trim()
+                                  .split(RegExp(r'\s+'))
+                                  .map((part) => part[0])
+                                  .take(2)
+                                  .join()
+                                  .toUpperCase(),
+                        style: TextStyle(
+                          color: OtaColors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
+              if (profileCount > 1) ...[
+                const SizedBox(width: 4),
+                const Icon(Icons.expand_more_rounded, color: OtaColors.navy),
+              ],
             ],
           ),
         ),
-        const SizedBox(width: 16),
-        Container(
-          width: 54,
-          height: 54,
-          decoration: BoxDecoration(
-            color: OtaColors.navy,
-            shape: BoxShape.circle,
-            border: Border.all(color: OtaColors.white, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: OtaColors.navy.withValues(alpha: 0.16),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            student.initials,
-            style: TextStyle(
-              color: OtaColors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
 
+@visibleForTesting
+String academyGreeting(DateTime academyTime) {
+  if (academyTime.hour < 12) return 'Good morning';
+  if (academyTime.hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 class _NextClassCard extends StatelessWidget {
-  const _NextClassCard({required this.nextClass, required this.weekday});
+  const _NextClassCard({
+    required this.nextClass,
+    required this.weekday,
+    required this.state,
+    required this.errorMessage,
+  });
 
   final ClassSession? nextClass;
   final int? weekday;
+  final DashboardNextClassState state;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    final weekdayLabel = nextClass == null
-        ? 'No upcoming class'
-        : _weekdayLabel(weekday ?? DateTime.now().weekday);
-    final timeLabel = nextClass?.timeRangeLabel ?? '--';
+    final weekdayLabel = state == DashboardNextClassState.found
+        ? _weekdayLabel(weekday ?? DateTime.monday)
+        : _nextClassStatusLabel(state);
+    final timeLabel = state == DashboardNextClassState.found
+        ? nextClass!.timeRangeLabel
+        : '--';
+    final title = switch (state) {
+      DashboardNextClassState.loading => 'Loading Next Class',
+      DashboardNextClassState.error => 'Schedule Unavailable',
+      DashboardNextClassState.noSchedule => 'No Academy Schedule',
+      DashboardNextClassState.noEligibleClass => 'No Eligible Upcoming Class',
+      DashboardNextClassState.found => '${nextClass!.className} Class',
+    };
+    final detail = switch (state) {
+      DashboardNextClassState.loading =>
+        'Checking the latest academy schedule.',
+      DashboardNextClassState.error =>
+        errorMessage ?? 'The academy schedule could not be loaded.',
+      DashboardNextClassState.noSchedule =>
+        'The academy has not published a class schedule yet.',
+      DashboardNextClassState.noEligibleClass =>
+        'No upcoming class currently matches this student profile.',
+      DashboardNextClassState.found => nextClass!.eligibilityLabel,
+    };
 
     return _DashboardCard(
       padding: EdgeInsets.zero,
@@ -199,21 +394,22 @@ class _NextClassCard extends StatelessWidget {
                         iconColor: OtaColors.maroon,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'NEXT CLASS',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: OtaColors.white.withValues(alpha: 0.78),
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.2,
+                      Flexible(
+                        child: Text(
+                          'NEXT CLASS',
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(
+                                color: OtaColors.white.withValues(alpha: 0.78),
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.2,
+                              ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 22),
                   Text(
-                    nextClass == null
-                        ? 'No Class Scheduled'
-                        : '${nextClass!.className} Class',
+                    title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: OtaColors.white,
                       fontWeight: FontWeight.w900,
@@ -266,8 +462,7 @@ class _NextClassCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   Text(
-                    nextClass?.eligibilityLabel ??
-                        'Check the schedule for updates.',
+                    detail,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: OtaColors.white.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w600,
@@ -290,6 +485,14 @@ class _BeltProgressCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasStickerTarget = student.stickersRequired > 0;
+    final progress = hasStickerTarget
+        ? (student.stickerCount / student.stickersRequired).clamp(0.0, 1.0)
+        : 0.0;
+    final remaining =
+        hasStickerTarget && student.stickerCount < student.stickersRequired
+        ? student.stickersRequired - student.stickerCount
+        : 0;
     return _DashboardCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,44 +529,53 @@ class _BeltProgressCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 22),
-          Wrap(
-            spacing: 10,
-            runSpacing: 4,
-            alignment: WrapAlignment.spaceBetween,
-            children: [
-              Text(
-                'Sticker Progress',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: OtaColors.ink,
-                  fontWeight: FontWeight.w800,
+          if (!hasStickerTarget)
+            Text(
+              'Sticker tracking has not been configured yet.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
+            )
+          else ...[
+            Wrap(
+              spacing: 10,
+              runSpacing: 4,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Sticker Progress',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              Text(
-                '${student.stickerCount} / ${student.stickersRequired} Stickers',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: OtaColors.maroon,
-                  fontWeight: FontWeight.w900,
+                Text(
+                  '${student.stickerCount} / ${student.stickersRequired} Stickers',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.maroon,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: student.stickerCount / student.stickersRequired,
-              minHeight: 12,
-              backgroundColor: OtaColors.softRed,
-              color: OtaColors.actionRed,
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '${student.stickersRequired - student.stickerCount} more stickers until your next rank review.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
-          ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: LinearProgressIndicator(
+                value: progress,
+                minHeight: 12,
+                backgroundColor: OtaColors.softRed,
+                color: OtaColors.actionRed,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '$remaining more stickers until your next rank review.',
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: OtaColors.mutedText),
+            ),
+          ],
         ],
       ),
     );
@@ -490,6 +702,7 @@ class _QuickActionsGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth >= 560 ? 4 : 2;
+        final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
         return GridView.builder(
           shrinkWrap: true,
@@ -499,7 +712,11 @@ class _QuickActionsGrid extends StatelessWidget {
             crossAxisCount: crossAxisCount,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: constraints.maxWidth >= 560 ? 1.04 : 0.96,
+            childAspectRatio: constraints.maxWidth >= 560
+                ? 1.04
+                : largeText
+                ? 0.78
+                : 0.96,
           ),
           itemBuilder: (context, index) {
             final action = _actions[index];
@@ -735,4 +952,28 @@ String _weekdayLabel(int weekday) {
     DateTime.sunday => 'Sunday',
     _ => 'Next class',
   };
+}
+
+String _nextClassStatusLabel(DashboardNextClassState state) => switch (state) {
+  DashboardNextClassState.loading => 'Loading schedule',
+  DashboardNextClassState.error => 'Unable to load schedule',
+  DashboardNextClassState.noSchedule => 'No published classes',
+  DashboardNextClassState.noEligibleClass => 'No matching class',
+  DashboardNextClassState.found => 'Next class',
+};
+
+@visibleForTesting
+DashboardNextClassState dashboardNextClassState({
+  required bool isLoading,
+  required String? errorMessage,
+  required Map<int, List<ClassSession>> schedule,
+  required ClassSession? nextClass,
+}) {
+  if (isLoading) return DashboardNextClassState.loading;
+  if (errorMessage != null) return DashboardNextClassState.error;
+  if (!schedule.values.any((sessions) => sessions.isNotEmpty)) {
+    return DashboardNextClassState.noSchedule;
+  }
+  if (nextClass == null) return DashboardNextClassState.noEligibleClass;
+  return DashboardNextClassState.found;
 }

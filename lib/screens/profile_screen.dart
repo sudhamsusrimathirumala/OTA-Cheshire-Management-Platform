@@ -1,56 +1,138 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import '../data/sample_constants.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/debug_view_controller.dart';
 import '../services/location_time_service.dart';
+import '../services/firebase/firebase_session_controller.dart';
+import '../services/firebase/profile_service.dart';
+import '../services/push_runtime.dart';
+import '../services/push_notification_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({this.managementAvailableOverride, super.key});
+
+  final bool? managementAvailableOverride;
 
   @override
   Widget build(BuildContext context) {
-    final student = appDataService.selectedStudentProfile;
-    final account = appDataService.currentUserAccount;
+    return AnimatedBuilder(
+      animation: appDataService,
+      builder: (context, _) {
+        final student = appDataService.selectedStudentProfile;
+        final account = appDataService.currentUserAccount;
 
-    return Scaffold(
-      backgroundColor: OtaColors.blush,
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-              sliver: SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 760),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _ProfileIdentityHeader(student: student),
-                        const SizedBox(height: 24),
-                        _StudentInformationSection(student: student),
-                        const SizedBox(height: 22),
-                        _BeltPromotionSection(student: student),
-                        const SizedBox(height: 22),
-                        _FamilyAccountSection(account: account),
-                        const SizedBox(height: 22),
-                        const _SettingsActionsSection(),
-                      ],
+        return Scaffold(
+          backgroundColor: OtaColors.blush,
+          body: SafeArea(
+            child: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+                  sliver: SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _ProfileIdentityHeader(student: student),
+                            const SizedBox(height: 24),
+                            _StudentInformationSection(student: student),
+                            const SizedBox(height: 22),
+                            _BeltPromotionSection(student: student),
+                            const SizedBox(height: 22),
+                            _FamilyAccountSection(account: account),
+                            const SizedBox(height: 22),
+                            _AcademySection(student: student),
+                            const SizedBox(height: 22),
+                            _SettingsActionsSection(
+                              student: student,
+                              account: account,
+                              managementAvailableOverride:
+                                  managementAvailableOverride,
+                            ),
+                            if (kDebugMode &&
+                                pushNotificationService != null) ...[
+                              const SizedBox(height: 22),
+                              const _PushDiagnosticsSection(),
+                            ],
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: const OtaBottomNavBar(
-        selectedDestination: OtaBottomNavDestination.profile,
+          ),
+          bottomNavigationBar:
+              Firebase.apps.isEmpty ||
+                  firebaseSessionController.stage == SessionStage.member
+              ? const OtaBottomNavBar(
+                  selectedDestination: OtaBottomNavDestination.profile,
+                )
+              : null,
+        );
+      },
+    );
+  }
+}
+
+class _PushDiagnosticsSection extends StatelessWidget {
+  const _PushDiagnosticsSection();
+  @override
+  Widget build(BuildContext context) {
+    final service = pushNotificationService!;
+    return ValueListenableBuilder<PushDiagnostics>(
+      valueListenable: service.diagnostics,
+      builder: (context, value, _) => ProfileSection(
+        title: 'Push Diagnostics',
+        children: [
+          ProfileInfoRow(
+            icon: Icons.person_outline,
+            label: 'Session eligible',
+            value: value.sessionEligible ? 'Yes' : 'No',
+          ),
+          ProfileInfoRow(
+            icon: Icons.notifications_outlined,
+            label: 'Permission',
+            value: value.permissionGranted
+                ? 'Authorized'
+                : value.state == PushRegistrationState.permissionDenied
+                ? 'Denied'
+                : 'Not confirmed',
+          ),
+          ProfileInfoRow(
+            icon: Icons.key_outlined,
+            label: 'Token available',
+            value: value.tokenExists ? 'Yes' : 'No',
+          ),
+          ProfileInfoRow(
+            icon: Icons.cloud_done_outlined,
+            label: 'Registration',
+            value: value.registrationSucceeded ? 'Succeeded' : value.state.name,
+          ),
+          if (value.errorCode != null)
+            ProfileInfoRow(
+              icon: Icons.error_outline,
+              label: 'Last error code',
+              value: value.errorCode!,
+            ),
+          ProfileActionRow(
+            icon: Icons.refresh,
+            label: 'Retry registration',
+            onTap: () => service.handleSession(firebaseSessionController),
+          ),
+        ],
       ),
     );
   }
@@ -98,7 +180,7 @@ class _ProfileIdentityHeader extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '${_beltLabel(student.belt)} • OTA Cheshire',
+                '${_beltLabel(student.belt)} • ${_locationLabel(student)}',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   color: OtaColors.mutedText,
                   fontWeight: FontWeight.w700,
@@ -155,10 +237,10 @@ class _StudentInformationSection extends StatelessWidget {
           label: 'Belt Rank',
           value: _beltLabel(student.belt),
         ),
-        const ProfileInfoRow(
+        ProfileInfoRow(
           icon: Icons.location_on_rounded,
           label: 'Location',
-          value: 'OTA Cheshire',
+          value: _locationLabel(student),
         ),
         const ProfileInfoRow(
           icon: Icons.school_rounded,
@@ -229,15 +311,17 @@ class _FamilyAccountSection extends StatelessWidget {
           label: 'Linked Profiles',
           value: linkedProfileLabel,
         ),
-        const ProfileInfoRow(
+        ProfileInfoRow(
           icon: Icons.switch_account_rounded,
           label: 'Profile Switching',
-          value: 'Coming later',
+          value: account.linkedStudentProfileIds.length > 1
+              ? 'Available'
+              : 'One linked profile',
         ),
         ProfileInfoRow(
           icon: Icons.verified_user_rounded,
-          label: 'Account Status',
-          value: account.approvalStatusLabel,
+          label: 'Account state',
+          value: account.isActive ? 'Active' : 'Inactive',
           showDivider: false,
         ),
       ],
@@ -245,19 +329,63 @@ class _FamilyAccountSection extends StatelessWidget {
   }
 }
 
+class _AcademySection extends StatelessWidget {
+  const _AcademySection({required this.student});
+  final StudentProfile student;
+
+  @override
+  Widget build(BuildContext context) => ProfileSection(
+    title: 'Academy Location',
+    children: [
+      ProfileInfoRow(
+        icon: Icons.place_outlined,
+        label: 'Academy location',
+        value: _locationLabel(student),
+      ),
+      if (student.guardianEmail != null)
+        ProfileInfoRow(
+          icon: Icons.alternate_email_rounded,
+          label: 'Guardian email',
+          value: student.guardianEmail!,
+        ),
+    ],
+  );
+}
+
 class _SettingsActionsSection extends StatelessWidget {
-  const _SettingsActionsSection();
+  const _SettingsActionsSection({
+    required this.student,
+    required this.account,
+    required this.managementAvailableOverride,
+  });
+  final StudentProfile student;
+  final UserAccount account;
+  final bool? managementAvailableOverride;
 
   @override
   Widget build(BuildContext context) {
+    final hasFirebase = Firebase.apps.isNotEmpty;
+    final managementAvailable = managementAvailableOverride ?? hasFirebase;
+    final profileCount = hasFirebase
+        ? firebaseSessionController.profiles.length
+        : appDataService.linkedStudentProfiles.length;
     return ProfileSection(
       title: 'Settings & Actions',
       children: [
-        const ProfileActionRow(icon: Icons.edit_rounded, label: 'Edit Profile'),
-        const ProfileActionRow(
+        ProfileActionRow(
+          icon: Icons.manage_accounts_rounded,
+          label: 'Manage Account & Student Profiles',
+          onTap: managementAvailable
+              ? () => Navigator.of(context).pushNamed(OtaRoutes.manageProfiles)
+              : null,
+        ),
+        ProfileActionRow(
           icon: Icons.switch_account_rounded,
           label: 'Switch Profile',
-          value: 'Coming later',
+          value: profileCount > 1 ? '$profileCount profiles' : '1 profile',
+          onTap: hasFirebase && profileCount > 1
+              ? () => _showProfileSwitcher(context)
+              : null,
         ),
         const ProfileActionRow(
           icon: Icons.notifications_rounded,
@@ -271,24 +399,98 @@ class _SettingsActionsSection extends StatelessWidget {
           icon: Icons.help_rounded,
           label: 'Help / Contact Academy',
         ),
-        const ProfileActionRow(
+        ProfileActionRow(
           icon: Icons.logout_rounded,
           label: 'Sign Out',
           isDestructive: true,
-        ),
-        ProfileActionRow(
-          icon: Icons.home_rounded,
-          label: 'Exit to Welcome',
-          showDivider: false,
-          onTap: () {
-            Navigator.of(
-              context,
-            ).pushNamedAndRemoveUntil(OtaRoutes.welcome, (_) => false);
-          },
+          onTap: debugViewController.isActive
+              ? () {
+                  debugViewController.clear();
+                  Navigator.of(
+                    context,
+                  ).pushNamedAndRemoveUntil(OtaRoutes.welcome, (_) => false);
+                }
+              : hasFirebase
+              ? () async {
+                  await firebaseSessionController.signOut();
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                }
+              : null,
         ),
       ],
     );
   }
+
+  Future<void> _showProfileSwitcher(BuildContext context) async {
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(title: Text('Switch student')),
+            for (final profile in firebaseSessionController.profiles)
+              ListTile(
+                leading: Icon(
+                  profile.id == student.id
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_unchecked,
+                ),
+                title: Text(profile.name),
+                subtitle: Text(
+                  '${profile.beltRank} • ${_locationLabel(profile)}',
+                ),
+                onTap: () => Navigator.pop(context, profile.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (id == null) return;
+    if (!context.mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      await firebaseSessionController.selectProfile(id);
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(OtaRoutes.dashboard, (_) => false);
+    } on ProfileServiceException catch (error) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      _showError(context, error.message);
+    } catch (_) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      _showError(context, 'Unable to switch profiles. Please try again.');
+    }
+  }
+
+  void _showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
 }
 
 String _beltLabel(String belt) => '$belt Belt';
+
+String _locationLabel(StudentProfile student) {
+  if (student.locationId.isEmpty) return 'Not assigned';
+  if (Firebase.apps.isNotEmpty &&
+      firebaseSessionController.selectedProfile?.id == student.id) {
+    return firebaseSessionController.selectedLocationName ??
+        'Academy location loading';
+  }
+  if (student.locationId == otaCheshireLocationId) {
+    return otaCheshireLocationName;
+  }
+  return student.locationId;
+}

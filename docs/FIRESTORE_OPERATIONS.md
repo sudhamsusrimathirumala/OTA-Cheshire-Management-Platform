@@ -11,6 +11,7 @@ current source before running any write-capable target.
 | Cleanup planner/apply | `lib/firestore_cleanup_main.dart` | Read, then optional targeted writes | `enableFirestoreCleanupApply` is currently `true` | Generates a deterministic plan, validates preconditions, applies targeted field updates/deletions, and reruns the audit | Planning: yes. Apply: designed to be idempotent, but run only with explicit approval | Requires exact confirmation and project ID match; supports no document deletion; no backup is required |
 | MVP readiness migration | `lib/seed_firestore_main.dart` | Read/write | `_enableFirestoreMigration` is `false` | Runs the merge-only readiness migration and may create missing starter resources | Yes, designed to be idempotent | The only manual migration entrypoint; do not run against production/shared data without a fresh backup and review |
 | Approved schema update | `lib/firestore_schema_update_main.dart` | Targeted writes | `enableApprovedSchemaUpdate` is `false` | Historical one-time update for sparring IDs, event legacy-field removal, and five student birth dates | Technically repeatable if all target documents exist, but intended once | Already applied; keep disabled |
+| Development access cleanup | `tool/remove_approval_data.mjs` | Dry-run, then guarded writes/deletes | Dry-run by default | Removes retired review fields and application documents only from `ota-management-platform` | Yes | Requires exactly one active location, a short-lived OAuth token, and exact confirmation; never accesses Auth |
 | Full development seed | `tool/seed_firestore.dart` | Writes complete sample documents | No entrypoint guard; internal service flag does not protect this script | Writes sample users, profiles, sessions, announcements, events, and resources using fixed IDs | No | May overwrite documents with matching IDs; do not use on the shared database |
 
 ## Exact Commands
@@ -18,19 +19,19 @@ current source before running any write-capable target.
 Read-only audit:
 
 ```powershell
-flutter run -t lib/firestore_audit_main.dart
+flutter run --flavor dev -t lib/firestore_audit_main.dart
 ```
 
 Read-only export:
 
 ```powershell
-flutter run -t lib/firestore_export_main.dart
+flutter run --flavor dev -t lib/firestore_export_main.dart
 ```
 
 Cleanup planning and guarded apply:
 
 ```powershell
-flutter run -t lib/firestore_cleanup_main.dart
+flutter run --flavor dev -t lib/firestore_cleanup_main.dart
 ```
 
 The plan is read-only. Apply requires `enableFirestoreCleanupApply`, the exact
@@ -43,7 +44,7 @@ audit.
 MVP readiness migration:
 
 ```powershell
-flutter run -t lib/seed_firestore_main.dart
+flutter run --flavor dev -t lib/seed_firestore_main.dart
 ```
 
 This entrypoint calls `FirestoreMigrationService.runMvpReadinessMigration()`,
@@ -58,16 +59,27 @@ categories to `general`, and explicitly deletes legacy `resourceType` fields.
 Historical approved schema update:
 
 ```powershell
-flutter run -t lib/firestore_schema_update_main.dart
+flutter run --flavor dev -t lib/firestore_schema_update_main.dart
 ```
 
 This completed one-time tool is disabled. Do not re-enable it without reviewing
 every fixed document ID and operation.
 
+Development access cleanup:
+
+```powershell
+node tool/remove_approval_data.mjs --project=ota-management-platform
+```
+
+Dry-run output lists every affected document, field set, field removal, and
+retired document deletion. Apply requires the exact confirmation documented in
+[Development Academy Access Testing](DEVELOPMENT_ACCESS_TESTING.md). The tool
+uses the existing Firebase CLI login without printing or storing its token.
+
 Full sample seed:
 
 ```powershell
-flutter run -t tool/seed_firestore.dart
+flutter run --flavor dev -t tool/seed_firestore.dart
 ```
 
 This is the highest-risk utility because the script directly invokes the full

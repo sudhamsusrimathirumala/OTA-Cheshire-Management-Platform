@@ -1,5 +1,6 @@
 abstract final class OtaRoutes {
-  static const welcome = '/';
+  static const gate = '/';
+  static const welcome = '/welcome';
   static const dashboard = '/dashboard';
   static const schedule = '/schedule';
   static const events = '/events';
@@ -8,6 +9,7 @@ abstract final class OtaRoutes {
   static const curriculum = '/curriculum';
   static const notifications = '/notifications';
   static const profile = '/profile';
+  static const manageProfiles = '/profile/manage';
   static const login = '/login';
   static const signup = '/signup';
   static const adminDashboard = '/admin/dashboard';

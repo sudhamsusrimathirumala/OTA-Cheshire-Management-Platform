@@ -978,23 +978,21 @@ void _auditUsers(
   FirestoreDocumentMap profiles,
   List<FirestoreAuditIssue> issues,
 ) {
-  const approvalStatuses = {'pending', 'approved', 'rejected'};
   for (final entry in users.entries) {
     final id = entry.key;
     final data = entry.value;
     for (final field in const ['displayName', 'email', 'role', 'locationId']) {
       _requireString(data, field, id, FirestoreCollections.users, issues);
     }
-    final approval = _nonEmptyString(data['approvalStatus']);
-    if (approval == null || !approvalStatuses.contains(approval)) {
+    if (data['isActive'] is! bool) {
       issues.add(
         _issue(
           FirestoreCollections.users,
           id,
-          'user.invalid_approval_status',
+          'user.invalid_active_state',
           FirestoreAuditSeverity.error,
-          'approvalStatus is missing or invalid.',
-          'Set pending, approved, or rejected.',
+          'isActive is missing or invalid.',
+          'Set isActive to true or false.',
         ),
       );
     }

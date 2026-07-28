@@ -6,6 +6,8 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/admin/admin_location_selector.dart';
+import '../../widgets/unsaved_changes_guard.dart';
 import '../../widgets/resources/general_resources_view.dart';
 import '../../widgets/resources/resources_landing_view.dart';
 import '../resource_detail_screen.dart';
@@ -57,7 +59,15 @@ class _AdminGeneralResourcesScreenState
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
       if (resource.resourceSection != 'general') return false;
-      if (resource.locationId != _adminLocationId()) return false;
+      if (!adminLocationController.isSuperAdmin &&
+          resource.locationId != _adminLocationId()) {
+        return false;
+      }
+      if (adminLocationController.isSuperAdmin &&
+          adminLocationController.selectedLocationId != null &&
+          resource.locationId != adminLocationController.selectedLocationId) {
+        return false;
+      }
       return switch (_selectedFilter) {
         _ResourceFilter.published =>
           resource.isPublished && !resource.isArchived,
@@ -74,15 +84,13 @@ class _AdminGeneralResourcesScreenState
   }
 
   String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) return accountLocationId;
-    return appDataService.selectedStudentProfile.locationId;
+    return adminWriteLocationId();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
         final resources = _filteredResources(appDataService.resources);
 
@@ -101,6 +109,7 @@ class _AdminGeneralResourcesScreenState
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
+              const AdminLocationSelector(),
               _ResourcesToolbar(onCreateResource: () => _openResourceSheet()),
               const SizedBox(height: 14),
               _FilterRow(
@@ -130,6 +139,8 @@ class _AdminGeneralResourcesScreenState
     final result = await showModalBottomSheet<_ResourceFormResult>(
       context: context,
       isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
       useSafeArea: true,
       backgroundColor: OtaColors.white,
       shape: const RoundedRectangleBorder(
@@ -523,6 +534,9 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
   late final TextEditingController _linkController;
   late String _category;
   String? _validationMessage;
+  late final String _initialFingerprint;
+  final _closeController = UnsavedChangesController();
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -539,6 +553,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
     _category = canonicalResourceCategories.contains(normalizedCategory)
         ? normalizedCategory
         : 'general';
+    _initialFingerprint = _formFingerprint;
   }
 
   @override
@@ -557,92 +572,103 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
         ? 'Update Published Resource'
         : 'Publish Resource';
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _SheetHeader(
-              title: isEditing ? 'Edit Resource' : 'Create Resource',
-              subtitle: 'Drafts and published resources write to Firestore.',
-            ),
-            const SizedBox(height: 14),
-            _AdminTextField(controller: _titleController, label: 'Title'),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _descriptionController,
-              label: 'Description',
-              maxLines: 3,
-            ),
-            const SizedBox(height: 10),
-            DropdownButtonFormField<String>(
-              initialValue: _category,
-              decoration: _fieldDecoration('Category'),
-              items: [
-                for (final option in _categoryOptions)
-                  DropdownMenuItem(value: option.id, child: Text(option.label)),
-              ],
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _category = value);
-                }
-              },
-            ),
-            const SizedBox(height: 10),
-            _AdminTextField(
-              controller: _linkController,
-              label: 'Link URL',
-              helperText: 'Optional.',
-            ),
-            const SizedBox(height: 16),
-            if (_validationMessage != null) ...[
-              _ValidationMessage(message: _validationMessage!),
+    return UnsavedChangesGuard(
+      controller: _closeController,
+      isDirty: () => _formFingerprint != _initialFingerprint,
+      isSaving: _submitting,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.viewInsetsOf(context).bottom,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _SheetHeader(
+                title: isEditing ? 'Edit Resource' : 'Create Resource',
+                subtitle: 'Drafts and published resources write to Firestore.',
+              ),
+              const SizedBox(height: 14),
+              _AdminTextField(controller: _titleController, label: 'Title'),
               const SizedBox(height: 10),
-            ],
-            Wrap(
-              alignment: WrapAlignment.end,
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-                if (!isEditingPublished)
-                  OutlinedButton(
-                    onPressed: () => _submit(_ResourceSaveAction.draft),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: OtaColors.maroon,
-                      side: const BorderSide(color: OtaColors.maroon),
+              _AdminTextField(
+                controller: _descriptionController,
+                label: 'Description',
+                maxLines: 3,
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                initialValue: _category,
+                decoration: _fieldDecoration('Category'),
+                items: [
+                  for (final option in _categoryOptions)
+                    DropdownMenuItem(
+                      value: option.id,
+                      child: Text(option.label),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _category = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 10),
+              _AdminTextField(
+                controller: _linkController,
+                label: 'Link URL',
+                helperText: 'Optional.',
+              ),
+              const SizedBox(height: 16),
+              if (_validationMessage != null) ...[
+                _ValidationMessage(message: _validationMessage!),
+                const SizedBox(height: 10),
+              ],
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  TextButton(
+                    onPressed: _closeController.requestClose,
+                    child: const Text('Cancel'),
+                  ),
+                  if (!isEditingPublished)
+                    OutlinedButton(
+                      onPressed: () => _submit(_ResourceSaveAction.draft),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: OtaColors.maroon,
+                        side: const BorderSide(color: OtaColors.maroon),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: const Text('Save Draft'),
+                    ),
+                  FilledButton(
+                    onPressed: () => _submit(_ResourceSaveAction.publish),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: OtaColors.maroon,
+                      foregroundColor: OtaColors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
-                    child: const Text('Save Draft'),
+                    child: Text(publishLabel),
                   ),
-                FilledButton(
-                  onPressed: () => _submit(_ResourceSaveAction.publish),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: OtaColors.maroon,
-                    foregroundColor: OtaColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  child: Text(publishLabel),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   void _submit(_ResourceSaveAction action) {
+    if (_submitting) return;
     final title = _titleController.text.trim();
     final link = _linkController.text.trim();
     if (title.isEmpty) {
@@ -678,6 +704,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             isPublished: isPublished,
           );
 
+    _submitting = true;
     Navigator.of(context).pop(
       _ResourceFormResult(
         action: action,
@@ -687,13 +714,15 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
     );
   }
 
-  String _adminLocationId() {
-    final accountLocationId = appDataService.currentUserAccount.locationId;
-    if (accountLocationId.trim().isNotEmpty) {
-      return accountLocationId;
-    }
+  String get _formFingerprint => [
+    _titleController.text,
+    _descriptionController.text,
+    _linkController.text,
+    _category,
+  ].join('\u0000');
 
-    return appDataService.selectedStudentProfile.locationId;
+  String _adminLocationId() {
+    return adminWriteLocationId();
   }
 }
 

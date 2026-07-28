@@ -7,7 +7,7 @@ database tools are documented in [Firestore operations](FIRESTORE_OPERATIONS.md)
 ## Entry Point
 
 ```powershell
-flutter run -t lib/firestore_cleanup_main.dart
+flutter run --flavor dev -t lib/firestore_cleanup_main.dart
 ```
 
 `Generate Cleanup Plan` reads the seven application collections and produces a

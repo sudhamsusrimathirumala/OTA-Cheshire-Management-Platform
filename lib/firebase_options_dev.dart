@@ -8,13 +8,13 @@ import 'package:flutter/foundation.dart'
 ///
 /// Example:
 /// ```dart
-/// import 'firebase_options.dart';
+/// import 'firebase_options_dev.dart';
 /// // ...
 /// await Firebase.initializeApp(
-///   options: DefaultFirebaseOptions.currentPlatform,
+///   options: DevelopmentFirebaseOptions.currentPlatform,
 /// );
 /// ```
-class DefaultFirebaseOptions {
+class DevelopmentFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
       return web;
@@ -30,12 +30,12 @@ class DefaultFirebaseOptions {
         return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
+          'DevelopmentFirebaseOptions have not been configured for linux - '
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       default:
         throw UnsupportedError(
-          'DefaultFirebaseOptions are not supported for this platform.',
+          'DevelopmentFirebaseOptions are not supported for this platform.',
         );
     }
   }

@@ -30,7 +30,6 @@ class FirestoreMigrationService {
       studentProfilesMissingGuardianEmail: guardianResult.missingGuardianEmail,
       usersNormalizedOrBackfilled: userResult.normalizedOrBackfilled,
       usersMissingRequiredEmail: userResult.missingRequiredEmail,
-      userPhoneNumbersPreserved: userResult.phoneNumbersPreserved,
       googleAccountIdsPreservedOrNormalized:
           userResult.googleAccountIdsPreservedOrNormalized,
       classTypeIdsNormalized: classTypeIdsNormalized,
@@ -59,14 +58,12 @@ class FirestoreMigrationService {
     final batch = _firestore.batch();
     var normalizedOrBackfilled = 0;
     var missingRequiredEmail = 0;
-    var phoneNumbersPreserved = 0;
     var googleAccountIdsPreservedOrNormalized = 0;
 
     for (final document in snapshot.docs) {
       final data = document.data();
       final email = validNormalizedEmail(data['email']);
       if (email == null) missingRequiredEmail++;
-      if (_stringValue(data['phoneNumber']) != null) phoneNumbersPreserved++;
       if (_stringValue(data['googleAccountId']) != null) {
         googleAccountIdsPreservedOrNormalized++;
       }
@@ -85,7 +82,6 @@ class FirestoreMigrationService {
     return UserMigrationResult(
       normalizedOrBackfilled: normalizedOrBackfilled,
       missingRequiredEmail: missingRequiredEmail,
-      phoneNumbersPreserved: phoneNumbersPreserved,
       googleAccountIdsPreservedOrNormalized:
           googleAccountIdsPreservedOrNormalized,
     );
@@ -435,7 +431,6 @@ class FirestoreMigrationResult {
     required this.studentProfilesMissingGuardianEmail,
     required this.usersNormalizedOrBackfilled,
     required this.usersMissingRequiredEmail,
-    required this.userPhoneNumbersPreserved,
     required this.googleAccountIdsPreservedOrNormalized,
     required this.classTypeIdsNormalized,
     required this.bulkGroupIdsAdded,
@@ -456,7 +451,6 @@ class FirestoreMigrationResult {
   final int studentProfilesMissingGuardianEmail;
   final int usersNormalizedOrBackfilled;
   final int usersMissingRequiredEmail;
-  final int userPhoneNumbersPreserved;
   final int googleAccountIdsPreservedOrNormalized;
   final int classTypeIdsNormalized;
   final int bulkGroupIdsAdded;
@@ -478,7 +472,6 @@ class FirestoreMigrationResult {
       'profiles missing guardian email=$studentProfilesMissingGuardianEmail, '
       'users normalized or backfilled=$usersNormalizedOrBackfilled, '
       'users missing email=$usersMissingRequiredEmail, '
-      'phone numbers preserved=$userPhoneNumbersPreserved, '
       'Google account IDs preserved=$googleAccountIdsPreservedOrNormalized, '
       'class type IDs normalized=$classTypeIdsNormalized, '
       'bulk group IDs added=$bulkGroupIdsAdded, '
@@ -500,7 +493,6 @@ class FirestoreMigrationResult {
       'Student profiles still missing guardianEmail: $studentProfilesMissingGuardianEmail\n'
       'Users normalized or backfilled: $usersNormalizedOrBackfilled\n'
       'Users still missing required email: $usersMissingRequiredEmail\n'
-      'User phone numbers preserved: $userPhoneNumbersPreserved\n'
       'Google account IDs preserved or normalized: $googleAccountIdsPreservedOrNormalized\n'
       'Class type IDs normalized: $classTypeIdsNormalized\n'
       'Bulk group IDs added: $bulkGroupIdsAdded\n'
@@ -527,13 +519,11 @@ class UserMigrationResult {
   const UserMigrationResult({
     required this.normalizedOrBackfilled,
     required this.missingRequiredEmail,
-    required this.phoneNumbersPreserved,
     required this.googleAccountIdsPreservedOrNormalized,
   });
 
   final int normalizedOrBackfilled;
   final int missingRequiredEmail;
-  final int phoneNumbersPreserved;
   final int googleAccountIdsPreservedOrNormalized;
 }
 
@@ -674,14 +664,6 @@ Map<String, Object?> migrationUserBackfill(Map<String, dynamic> data) {
   }
   final email = validNormalizedEmail(data['email']);
   if (email != null && data['email'] != email) updates['email'] = email;
-  if (data.containsKey('phoneNumber')) {
-    final phone = _stringValue(data['phoneNumber']);
-    if (phone == null) {
-      updates['phoneNumber'] = migrationDeleteField;
-    } else if (data['phoneNumber'] != phone) {
-      updates['phoneNumber'] = phone;
-    }
-  }
   final googleAccountId = _stringValue(data['googleAccountId']);
   if (data.containsKey('googleAccountId')) {
     if (googleAccountId == null) {

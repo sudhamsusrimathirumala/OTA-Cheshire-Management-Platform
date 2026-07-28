@@ -14,7 +14,7 @@ class OtaActionButton extends StatelessWidget {
   });
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final OtaActionButtonVariant variant;
   final Widget? icon;
 
@@ -73,10 +73,14 @@ class _ButtonLabel extends StatelessWidget {
       return Text(label);
     }
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [icon!, const SizedBox(width: 10), Text(label)],
+    return Wrap(
+      alignment: WrapAlignment.center,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 10,
+      children: [
+        icon!,
+        Text(label, textAlign: TextAlign.center),
+      ],
     );
   }
 }

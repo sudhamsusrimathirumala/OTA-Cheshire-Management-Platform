@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'firebase_options.dart';
+import 'firebase_options_dev.dart';
 import 'services/firestore/firestore_export_service.dart';
 
 Future<void> main() async {
@@ -15,7 +15,9 @@ Future<void> main() async {
     runApp(const _ReleaseModeRefusalApp());
     return;
   }
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DevelopmentFirebaseOptions.currentPlatform,
+  );
   runApp(const FirestoreExportApp());
 }
 

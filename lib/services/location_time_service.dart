@@ -12,6 +12,7 @@ class LocationTimeService {
 
   static const otaCheshireLocationId = 'ota-cheshire';
   static const otaCheshireTimeZoneId = 'America/New_York';
+  static const neutralTimeZoneId = 'UTC';
 
   static bool _isInitialized = false;
   static final Map<String, String> _timeZoneIds = {
@@ -25,7 +26,14 @@ class LocationTimeService {
   }
 
   String timeZoneIdFor(String locationId) {
-    return _timeZoneIds[locationId] ?? otaCheshireTimeZoneId;
+    return _timeZoneIds[locationId] ?? neutralTimeZoneId;
+  }
+
+  void cacheTimeZone(String locationId, String timeZoneId) {
+    initialize();
+    if (locationId.trim().isEmpty) return;
+    tz.getLocation(timeZoneId);
+    _timeZoneIds[locationId] = timeZoneId;
   }
 
   Future<AcademyLocation> loadLocation(
@@ -49,7 +57,7 @@ class LocationTimeService {
       }
       return AcademyLocation(
         id: locationId,
-        name: name is String && name.isNotEmpty ? name : 'OTA Cheshire',
+        name: name is String && name.isNotEmpty ? name : 'Academy location',
         timeZoneId: timeZoneIdFor(locationId),
         isActive: isActive is bool ? isActive : true,
         addressLine1: _stringValue(data?['addressLine1']),
@@ -64,7 +72,7 @@ class LocationTimeService {
     } catch (_) {
       return AcademyLocation(
         id: locationId,
-        name: 'OTA Cheshire',
+        name: 'Academy location',
         timeZoneId: timeZoneIdFor(locationId),
         isActive: true,
       );
@@ -109,6 +117,9 @@ class LocationTimeService {
   }
 
   int ageForStudent(StudentProfile student, {DateTime? instant}) {
+    if (student.locationId.trim().isEmpty) {
+      return student.ageOn((instant ?? DateTime.now()).toLocal());
+    }
     final academyDate = toLocationTime(
       instant ?? DateTime.now(),
       student.locationId,

@@ -12,7 +12,7 @@ final sampleStudent = Student(
   stickersRequired: 3,
   nextRank: 'Black',
   guardianUserIds: ['user_parent_demo'],
-  preferredClassGroupIds: ['teen-adult', 'level-4'],
+  preferredClassGroupIds: ['teen-black-belt-standard'],
 );
 
 final sampleStudentProfiles = [
@@ -27,7 +27,7 @@ final sampleStudentProfiles = [
     stickersRequired: 4,
     nextRank: 'Green',
     guardianUserIds: ['guardian_patel'],
-    preferredClassGroupIds: ['level-2'],
+    preferredClassGroupIds: ['level-2-standard'],
   ),
   Student(
     id: 'student_aarav',
@@ -39,7 +39,7 @@ final sampleStudentProfiles = [
     stickersRequired: 3,
     nextRank: 'Yellow',
     guardianUserIds: ['guardian_patel'],
-    preferredClassGroupIds: ['level-1'],
+    preferredClassGroupIds: ['level-1-standard'],
   ),
   Student(
     id: 'student_elena',
@@ -51,7 +51,7 @@ final sampleStudentProfiles = [
     stickersRequired: 4,
     nextRank: 'Blue-Red',
     guardianUserIds: ['guardian_rivera'],
-    preferredClassGroupIds: ['level-3'],
+    preferredClassGroupIds: ['level-3-standard'],
   ),
   Student(
     id: 'student_daniel',
@@ -62,7 +62,19 @@ final sampleStudentProfiles = [
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'Second Dan',
-    preferredClassGroupIds: ['teen-adult'],
+    preferredClassGroupIds: ['black-belt-standard'],
+  ),
+  Student(
+    id: 'student_sample_new',
+    name: 'Sample New Student',
+    locationId: otaCheshireLocationId,
+    belt: 'White',
+    dateOfBirth: DateTime.utc(2014, 6, 15),
+    stickerCount: 0,
+    stickersRequired: 4,
+    nextRank: 'Yellow',
+    guardianEmail: 'sample.guardian@example.com',
+    updatedAt: DateTime.utc(2026, 7, 15),
   ),
 ];
 
@@ -73,7 +85,7 @@ const sampleUserAccount = UserAccount(
   email: 'parent@example.com',
   role: UserAccountRole.parent,
   locationId: otaCheshireLocationId,
-  approvalStatus: UserAccountApprovalStatus.approved,
+  isActive: true,
   linkedStudentProfileIds: ['student_sudhamsu'],
   selectedStudentProfileId: 'student_sudhamsu',
 );

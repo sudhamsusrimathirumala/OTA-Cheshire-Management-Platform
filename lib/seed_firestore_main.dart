@@ -1,7 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'firebase_options.dart';
+import 'firebase_options_dev.dart';
 import 'services/firestore/firestore_migration_service.dart';
 import 'services/location_time_service.dart';
 
@@ -11,7 +11,7 @@ import 'services/location_time_service.dart';
 //
 // To run this merge-only migration:
 // 1. Temporarily set _enableFirestoreMigration to true.
-// 2. Run: flutter run -t lib/seed_firestore_main.dart
+// 2. Run: flutter run --flavor dev -t lib/seed_firestore_main.dart
 // 3. Click Run Migration once.
 // 4. Confirm the database updates shown in the completion summary.
 // 5. Set _enableFirestoreMigration back to false.
@@ -23,7 +23,9 @@ const bool _enableFirestoreMigration = false;
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LocationTimeService.initialize();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DevelopmentFirebaseOptions.currentPlatform,
+  );
   runApp(const SeedFirestoreApp());
 }
 

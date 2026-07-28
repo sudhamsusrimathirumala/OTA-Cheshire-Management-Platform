@@ -42,6 +42,9 @@ dependencies:
   youtube_player_iframe: ^6.0.2
   url_launcher: ^6.3.2
   google_sign_in: ^7.2.0
+  firebase_messaging: ^16.4.1
+  flutter_local_notifications: ^22.1.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

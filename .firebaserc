@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "dev": "ota-management-platform",
+    "prod": "academy-production-project-id-required"
+  }
+}

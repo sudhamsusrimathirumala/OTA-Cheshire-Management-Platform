@@ -11,10 +11,16 @@ import '../theme/ota_colors.dart';
 import 'resource_detail_screen.dart';
 
 class EventsScreen extends StatefulWidget {
-  const EventsScreen({this.dataService, this.now, super.key});
+  const EventsScreen({
+    this.dataService,
+    this.now,
+    this.initialEventId,
+    super.key,
+  });
 
   final AppDataService? dataService;
   final DateTime? now;
+  final String? initialEventId;
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -24,6 +30,7 @@ class _EventsScreenState extends State<EventsScreen> {
   late DateTime _visibleMonth;
   late DateTime _selectedDate;
   String? _locationId;
+  bool _handledInitialEvent = false;
 
   AppDataService get _service => widget.dataService ?? appDataService;
 
@@ -68,6 +75,28 @@ class _EventsScreenState extends State<EventsScreen> {
           events,
           date: _selectedDate,
         );
+        final initialEventId = widget.initialEventId;
+        if (!_handledInitialEvent &&
+            initialEventId != null &&
+            !_service.isEventsLoading) {
+          _handledInitialEvent = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final event = events
+                .where((item) => item.id == initialEventId)
+                .firstOrNull;
+            if (event == null) {
+              showModalBottomSheet<void>(
+                context: context,
+                builder: (context) => _UnavailableEventDetails(
+                  onClose: () => Navigator.of(context).pop(),
+                ),
+              );
+            } else {
+              _showEventDetails(context, event, _service);
+            }
+          });
+        }
         final canPop = Navigator.of(context).canPop();
 
         return PopScope<void>(

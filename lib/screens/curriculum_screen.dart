@@ -13,11 +13,14 @@ typedef CurriculumVideoBuilder =
     Widget Function(BuildContext context, String videoId);
 
 String? initialCurriculumBelt({
-  required String selectedStudentBelt,
+  required String? selectedStudentBelt,
   required List<String> beltOrder,
   required Map<String, CurriculumRequirement> curriculum,
 }) {
-  if (curriculum.containsKey(selectedStudentBelt)) return selectedStudentBelt;
+  if (selectedStudentBelt != null &&
+      curriculum.containsKey(selectedStudentBelt)) {
+    return selectedStudentBelt;
+  }
   if (curriculum.containsKey('No Belt')) return 'No Belt';
   for (final belt in beltOrder) {
     if (curriculum.containsKey(belt)) return belt;
@@ -73,7 +76,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
   void initState() {
     super.initState();
     _selectedBelt = initialCurriculumBelt(
-      selectedStudentBelt: _service.selectedStudentProfile.belt,
+      selectedStudentBelt: widget.isAdmin
+          ? null
+          : _service.selectedStudentProfile.belt,
       beltOrder: _service.curriculumBeltOrder,
       curriculum: _service.curriculum,
     );
@@ -225,22 +230,18 @@ class _CurriculumHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              if (backLabel == null)
-                IconButton.filledTonal(
-                  onPressed: onBack ?? () => Navigator.maybePop(context),
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  tooltip: 'Back',
-                )
-              else
-                OutlinedButton.icon(
-                  onPressed: onBack,
-                  icon: const Icon(Icons.arrow_back_rounded),
-                  label: Text(backLabel!),
-                ),
+              IconButton.filledTonal(
+                onPressed: onBack ?? () => Navigator.maybePop(context),
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: backLabel ?? 'Back',
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Curriculum',
+                  key: const ValueKey('curriculum-content-title'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     color: OtaColors.ink,
                     fontWeight: FontWeight.w900,
@@ -260,6 +261,7 @@ class _CurriculumHeader extends StatelessWidget {
           const SizedBox(height: 16),
           DropdownButtonFormField<String>(
             initialValue: selectedBelt,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Select Belt Level',
               border: OutlineInputBorder(),
@@ -268,7 +270,11 @@ class _CurriculumHeader extends StatelessWidget {
               for (final belt in beltOrder)
                 DropdownMenuItem(
                   value: belt,
-                  child: Text(beltDisplayLabel(belt)),
+                  child: Text(
+                    beltDisplayLabel(belt),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
             ],
             onChanged: beltOrder.isEmpty ? null : onBeltChanged,

@@ -19,7 +19,7 @@ class ClassSession {
     this.resumesOn,
     this.createdAt,
     this.updatedAt,
-  }) : bulkGroupId = bulkGroupId ?? '$classTypeId-standard',
+  }) : bulkGroupId = resolvedPreferredClassGroupId(className, bulkGroupId),
        startMinutes = startMinutes ?? startTime.hour * 60 + startTime.minute,
        endMinutes = endMinutes ?? endTime.hour * 60 + endTime.minute;
 
@@ -84,6 +84,62 @@ class ClassSession {
     }
     return eligibleBelts.contains(student.belt);
   }
+}
+
+const legacyAmbiguousTeenAdultGroupId = 'teen-adult-standard';
+
+String preferredClassGroupIdForClassName(String className) {
+  final normalized = className.trim();
+  return switch (normalized) {
+    'Little Tiger' || 'Little Tiger (Age 3-5)' => 'little-tiger-standard',
+    'Level 1' => 'level-1-standard',
+    'Level 2' => 'level-2-standard',
+    'Level 3' => 'level-3-standard',
+    'Level 4' => 'level-4-standard',
+    'Black Belt' => 'black-belt-standard',
+    'Teen & Black Belt' => 'teen-black-belt-standard',
+    'Adult' => 'adult-standard',
+    'Teen/Adult Sparring' => 'teen-adult-sparring-standard',
+    'Level 1 / Level 2 Sparring' => 'level-1-2-sparring-standard',
+    _ => '${_preferredClassSlug(normalized)}-standard',
+  };
+}
+
+String resolvedPreferredClassGroupId(String className, String? storedGroupId) {
+  final stored = storedGroupId?.trim() ?? '';
+  if (stored.isEmpty || stored == legacyAmbiguousTeenAdultGroupId) {
+    return preferredClassGroupIdForClassName(className);
+  }
+  return stored;
+}
+
+bool matchesResolvedPreferredClassGroup(
+  Iterable<String> savedGroupIds,
+  String classGroupId,
+) {
+  return savedGroupIds.any(
+    (groupId) =>
+        groupId != legacyAmbiguousTeenAdultGroupId && groupId == classGroupId,
+  );
+}
+
+List<String> resolvedSavedPreferredClassGroupIds(Iterable<String> groupIds) {
+  return groupIds
+      .where(
+        (groupId) =>
+            groupId.trim().isNotEmpty &&
+            groupId != legacyAmbiguousTeenAdultGroupId,
+      )
+      .toList(growable: false);
+}
+
+String _preferredClassSlug(String className) {
+  final slug = className
+      .toLowerCase()
+      .replaceAll('&', 'and')
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
+  return slug.isEmpty ? 'class-session' : slug;
 }
 
 String formatMinutesAsTime(int minutes) {
