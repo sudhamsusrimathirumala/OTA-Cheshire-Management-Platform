@@ -61,6 +61,13 @@ During public initial creation, `role` is only `student` or `parent`,
 `isActive` is true, `selectedStudentProfileId` is required and linked, and
 `locationId` references an active academy. Admin roles are configured manually.
 
+Self-service account deletion is intentionally different from unlinking one
+child. After recent authentication, a parent or student explicitly deletes
+their private subcollections, then one atomic batch deletes every ID in
+`linkedStudentProfileIds` and `users/{uid}`. Rules reject an incomplete linked
+profile set, an unrelated or cross-location profile, and Admin or Super Admin
+self-deletion. Profile progress is not retained.
+
 ## `studentProfiles/{studentProfileId}`
 
 Required fields:
@@ -99,6 +106,13 @@ history remains stored.
 Persistent notification read state is scoped to the authenticated account.
 The document ID is the announcement ID and the only field is `readAt`, a server
 timestamp. No administrator may read another user's notification state.
+
+## `users/{uid}/pushDevices/{installationId}`
+
+Private device registrations contain the current FCM token, platform,
+environment, enabled state, and server timestamps. They are owned by the
+authenticated user and are explicitly deleted before the account document;
+deleting `users/{uid}` alone does not delete either private subcollection.
 
 Age is computed from `dateOfBirth`, using the academy-location date where the
 UI has location context. The parser temporarily reads legacy `age` only when

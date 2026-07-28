@@ -18,9 +18,14 @@ import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({this.managementAvailableOverride, super.key});
+  const ProfileScreen({
+    this.managementAvailableOverride,
+    this.accountDeletionAvailableOverride,
+    super.key,
+  });
 
   final bool? managementAvailableOverride;
+  final bool? accountDeletionAvailableOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -60,6 +65,12 @@ class ProfileScreen extends StatelessWidget {
                               managementAvailableOverride:
                                   managementAvailableOverride,
                             ),
+                            if ((accountDeletionAvailableOverride ??
+                                    Firebase.apps.isNotEmpty) &&
+                                !debugViewController.isActive) ...[
+                              const SizedBox(height: 22),
+                              const _AccountDeletionSection(),
+                            ],
                             if (kDebugMode &&
                                 pushNotificationService != null) ...[
                               const SizedBox(height: 22),
@@ -478,6 +489,24 @@ class _SettingsActionsSection extends StatelessWidget {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+class _AccountDeletionSection extends StatelessWidget {
+  const _AccountDeletionSection();
+
+  @override
+  Widget build(BuildContext context) => ProfileSection(
+    title: 'Danger Zone',
+    children: [
+      ProfileActionRow(
+        icon: Icons.delete_forever_rounded,
+        label: 'Delete Account',
+        isDestructive: true,
+        showDivider: false,
+        onTap: () => Navigator.of(context).pushNamed(OtaRoutes.accountDeletion),
+      ),
+    ],
+  );
 }
 
 String _beltLabel(String belt) => '$belt Belt';

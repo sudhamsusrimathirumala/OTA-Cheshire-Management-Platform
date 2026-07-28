@@ -44,6 +44,8 @@ cleanup and schema-update work is not listed as active work.
 - [ ] Complete end-to-end tests for authentication, role access, Firestore
   permissions, student/parent reads, and admin writes.
 - [ ] Review production academy content and links with stakeholders.
+- [ ] Deploy the reviewed account-deletion Rules explicitly and validate
+  password and Google deletion on real Android and iOS devices.
 
 ## Important Product Work
 
@@ -54,6 +56,9 @@ cleanup and schema-update work is not listed as active work.
 - [x] Add handling for accounts with no linked student profile.
 - [x] Use authenticated live current-user and selected-profile state outside
   clearly labeled development-debug sample views.
+- [x] Implement direct permanent member account deletion with recent
+  reauthentication, explicit private-subcollection removal, all-linked-profile
+  deletion, privileged-account restriction, and safe partial-failure recovery.
 
 ### Student Management
 
@@ -105,7 +110,8 @@ cleanup and schema-update work is not listed as active work.
 ## Post-Launch
 
 - [ ] Sign in with Apple.
-- [ ] In-app account deletion.
+- [ ] Add Apple authorization revocation to account deletion when Sign in with
+  Apple is implemented.
 - [ ] Analytics and operational monitoring with an approved privacy plan.
 - [ ] Advanced reporting for attendance, promotions, communications, and
   engagement.

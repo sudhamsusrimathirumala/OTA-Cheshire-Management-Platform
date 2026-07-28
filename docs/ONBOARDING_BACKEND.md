@@ -17,6 +17,33 @@ selected profile, and its location. `AuthGate` is the routing authority. Its
 runtime stages are `loading`, `signedOut`, `needsProfiles`, `member`,
 `disabled`, `adminDisabled`, `admin`, and `error`.
 
+## Permanent member account deletion
+
+Parents and students can start account deletion from the profile settings
+danger zone. The flow explains that deletion removes the login account, every
+linked child or self-student profile, stored belt/sticker/testing/promotion
+progress, preferred classes, device registrations, and notification-read
+records. Removing one child profile remains a separate action.
+
+Deletion requires recent password or Google reauthentication and the final
+text confirmation `DELETE`. Accounts with both providers may choose either
+supported method. Admin and Super Admin accounts cannot delete themselves and
+must be removed by another authorized administrator.
+
+The client deletes known private subcollection documents first. One final
+Firestore batch deletes every linked profile and `users/{uid}`, and Firebase
+Authentication deletion runs last. No Cloud Function, request collection,
+retention queue, or delayed processor is used. Firestore Rules enforce the
+member, relationship, location, and all-linked-profiles deletion boundary.
+
+Sign in with Apple is not implemented. When it is added, the reauthentication
+adapter must also revoke Apple authorization as part of account deletion; no
+Apple option is currently presented.
+
+The Rules are tested with the local emulator only. Production account deletion
+is not operational until the reviewed Rules are explicitly deployed and the
+complete flow is validated on real devices.
+
 ## Atomic profile creation
 
 Authenticated users complete the existing three-step flow with a 16+ account

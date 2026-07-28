@@ -107,6 +107,32 @@ class FirebaseSessionController extends ChangeNotifier {
     await _replaceAuthUser(null);
   }
 
+  Future<void> suspendForAccountDeletion() async {
+    justCreatedProfiles = false;
+    ++_sessionGeneration;
+    ++_profilesGeneration;
+    ++_locationGeneration;
+    stage = SessionStage.loading;
+    errorMessage = null;
+    notifyListeners();
+    await _cancelFirestoreSubscriptions();
+  }
+
+  Future<void> completeAccountDeletion() async {
+    try {
+      await signOutCleanup?.call();
+    } catch (_) {
+      // Local push cleanup remains best effort after permanent deletion.
+    }
+    try {
+      await authentication.signOut();
+    } catch (_) {
+      // The Auth user is already deleted; provider-session cleanup is best
+      // effort and must not restore application access.
+    }
+    await _replaceAuthUser(null);
+  }
+
   Future<void> createProfiles(ProfileCreationRequest request) async {
     _profileCreationInProgress = true;
     try {

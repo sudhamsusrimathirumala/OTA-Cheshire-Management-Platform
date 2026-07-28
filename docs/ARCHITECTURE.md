@@ -9,6 +9,15 @@ Deploying the Functions requires explicit academy approval for Blaze billing
 and a reviewed target project. The product has no advertising, subscriptions,
 purchases, paid memberships, donations, fees, or revenue features.
 
+Member account deletion is a direct authenticated client operation and does
+not require a Cloud Function. After recent password or Google
+reauthentication, the client explicitly removes `pushDevices` and
+`notificationReads`, then atomically deletes every linked student profile and
+the owning user document before deleting the Firebase Authentication account.
+Admin and Super Admin self-deletion is denied. The reviewed Rules must be
+deployed and the flow must pass real-device testing before production account
+deletion is considered operational.
+
 ## Application Layers
 
 - **UI and screens:** Flutter screens under `lib/screens/` and shared widgets

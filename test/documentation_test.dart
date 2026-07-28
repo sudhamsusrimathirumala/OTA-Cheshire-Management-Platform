@@ -4,13 +4,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('active schema contains no retired application collection', () {
-    final schema = File('docs/firestore_schema.md').readAsStringSync();
+    final schema = File(
+      'docs/firestore_schema.md',
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     expect(schema, isNot(contains('membershipApplications')));
     expect(
       schema,
       contains('`isActive`: bool controlling account availability'),
     );
     expect(schema, contains('one matching\n  `locationId`'));
+    expect(schema, contains('Self-service account deletion'));
+    expect(schema, contains('Profile progress is not retained.'));
   });
 
   test('historical design remains clearly labeled inactive', () {
