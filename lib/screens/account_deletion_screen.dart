@@ -1,3 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/user_account.dart';
@@ -15,6 +18,7 @@ class AccountDeletionScreen extends StatefulWidget {
     this.suspendSession,
     this.completeSession,
     this.restoreSession,
+    this.currentFirebaseUid,
     super.key,
   });
 
@@ -23,6 +27,7 @@ class AccountDeletionScreen extends StatefulWidget {
   final Future<void> Function()? suspendSession;
   final Future<void> Function()? completeSession;
   final Future<void> Function()? restoreSession;
+  final String? Function()? currentFirebaseUid;
 
   @override
   State<AccountDeletionScreen> createState() => _AccountDeletionScreenState();
@@ -39,6 +44,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
   bool _firestoreDeletionCompleted = false;
   bool _recoveringAuthenticationDeletion = false;
   String? _message;
+  AccountDeletionDebugDiagnostics? _debugDiagnostics;
 
   UserAccount? get _account =>
       widget.accountOverride ?? firebaseSessionController.account;
@@ -46,7 +52,11 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
   @override
   void initState() {
     super.initState();
-    _service = widget.service ?? createFirebaseAccountDeletionService();
+    _service =
+        widget.service ??
+        createFirebaseAccountDeletionService(
+          authentication: firebaseSessionController.authentication,
+        );
     final methods = _service.availableMethods;
     if (methods.length == 1) _method = methods.single;
     _confirmationController.addListener(_confirmationChanged);
@@ -199,6 +209,10 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
           const SizedBox(height: 14),
           _InlineError(message: _message!),
         ],
+        if (kDebugMode && _debugDiagnostics != null) ...[
+          const SizedBox(height: 14),
+          _AccountDeletionDiagnostics(value: _debugDiagnostics!),
+        ],
         const SizedBox(height: 20),
         FilledButton(
           onPressed: _busy || _method == null ? null : _reauthenticate,
@@ -249,6 +263,10 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
         if (_message != null) ...[
           const SizedBox(height: 14),
           _InlineError(message: _message!),
+        ],
+        if (kDebugMode && _debugDiagnostics != null) ...[
+          const SizedBox(height: 14),
+          _AccountDeletionDiagnostics(value: _debugDiagnostics!),
         ],
         const SizedBox(height: 20),
         if (_firestoreDeletionCompleted)
@@ -342,9 +360,22 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
     });
     var suspended = false;
     try {
+      final firebaseUidBeforeSuspension = _readCurrentFirebaseUid();
       await (widget.suspendSession ??
           firebaseSessionController.suspendForAccountDeletion)();
       suspended = true;
+      if (kDebugMode) {
+        final firebaseUidAfterSuspension = _readCurrentFirebaseUid();
+        setState(() {
+          _debugDiagnostics = AccountDeletionDebugDiagnostics(
+            authorizationUid: authorization.uid,
+            firebaseUidBeforeSuspension: firebaseUidBeforeSuspension,
+            firebaseUidAfterSuspension: firebaseUidAfterSuspension,
+            deletionServiceUidAfterSuspension:
+                _service.authGateway.currentIdentity?.uid,
+          );
+        });
+      }
       await _service.deleteAccount(authorization);
       await _completeDeletion();
     } on AccountDeletionException catch (error) {
@@ -409,6 +440,77 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
   Future<void> _restoreSession() async {
     await (widget.restoreSession ?? firebaseSessionController.retry)();
   }
+
+  String? _readCurrentFirebaseUid() {
+    final override = widget.currentFirebaseUid;
+    if (override != null) return override();
+    if (Firebase.apps.isEmpty) return _service.authGateway.currentIdentity?.uid;
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
+}
+
+class AccountDeletionDebugDiagnostics {
+  const AccountDeletionDebugDiagnostics({
+    required this.authorizationUid,
+    required this.firebaseUidBeforeSuspension,
+    required this.firebaseUidAfterSuspension,
+    required this.deletionServiceUidAfterSuspension,
+  });
+
+  final String authorizationUid;
+  final String? firebaseUidBeforeSuspension;
+  final String? firebaseUidAfterSuspension;
+  final String? deletionServiceUidAfterSuspension;
+
+  bool get firebaseCurrentUserBecameNull =>
+      firebaseUidBeforeSuspension != null && firebaseUidAfterSuspension == null;
+}
+
+class _AccountDeletionDiagnostics extends StatelessWidget {
+  const _AccountDeletionDiagnostics({required this.value});
+
+  final AccountDeletionDebugDiagnostics value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: OtaColors.navy.withValues(alpha: 0.05),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: DefaultTextStyle(
+      style: Theme.of(context).textTheme.bodySmall!.copyWith(
+        color: OtaColors.ink,
+        fontFamily: 'monospace',
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Deletion diagnostics (debug only)',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          Text('Authorization UID: ${value.authorizationUid}'),
+          Text(
+            'Firebase UID before suspension: '
+            '${value.firebaseUidBeforeSuspension ?? 'null'}',
+          ),
+          Text(
+            'Firebase UID after suspension: '
+            '${value.firebaseUidAfterSuspension ?? 'null'}',
+          ),
+          Text(
+            'FirebaseAuth.currentUser became null: '
+            '${value.firebaseCurrentUserBecameNull ? 'Yes' : 'No'}',
+          ),
+          Text(
+            'Deletion service UID after suspension: '
+            '${value.deletionServiceUidAfterSuspension ?? 'null'}',
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _ExplanationStep extends StatelessWidget {

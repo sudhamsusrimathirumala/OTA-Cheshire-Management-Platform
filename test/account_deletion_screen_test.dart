@@ -186,6 +186,57 @@ void main() {
     expect(fixture.auth.deleteCalls, 0);
   });
 
+  testWidgets('debug diagnostics capture identity around session suspension', (
+    tester,
+  ) async {
+    final fixture = _Fixture();
+    String? firebaseUid = 'member';
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AccountDeletionScreen(
+          service: fixture.service,
+          accountOverride: fixture.account,
+          currentFirebaseUid: () => firebaseUid,
+          suspendSession: () async {
+            firebaseUid = null;
+            fixture.auth.identity = null;
+          },
+          completeSession: () async {},
+          restoreSession: () async {},
+        ),
+      ),
+    );
+    await _reachConfirmation(tester);
+    await tester.ensureVisible(find.byType(TextField));
+    await tester.enterText(find.byType(TextField), 'DELETE');
+    await tester.pump();
+    final deleteButton = find.widgetWithText(
+      FilledButton,
+      'Permanently delete account',
+    );
+    await tester.ensureVisible(deleteButton);
+    await tester.tap(deleteButton);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Sign in again before deleting your account.'),
+      findsOneWidget,
+    );
+    expect(find.text('Authorization UID: member'), findsOneWidget);
+    expect(find.text('Firebase UID before suspension: member'), findsOneWidget);
+    expect(find.text('Firebase UID after suspension: null'), findsOneWidget);
+    expect(
+      find.text('FirebaseAuth.currentUser became null: Yes'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Deletion service UID after suspension: null'),
+      findsOneWidget,
+    );
+    expect(fixture.store.users, isNotEmpty);
+    expect(fixture.auth.deleteCalls, 0);
+  });
+
   for (final size in const [Size(320, 568), Size(360, 640), Size(412, 915)]) {
     for (final scale in const [1.0, 1.5]) {
       testWidgets(

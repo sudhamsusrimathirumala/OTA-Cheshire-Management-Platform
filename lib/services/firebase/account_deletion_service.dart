@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../models/user_account.dart';
 import '../firestore/firestore_collections.dart';
+import 'firebase_authentication_service.dart';
 
 enum AccountReauthenticationMethod { password, google }
 
@@ -289,19 +290,18 @@ class AccountDeletionService {
 }
 
 class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
-  FirebaseAccountDeletionAuthGateway({
-    FirebaseAuth? auth,
+  FirebaseAccountDeletionAuthGateway(
+    this._authentication, {
     GoogleSignIn? googleSignIn,
-  }) : _auth = auth ?? FirebaseAuth.instance,
-       _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+  }) : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
 
-  final FirebaseAuth _auth;
+  final AuthenticationService _authentication;
   final GoogleSignIn _googleSignIn;
   Future<void>? _googleInitialization;
 
   @override
   AccountDeletionIdentity? get currentIdentity {
-    final user = _auth.currentUser;
+    final user = _authentication.currentUser;
     if (user == null) return null;
     final providers = user.providerData
         .map((value) => value.providerId)
@@ -320,7 +320,7 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
 
   @override
   Future<void> reauthenticateWithPassword(String password) async {
-    final user = _auth.currentUser;
+    final user = _authentication.currentUser;
     final email = user?.email;
     if (user == null || email == null || email.isEmpty) {
       throw const AccountDeletionException(
@@ -339,7 +339,7 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
 
   @override
   Future<void> reauthenticateWithGoogle() async {
-    final user = _auth.currentUser;
+    final user = _authentication.currentUser;
     if (user == null) {
       throw const AccountDeletionException(
         AccountDeletionError.unauthenticated,
@@ -386,7 +386,7 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
 
   @override
   Future<void> deleteCurrentUser() async {
-    final user = _auth.currentUser;
+    final user = _authentication.currentUser;
     if (user == null) {
       throw const AccountDeletionException(
         AccountDeletionError.unauthenticated,
@@ -535,8 +535,9 @@ AccountDeletionException _mapDeletionAuthException(
   };
 }
 
-AccountDeletionService createFirebaseAccountDeletionService() =>
-    AccountDeletionService(
-      authGateway: FirebaseAccountDeletionAuthGateway(),
-      store: FirestoreAccountDeletionStore(),
-    );
+AccountDeletionService createFirebaseAccountDeletionService({
+  required AuthenticationService authentication,
+}) => AccountDeletionService(
+  authGateway: FirebaseAccountDeletionAuthGateway(authentication),
+  store: FirestoreAccountDeletionStore(),
+);

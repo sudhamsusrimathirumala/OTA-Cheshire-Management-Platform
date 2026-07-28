@@ -1,8 +1,11 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/account_deletion_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 
 void main() {
   late _FakeDeletionAuth auth;
@@ -176,6 +179,51 @@ void main() {
       expect(auth.currentIdentity, isNull);
     },
   );
+
+  test('password reauthentication then session suspension preserves identity '
+      'for deletion', () async {
+    final events = <String>[];
+    final authentication = _SharedFlowAuthentication(events);
+    final flowStore = _FakeDeletionStore(events);
+    final flowService = AccountDeletionService(
+      authGateway: authentication,
+      store: flowStore,
+    );
+    final controller = FirebaseSessionController(authentication: authentication)
+      ..stage = SessionStage.member
+      ..authUser = authentication.currentUser;
+
+    final authorization = await flowService.reauthenticate(
+      AccountReauthenticationMethod.password,
+      password: 'correct-password',
+    );
+    final userBeforeSuspension = authentication.currentUser;
+
+    await controller.suspendForAccountDeletion();
+
+    expect(controller.stage, SessionStage.loading);
+    expect(controller.authUser, same(userBeforeSuspension));
+    expect(authentication.currentUser, same(userBeforeSuspension));
+    expect(authentication.currentIdentity?.uid, authorization.uid);
+    expect(authentication.signOutCalls, 0);
+    expect(controller.authentication, same(authentication));
+    expect(flowService.authGateway, same(authentication));
+
+    await flowService.deleteAccount(authorization);
+
+    expect(authentication.deleteCalls, 1);
+    expect(flowStore.users, isEmpty);
+    expect(
+      events,
+      containsAllInOrder([
+        'reauth-password',
+        'delete-private',
+        'delete-profiles-and-user',
+        'delete-auth',
+      ]),
+    );
+    controller.dispose();
+  });
 }
 
 AccountDeletionRecord _record({
@@ -282,4 +330,67 @@ class _FakeDeletionStore implements AccountDeletionStore {
     profiles.removeAll(account.linkedStudentProfileIds);
     users.remove(account.uid);
   }
+}
+
+class _SharedFlowAuthentication
+    implements AuthenticationService, AccountDeletionAuthGateway {
+  _SharedFlowAuthentication(this.events);
+
+  final List<String> events;
+  User? _currentUser = _FlowUser();
+  int signOutCalls = 0;
+  int deleteCalls = 0;
+
+  @override
+  User? get currentUser => _currentUser;
+
+  @override
+  AccountDeletionIdentity? get currentIdentity => _currentUser == null
+      ? null
+      : AccountDeletionIdentity(
+          uid: _currentUser!.uid,
+          email: 'member@example.com',
+          methods: const {AccountReauthenticationMethod.password},
+        );
+
+  @override
+  Stream<User?> authStateChanges() => const Stream.empty();
+
+  @override
+  Future<void> reauthenticateWithPassword(String password) async {
+    events.add('reauth-password');
+    if (password != 'correct-password') {
+      throw const AccountDeletionException(
+        AccountDeletionError.incorrectPassword,
+        'The current password is incorrect.',
+      );
+    }
+  }
+
+  @override
+  Future<void> reauthenticateWithGoogle() => throw UnimplementedError();
+
+  @override
+  Future<void> deleteCurrentUser() async {
+    events.add('delete-auth');
+    deleteCalls++;
+    _currentUser = null;
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+    _currentUser = null;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _FlowUser implements User {
+  @override
+  String get uid => 'member';
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
