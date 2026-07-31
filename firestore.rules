@@ -30,6 +30,46 @@ service cloud.firestore {
       return hasUser() && currentUser().isActive == true;
     }
 
+    function memberDeletingOwnAccount(uid) {
+      return signedIn() &&
+          request.auth.uid == uid &&
+          hasUser() &&
+          currentUser().role in ['student', 'parent'];
+    }
+
+    function allLinkedProfilesDeleted(ids) {
+      return ids is list &&
+          ids.size() >= 1 && ids.size() <= 11 &&
+          !existsAfter(profilePath(ids[0])) &&
+          (ids.size() < 2 || !existsAfter(profilePath(ids[1]))) &&
+          (ids.size() < 3 || !existsAfter(profilePath(ids[2]))) &&
+          (ids.size() < 4 || !existsAfter(profilePath(ids[3]))) &&
+          (ids.size() < 5 || !existsAfter(profilePath(ids[4]))) &&
+          (ids.size() < 6 || !existsAfter(profilePath(ids[5]))) &&
+          (ids.size() < 7 || !existsAfter(profilePath(ids[6]))) &&
+          (ids.size() < 8 || !existsAfter(profilePath(ids[7]))) &&
+          (ids.size() < 9 || !existsAfter(profilePath(ids[8]))) &&
+          (ids.size() < 10 || !existsAfter(profilePath(ids[9]))) &&
+          (ids.size() < 11 || !existsAfter(profilePath(ids[10])));
+    }
+
+    function validOwnAccountDeletion(uid) {
+      return memberDeletingOwnAccount(uid) &&
+          resource.data.linkedStudentProfileIds is list &&
+          resource.data.linkedStudentProfileIds.toSet().size() ==
+              resource.data.linkedStudentProfileIds.size() &&
+          allLinkedProfilesDeleted(resource.data.linkedStudentProfileIds);
+    }
+
+    function validLinkedProfileDeletion(profileId) {
+      return memberDeletingOwnAccount(request.auth.uid) &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          resource.data.locationId == currentUser().locationId &&
+          (resource.data.get('linkedUserId', '') == request.auth.uid ||
+           request.auth.uid in resource.data.guardianUserIds) &&
+          !existsAfter(userPath(request.auth.uid));
+    }
+
     function superAdmin() {
       return activeUser() && currentUser().role == 'superAdmin';
     }
@@ -660,7 +700,8 @@ service cloud.firestore {
             (validParentFamilyUpdate() || validOwnContactUpdate() ||
              validOwnAccountUpdate())) ||
            validAdminAccountActivation());
-      allow delete: if superAdmin();
+      allow delete: if (superAdmin() && request.auth.uid != uid) ||
+          validOwnAccountDeletion(uid);
 
       match /notificationReads/{announcementId} {
         allow read, delete: if signedIn() && request.auth.uid == uid;
@@ -671,7 +712,9 @@ service cloud.firestore {
       }
 
       match /pushDevices/{installationId} {
-        allow read, delete: if activePushDeviceOwner(uid);
+        allow read: if activePushDeviceOwner(uid);
+        allow delete: if activePushDeviceOwner(uid) ||
+            memberDeletingOwnAccount(uid);
         allow create: if activePushDeviceOwner(uid) &&
             validPushDevice(request.resource.data) &&
             request.resource.data.createdAt == request.time &&
@@ -703,7 +746,7 @@ service cloud.firestore {
            validPreferredClassUpdate(profileId) ||
            validParentLinkedProfileDeactivation(profileId) ||
            validAdminProfileUpdate());
-      allow delete: if superAdmin();
+      allow delete: if superAdmin() || validLinkedProfileDeletion(profileId);
     }
 
     match /locations/{locationId} {

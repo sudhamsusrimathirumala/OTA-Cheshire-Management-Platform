@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test --test-force-exit --test-concurrency=1",
+    "test:account-deletion": "node --test --test-force-exit account_deletion.test.js",
     "test:push": "node --test --test-force-exit push_devices.test.js"
   },
   "devDependencies": {

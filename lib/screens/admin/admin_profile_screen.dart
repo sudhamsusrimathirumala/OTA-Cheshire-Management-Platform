@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/debug_view_controller.dart';
 import '../../services/firebase/firebase_session_controller.dart';
+import '../../routes.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/profile/profile_edit_sheets.dart';
 import '../../widgets/profile/profile_section.dart';
@@ -109,6 +110,23 @@ class AdminProfileScreen extends StatelessWidget {
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 22),
+                      ProfileSection(
+                        title: 'Restricted Action',
+                        children: [
+                          ProfileActionRow(
+                            icon: Icons.delete_forever_rounded,
+                            label: 'Delete Account',
+                            isDestructive: true,
+                            showDivider: false,
+                            onTap: debugViewController.isActive
+                                ? null
+                                : () => Navigator.of(
+                                    context,
+                                  ).pushNamed(OtaRoutes.accountDeletion),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 22),
                       ProfileSection(

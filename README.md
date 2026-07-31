@@ -129,6 +129,10 @@ for the current data flow and fallback boundaries.
 - Firebase Authentication, role routing, profile creation and management,
   profile switching, password reset, and per-account notification-read
   persistence.
+- Direct self-service account-deletion code for member accounts, including
+  recent reauthentication and permanent removal of every linked student
+  profile. Production use remains pending reviewed Rules deployment and
+  real-device validation.
 - Android push permission, installation registration, token refresh, sign-out
   cleanup, foreground presentation, and deep-link handling.
 - Automated announcement, event, and General Resource push-delivery code with
@@ -155,7 +159,7 @@ for the current data flow and fallback boundaries.
 - Explicit Blaze approval and authorized Cloud Functions deployment.
 - Production Android and iOS signing, APNs connection, and physical-device push
   validation.
-- Sign in with Apple and in-app account deletion.
+- Sign in with Apple and Apple authorization revocation support.
 - Guardian display-name resolution and broader academy history management.
 - Obtain the academy-approved bundled curriculum wording and optional videos.
 - Real TestFlight and Play internal testing, final content review, and store
