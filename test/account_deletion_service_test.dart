@@ -124,6 +124,68 @@ void main() {
     expect(authentication.deletedUser, isNull);
   });
 
+  test('Apple verification, revocation, and deletion use one user', () async {
+    await service.deleteAccount(AccountReauthenticationMethod.apple);
+
+    expect(authentication.reauthenticatedUser, same(authentication.user));
+    expect(authentication.revokedUser, same(authentication.user));
+    expect(authentication.deletedUser, same(authentication.user));
+    expect(
+      events,
+      orderedEquals([
+        'load-account',
+        'reauth-apple',
+        'delete-private',
+        'delete-profiles-and-user',
+        'revoke-apple',
+        'delete-auth',
+      ]),
+    );
+  });
+
+  test('Apple cancellation changes nothing', () async {
+    authentication.appleCancelled = true;
+
+    await expectLater(
+      service.deleteAccount(AccountReauthenticationMethod.apple),
+      throwsA(
+        isA<AccountDeletionException>().having(
+          (value) => value.error,
+          'error',
+          AccountDeletionError.cancelled,
+        ),
+      ),
+    );
+
+    expect(store.users, isNotEmpty);
+    expect(store.privateDocuments, isNotEmpty);
+    expect(authentication.deletedUser, isNull);
+  });
+
+  test('Apple revocation failure reports partial deletion safely', () async {
+    authentication.failAppleRevocation = true;
+
+    await expectLater(
+      service.deleteAccount(AccountReauthenticationMethod.apple),
+      throwsA(
+        isA<AccountDeletionException>()
+            .having(
+              (value) => value.firestoreDeletionCompleted,
+              'Firestore completed',
+              isTrue,
+            )
+            .having(
+              (value) => value.message,
+              'safe message',
+              isNot(contains('apple-authorization-code')),
+            ),
+      ),
+    );
+
+    expect(store.users, isEmpty);
+    expect(authentication.deletedUser, isNull);
+  });
+
   for (final role in [UserAccountRole.admin, UserAccountRole.superAdmin]) {
     test('$role deletion is blocked before reauthentication', () async {
       store.users['member'] = _record(role: role);
@@ -229,9 +291,12 @@ class _FakeDeletionAuthentication implements AccountDeletionAuthentication {
   int deleteCalls = 0;
   int signOutCalls = 0;
   bool googleCancelled = false;
+  bool appleCancelled = false;
+  bool failAppleRevocation = false;
   bool failAuthDeletion = false;
   User? reauthenticatedUser;
   User? deletedUser;
+  User? revokedUser;
 
   @override
   User? get currentUser {
@@ -243,10 +308,11 @@ class _FakeDeletionAuthentication implements AccountDeletionAuthentication {
   Set<AccountReauthenticationMethod> methodsFor(User user) => const {
     AccountReauthenticationMethod.password,
     AccountReauthenticationMethod.google,
+    AccountReauthenticationMethod.apple,
   };
 
   @override
-  Future<void> reauthenticate(
+  Future<AccountDeletionProviderProof?> reauthenticate(
     User user,
     AccountReauthenticationMethod method, {
     String? password,
@@ -261,7 +327,7 @@ class _FakeDeletionAuthentication implements AccountDeletionAuthentication {
           'The current password is incorrect.',
         );
       }
-      return;
+      return null;
     }
     if (method == AccountReauthenticationMethod.google) {
       events.add('reauth-google');
@@ -271,19 +337,30 @@ class _FakeDeletionAuthentication implements AccountDeletionAuthentication {
           'Google verification was cancelled. Nothing was deleted.',
         );
       }
-      return;
+      return null;
     }
-    throw const AccountDeletionException(
-      AccountDeletionError.unsupportedProvider,
-      'Apple account verification is not available yet.',
-    );
+    events.add('reauth-apple');
+    if (appleCancelled) {
+      throw const AccountDeletionException(
+        AccountDeletionError.cancelled,
+        'Apple verification was cancelled. Nothing was deleted.',
+      );
+    }
+    return const AccountDeletionProviderProof.apple('apple-authorization-code');
   }
 
   @override
   Future<void> revokeProviderToken(
     User user,
     AccountReauthenticationMethod method,
-  ) async {}
+    AccountDeletionProviderProof? proof,
+  ) async {
+    if (method != AccountReauthenticationMethod.apple) return;
+    revokedUser = user;
+    events.add('revoke-apple');
+    expect(proof?.appleAuthorizationCode, 'apple-authorization-code');
+    if (failAppleRevocation) throw StateError('apple-authorization-code');
+  }
 
   @override
   Future<void> delete(User user) async {

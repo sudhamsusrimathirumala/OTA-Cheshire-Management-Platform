@@ -94,6 +94,67 @@ void main() {
     }
   });
 
+  testWidgets('Apple success from login and signup resets to the gate', (
+    tester,
+  ) async {
+    for (final screen in <Widget>[
+      LoginScreen(appleSupported: true, appleSignIn: () async => null),
+      SignupScreen(appleSupported: true, appleSignIn: () async => null),
+    ]) {
+      final route = screen is LoginScreen ? OtaRoutes.login : OtaRoutes.signup;
+      await tester.pumpWidget(app(route: route, screen: screen));
+      await tester.ensureVisible(find.text('CONTINUE WITH APPLE'));
+      await tester.tap(find.text('CONTINUE WITH APPLE'));
+      await tester.pumpAndSettle();
+      expect(find.text('AUTH GATE'), findsOneWidget);
+    }
+  });
+
+  testWidgets('Apple button is hidden when the platform is unsupported', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.login,
+        screen: const LoginScreen(appleSupported: false),
+      ),
+    );
+    expect(find.text('CONTINUE WITH APPLE'), findsNothing);
+
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.signup,
+        screen: const SignupScreen(appleSupported: false),
+      ),
+    );
+    expect(find.text('CONTINUE WITH APPLE'), findsNothing);
+  });
+
+  testWidgets('Apple cancellation stays on login with a distinct message', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      app(
+        route: OtaRoutes.login,
+        screen: LoginScreen(
+          appleSupported: true,
+          appleSignIn: () async => throw const AuthenticationException(
+            AuthenticationError.appleCancelled,
+            'Sign in with Apple was cancelled.',
+          ),
+        ),
+      ),
+    );
+
+    await tester.ensureVisible(find.text('CONTINUE WITH APPLE'));
+    await tester.tap(find.text('CONTINUE WITH APPLE'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.text('Sign in with Apple was cancelled.'), findsOneWidget);
+    expect(find.text('AUTH GATE'), findsNothing);
+  });
+
   testWidgets('authentication failure stays on the current screen', (
     tester,
   ) async {

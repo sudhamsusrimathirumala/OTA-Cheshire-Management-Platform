@@ -26,9 +26,10 @@ absent. See [Firebase environments](FIREBASE_ENVIRONMENTS.md).
 
 ## Firebase Authentication setup
 
-The app uses `firebase_auth`, `google_sign_in`, Firebase UID identity, atomic
-profile creation, active-account controls, and location-based access. Provider
-linking is intentionally not part of this implementation.
+The app uses `firebase_auth`, `google_sign_in`, `sign_in_with_apple`, Firebase
+UID identity, atomic profile creation, active-account controls, and
+location-based access. Provider linking is intentionally not part of this
+implementation.
 
 Manual Firebase/platform setup still required:
 
@@ -47,6 +48,27 @@ Manual Firebase/platform setup still required:
    then refresh Firebase platform configuration.
 7. Re-run `flutterfire configure` after Firebase app/provider configuration
    changes and review generated files before committing.
+
+### Sign in with Apple external setup
+
+The repository contains the iOS entitlement and Xcode capability, but each
+Firebase environment still requires external configuration before device
+testing:
+
+1. In the Apple Developer account, enable Sign in with Apple for the App ID
+   matching that flavor's iOS bundle identifier. Refresh the provisioning
+   profile if signing is managed manually.
+2. In that flavor's Firebase project, enable the Apple Authentication provider
+   and complete its Apple service configuration.
+3. Refresh the matching `GoogleService-Info.plist` and generated FlutterFire
+   options if Firebase configuration changes. Keep development and production
+   files separate.
+4. On a Mac, open `ios/Runner.xcworkspace`, confirm the Runner target shows the
+   Sign in with Apple capability, then validate sign-in, cancellation,
+   reauthentication, token revocation, and deletion on a physical iPhone.
+
+Do not commit Apple private keys, signing certificates, provisioning profiles,
+Team IDs, Key IDs, client secrets, or other credentials.
 
 Profile creation derives identity from `FirebaseAuth.currentUser` and uses
 `FirestoreProfileService` to atomically create the UID user document and

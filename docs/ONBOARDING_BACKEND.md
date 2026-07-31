@@ -7,10 +7,11 @@ no billing account or paid Google Cloud service.
 ## Authentication and routing
 
 `FirebaseAuthenticationService` supports email/password signup and login,
-Google Sign-In, neutral password reset, refresh, sign out, and safe error
-mapping. Email verification is not required to create profiles. Firebase UID
-is the permanent identity; email is contact data. A Google provider UID comes
-only from the authenticated `google.com` provider entry.
+Google Sign-In, Sign in with Apple on supported Apple platforms, neutral
+password reset, refresh, sign out, and safe error mapping. Email verification
+is not required to create profiles. Firebase UID is the permanent identity;
+email is contact data. Provider identity comes only from the authenticated
+Firebase provider entry; the app never links accounts by matching email.
 
 `FirebaseSessionController` observes Auth, `users/{uid}`, linked profiles, the
 selected profile, and its location. `AuthGate` is the routing authority. Its
@@ -25,20 +26,19 @@ linked child or self-student profile, stored belt/sticker/testing/promotion
 progress, preferred classes, device registrations, and notification-read
 records. Removing one child profile remains a separate action.
 
-Deletion requires recent password or Google reauthentication and the final
-text confirmation `DELETE`. Accounts with both providers may choose either
-supported method. Admin and Super Admin accounts cannot delete themselves and
-must be removed by another authorized administrator.
+Deletion requires fresh password, Google, or Apple reauthentication using a
+provider currently linked to the Firebase user. Accounts with multiple
+providers may choose any connected supported method. Admin and Super Admin
+accounts cannot delete themselves and must be removed by another authorized
+administrator.
 
 The client deletes known private subcollection documents first. One final
-Firestore batch deletes every linked profile and `users/{uid}`, and Firebase
-Authentication deletion runs last. No Cloud Function, request collection,
+Firestore batch deletes every linked profile and `users/{uid}`. For Apple,
+Firebase revokes the fresh authorization code after Firestore cleanup, and
+Firebase Authentication deletion runs last. The authorization code remains
+only in the active deletion operation. No Cloud Function, request collection,
 retention queue, or delayed processor is used. Firestore Rules enforce the
 member, relationship, location, and all-linked-profiles deletion boundary.
-
-Sign in with Apple is not implemented. When it is added, the reauthentication
-adapter must also revoke Apple authorization as part of account deletion; no
-Apple option is currently presented.
 
 The Rules are tested with the local emulator only. Production account deletion
 is not operational until the reviewed Rules are explicitly deployed and the

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../routes.dart';
 import '../services/firebase/firebase_authentication_service.dart';
+import '../services/firebase/apple_authentication.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
@@ -17,11 +18,15 @@ class LoginScreen extends StatefulWidget {
     super.key,
     this.emailSignIn,
     this.googleSignIn,
+    this.appleSignIn,
+    this.appleSupported,
     this.passwordReset,
   });
 
   final Future<Object?> Function(String email, String password)? emailSignIn;
   final Future<Object?> Function()? googleSignIn;
+  final Future<Object?> Function()? appleSignIn;
+  final bool? appleSupported;
   final Future<void> Function(String email)? passwordReset;
 
   @override
@@ -63,6 +68,22 @@ class _LoginScreenState extends State<LoginScreen> {
           widget.googleSignIn?.call() ??
           firebaseSessionController.authentication.signInWithGoogle(),
     );
+  }
+
+  Future<void> _appleSignIn() async {
+    await _run(() {
+      final injected = widget.appleSignIn;
+      if (injected != null) return injected();
+      final service =
+          firebaseSessionController.authentication.appleAuthentication;
+      if (service == null) {
+        throw const AuthenticationException(
+          AuthenticationError.unknownFailure,
+          'Sign in with Apple is unavailable on this device.',
+        );
+      }
+      return service.signInWithApple();
+    });
   }
 
   Future<void> _run(Future<Object?> Function() action) async {
@@ -224,6 +245,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       icon: const Icon(Icons.g_mobiledata_rounded, size: 28),
                       onPressed: _loading ? null : _googleSignIn,
                     ),
+                    if (widget.appleSupported ?? appleSignInSupported) ...[
+                      const SizedBox(height: 14),
+                      OtaActionButton(
+                        label: 'CONTINUE WITH APPLE',
+                        variant: OtaActionButtonVariant.secondary,
+                        icon: const Icon(Icons.apple, size: 24),
+                        onPressed: _loading ? null : _appleSignIn,
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     OtaAuthSwitchLink(
                       prompt: "Don't have an account?",

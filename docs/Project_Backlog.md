@@ -109,9 +109,8 @@ cleanup and schema-update work is not listed as active work.
 
 ## Post-Launch
 
-- [ ] Sign in with Apple.
-- [ ] Add Apple authorization revocation to account deletion when Sign in with
-  Apple is implemented.
+- [x] Sign in with Apple.
+- [x] Add Apple authorization revocation to account deletion.
 - [ ] Analytics and operational monitoring with an approved privacy plan.
 - [ ] Advanced reporting for attendance, promotions, communications, and
   engagement.

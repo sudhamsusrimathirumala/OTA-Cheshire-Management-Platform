@@ -39,9 +39,9 @@ monetization.
 - Local, read-only curriculum organized by belt, including No Belt and five
   canonical sections. Each form item independently supports an optional
   embedded YouTube video; unavailable videos show a coming-soon fallback.
-- Firebase email/password and Google authentication, password reset, profile
-  creation without mandatory email verification, immediate academy access,
-  and persisted profile switching.
+- Firebase email/password, Google, and Apple authentication, password reset,
+  profile creation without mandatory email verification, immediate academy
+  access, and persisted profile switching.
 - Student profile, linked account, academy location, preferred class, family
   child management, contact/profile editing, and profile switching backed by
   the authenticated Firebase UID.
@@ -130,9 +130,9 @@ for the current data flow and fallback boundaries.
   profile switching, password reset, and per-account notification-read
   persistence.
 - Direct self-service account-deletion code for member accounts, including
-  recent reauthentication and permanent removal of every linked student
-  profile. Production use remains pending reviewed Rules deployment and
-  real-device validation.
+  recent password, Google, or Apple reauthentication, Apple token revocation,
+  and permanent removal of every linked student profile. Production use
+  remains pending reviewed Rules deployment and real-device validation.
 - Android push permission, installation registration, token refresh, sign-out
   cleanup, foreground presentation, and deep-link handling.
 - Automated announcement, event, and General Resource push-delivery code with
@@ -159,7 +159,8 @@ for the current data flow and fallback boundaries.
 - Explicit Blaze approval and authorized Cloud Functions deployment.
 - Production Android and iOS signing, APNs connection, and physical-device push
   validation.
-- Sign in with Apple and Apple authorization revocation support.
+- External Apple Developer and Firebase provider setup plus physical-iPhone
+  validation for Sign in with Apple and Apple authorization revocation.
 - Guardian display-name resolution and broader academy history management.
 - Obtain the academy-approved bundled curriculum wording and optional videos.
 - Real TestFlight and Play internal testing, final content review, and store

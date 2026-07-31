@@ -7,6 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../../models/user_account.dart';
 import '../firestore/firestore_collections.dart';
 import 'firebase_authentication_service.dart';
+import 'apple_authentication.dart';
 
 enum AccountReauthenticationMethod { password, google, apple }
 
@@ -53,10 +54,16 @@ class AccountDeletionRecord {
   final List<String> linkedStudentProfileIds;
 }
 
+class AccountDeletionProviderProof {
+  const AccountDeletionProviderProof.apple(this.appleAuthorizationCode);
+
+  final String appleAuthorizationCode;
+}
+
 abstract interface class AccountDeletionAuthentication {
   User? get currentUser;
   Set<AccountReauthenticationMethod> methodsFor(User user);
-  Future<void> reauthenticate(
+  Future<AccountDeletionProviderProof?> reauthenticate(
     User user,
     AccountReauthenticationMethod method, {
     String? password,
@@ -64,6 +71,7 @@ abstract interface class AccountDeletionAuthentication {
   Future<void> revokeProviderToken(
     User user,
     AccountReauthenticationMethod method,
+    AccountDeletionProviderProof? proof,
   );
   Future<void> delete(User user);
 }
@@ -120,8 +128,7 @@ class AccountDeletionService {
     }
     final uid = user.uid;
     final methods = authentication.methodsFor(user);
-    if (!methods.contains(method) ||
-        method == AccountReauthenticationMethod.apple) {
+    if (!methods.contains(method)) {
       throw const AccountDeletionException(
         AccountDeletionError.unsupportedProvider,
         'Choose a sign-in method currently connected to this account.',
@@ -137,11 +144,15 @@ class AccountDeletionService {
 
     final account = await store.loadAccount(uid);
     _validateMemberAccount(account);
-    await authentication.reauthenticate(user, method, password: password);
-    await authentication.revokeProviderToken(user, method);
+    final proof = await authentication.reauthenticate(
+      user,
+      method,
+      password: password,
+    );
     await store.deletePrivateDocuments(uid);
     await store.deleteLinkedProfilesAndUser(account!);
     try {
+      await authentication.revokeProviderToken(user, method, proof);
       await authentication.delete(user);
     } on AccountDeletionException catch (error) {
       throw AccountDeletionException(
@@ -213,11 +224,14 @@ class FirebaseAccountDeletionAuthentication
         AccountReauthenticationMethod.password,
       if (providers.contains(GoogleAuthProvider.PROVIDER_ID))
         AccountReauthenticationMethod.google,
+      if (providers.contains(AppleAuthProvider.PROVIDER_ID) &&
+          _authentication.appleAuthentication != null)
+        AccountReauthenticationMethod.apple,
     };
   }
 
   @override
-  Future<void> reauthenticate(
+  Future<AccountDeletionProviderProof?> reauthenticate(
     User user,
     AccountReauthenticationMethod method, {
     String? password,
@@ -227,13 +241,13 @@ class FirebaseAccountDeletionAuthentication
       password ?? '',
     ),
     AccountReauthenticationMethod.google => _reauthenticateWithGoogle(user),
-    AccountReauthenticationMethod.apple => throw const AccountDeletionException(
-      AccountDeletionError.unsupportedProvider,
-      'Apple account verification is not available yet.',
-    ),
+    AccountReauthenticationMethod.apple => _reauthenticateWithApple(user),
   };
 
-  Future<void> _reauthenticateWithPassword(User user, String password) async {
+  Future<AccountDeletionProviderProof?> _reauthenticateWithPassword(
+    User user,
+    String password,
+  ) async {
     final email = user.email;
     if (email == null || email.isEmpty) {
       throw const AccountDeletionException(
@@ -245,12 +259,15 @@ class FirebaseAccountDeletionAuthentication
       await user.reauthenticateWithCredential(
         EmailAuthProvider.credential(email: email, password: password),
       );
+      return null;
     } on FirebaseAuthException catch (error) {
       throw _mapDeletionAuthException(error, passwordAttempt: true);
     }
   }
 
-  Future<void> _reauthenticateWithGoogle(User user) async {
+  Future<AccountDeletionProviderProof?> _reauthenticateWithGoogle(
+    User user,
+  ) async {
     try {
       _googleInitialization ??= _googleSignIn.initialize();
       await _googleInitialization;
@@ -265,6 +282,7 @@ class FirebaseAccountDeletionAuthentication
       await user.reauthenticateWithCredential(
         GoogleAuthProvider.credential(idToken: idToken),
       );
+      return null;
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled ||
           error.code == GoogleSignInExceptionCode.interrupted) {
@@ -289,16 +307,64 @@ class FirebaseAccountDeletionAuthentication
     }
   }
 
+  Future<AccountDeletionProviderProof> _reauthenticateWithApple(
+    User user,
+  ) async {
+    final appleAuthentication = _authentication.appleAuthentication;
+    if (appleAuthentication == null) {
+      throw const AccountDeletionException(
+        AccountDeletionError.unsupportedProvider,
+        'Apple verification is unavailable for this account.',
+      );
+    }
+    try {
+      final authorizationCode = await appleAuthentication
+          .reauthenticateWithApple(user);
+      return AccountDeletionProviderProof.apple(authorizationCode);
+    } on AppleAuthorizationCancelled {
+      throw const AccountDeletionException(
+        AccountDeletionError.cancelled,
+        'Apple verification was cancelled. Nothing was deleted.',
+      );
+    } on FirebaseAuthException catch (error) {
+      throw _mapDeletionAuthException(error);
+    } on AccountDeletionException {
+      rethrow;
+    } catch (_) {
+      throw const AccountDeletionException(
+        AccountDeletionError.deletionFailed,
+        'Apple verification could not be completed. Please try again.',
+      );
+    }
+  }
+
   @override
   Future<void> revokeProviderToken(
     User user,
     AccountReauthenticationMethod method,
+    AccountDeletionProviderProof? proof,
   ) async {
     if (method == AccountReauthenticationMethod.apple) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unsupportedProvider,
-        'Apple account deletion is not available yet.',
-      );
+      final appleAuthentication = _authentication.appleAuthentication;
+      final authorizationCode = proof?.appleAuthorizationCode;
+      if (appleAuthentication == null ||
+          authorizationCode == null ||
+          authorizationCode.isEmpty) {
+        throw const AccountDeletionException(
+          AccountDeletionError.deletionFailed,
+          'Apple authorization could not be revoked. Please try again.',
+        );
+      }
+      try {
+        await appleAuthentication.revokeAppleToken(authorizationCode);
+      } on FirebaseAuthException catch (error) {
+        throw _mapDeletionAuthException(error);
+      } catch (_) {
+        throw const AccountDeletionException(
+          AccountDeletionError.deletionFailed,
+          'Apple authorization could not be revoked. Please try again.',
+        );
+      }
     }
   }
 

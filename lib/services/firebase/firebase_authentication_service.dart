@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import 'apple_authentication.dart';
+
 enum AuthenticationError {
   invalidEmail,
   weakPassword,
@@ -14,6 +16,7 @@ enum AuthenticationError {
   providerDisabled,
   appConfiguration,
   googleCancelled,
+  appleCancelled,
   providerConflict,
   unknownFailure,
 }
@@ -46,15 +49,33 @@ abstract interface class AuthenticationService {
   Future<void> signOut();
 }
 
-class FirebaseAuthenticationService implements AuthenticationService {
+abstract interface class AppleAuthenticationService {
+  Future<UserCredential> signInWithApple();
+  Future<String> reauthenticateWithApple(User user);
+  Future<void> revokeAppleToken(String authorizationCode);
+}
+
+extension AppleAuthenticationServiceAccess on AuthenticationService {
+  AppleAuthenticationService? get appleAuthentication =>
+      this is AppleAuthenticationService
+      ? this as AppleAuthenticationService
+      : null;
+}
+
+class FirebaseAuthenticationService
+    implements AuthenticationService, AppleAuthenticationService {
   FirebaseAuthenticationService({
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
+    AppleAuthenticationCoordinator? appleAuthentication,
   }) : _auth = auth ?? FirebaseAuth.instance,
-       _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+       _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+       _appleAuthentication =
+           appleAuthentication ?? AppleAuthenticationCoordinator();
 
   final FirebaseAuth _auth;
   final GoogleSignIn _googleSignIn;
+  final AppleAuthenticationCoordinator _appleAuthentication;
   Future<void>? _googleInitialization;
 
   @override
@@ -126,6 +147,37 @@ class FirebaseAuthenticationService implements AuthenticationService {
       );
     }
   }
+
+  @override
+  Future<UserCredential> signInWithApple() async {
+    try {
+      final request = await _appleAuthentication.createRequest();
+      return await _auth.signInWithCredential(request.credential);
+    } on AppleAuthorizationCancelled {
+      throw const AuthenticationException(
+        AuthenticationError.appleCancelled,
+        'Sign in with Apple was cancelled.',
+      );
+    } on FirebaseAuthException catch (error) {
+      throw mapFirebaseAuthException(error);
+    } catch (_) {
+      throw const AuthenticationException(
+        AuthenticationError.unknownFailure,
+        'Sign in with Apple could not be completed.',
+      );
+    }
+  }
+
+  @override
+  Future<String> reauthenticateWithApple(User user) async {
+    final request = await _appleAuthentication.createRequest();
+    await user.reauthenticateWithCredential(request.credential);
+    return request.authorizationCode;
+  }
+
+  @override
+  Future<void> revokeAppleToken(String authorizationCode) =>
+      _auth.revokeTokenWithAuthorizationCode(authorizationCode);
 
   @override
   Future<void> sendPasswordReset(String email) async {
