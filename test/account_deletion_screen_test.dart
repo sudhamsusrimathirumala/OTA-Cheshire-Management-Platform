@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
@@ -42,43 +43,36 @@ void main() {
           ),
         ),
       );
+
       expect(
         find.text('Privileged account deletion is restricted'),
         findsOneWidget,
       );
-      expect(
-        find.textContaining(
-          'must be removed by another authorized administrator',
-        ),
-        findsOneWidget,
-      );
+      expect(find.text('Permanently delete account'), findsNothing);
     });
   }
 
-  testWidgets('warning covers linked profiles progress and permanence', (
+  testWidgets('single screen contains warning, profiles, and password', (
     tester,
   ) async {
     final fixture = _Fixture();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AccountDeletionScreen(
-          service: fixture.service,
-          accountOverride: fixture.account,
-        ),
-      ),
-    );
+    await _pumpDeletionScreen(tester, fixture);
+
     expect(find.text('Permanent account deletion'), findsOneWidget);
     expect(find.textContaining('every student profile linked'), findsOneWidget);
     expect(find.textContaining('Belt, sticker, testing'), findsOneWidget);
     expect(find.text('This cannot be undone'), findsOneWidget);
-    expect(find.textContaining('recreated manually'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.text('Permanently delete account'), findsOneWidget);
+    expect(find.textContaining('Step '), findsNothing);
+    expect(find.text('Final confirmation'), findsNothing);
+    expect(find.text('Verify and continue'), findsNothing);
   });
 
-  testWidgets('typing DELETE is required and success returns signed out', (
+  testWidgets('correct password immediately deletes and returns signed out', (
     tester,
   ) async {
     final fixture = _Fixture();
-    var suspended = 0;
     var completed = 0;
     final navigatorKey = GlobalKey<NavigatorState>();
     await tester.pumpWidget(
@@ -92,124 +86,13 @@ void main() {
         builder: (_) => AccountDeletionScreen(
           service: fixture.service,
           accountOverride: fixture.account,
-          suspendSession: () async => suspended++,
           completeSession: () async => completed++,
-          restoreSession: () async {},
         ),
       ),
     );
     await tester.pumpAndSettle();
-    await _reachConfirmation(tester);
 
-    final destructiveButton = find.widgetWithText(
-      FilledButton,
-      'Permanently delete account',
-    );
-    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNull);
-    await tester.ensureVisible(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'delete');
-    await tester.pump();
-    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNull);
-    await tester.enterText(find.byType(TextField), 'DELETE');
-    await tester.pump();
-    expect(tester.widget<FilledButton>(destructiveButton).onPressed, isNotNull);
-    await tester.ensureVisible(destructiveButton);
-    await tester.tap(destructiveButton);
-    await tester.pumpAndSettle();
-
-    expect(suspended, 1);
-    expect(completed, 1);
-    expect(find.text('Signed-out entry'), findsOneWidget);
-    expect(find.byType(AccountDeletionScreen), findsNothing);
-    expect(fixture.auth.deleteCalls, 1);
-    expect(fixture.store.users, isEmpty);
-  });
-
-  testWidgets('cancellation leaves all data unchanged', (tester) async {
-    final fixture = _Fixture();
-    final navigatorKey = GlobalKey<NavigatorState>();
-    await tester.pumpWidget(
-      MaterialApp(
-        navigatorKey: navigatorKey,
-        home: const Scaffold(body: Text('Profile settings')),
-      ),
-    );
-    navigatorKey.currentState!.push(
-      MaterialPageRoute<void>(
-        builder: (_) => AccountDeletionScreen(
-          service: fixture.service,
-          accountOverride: fixture.account,
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Cancel'));
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(find.text('Profile settings'), findsOneWidget);
-    expect(fixture.store.users, isNotEmpty);
-    expect(fixture.auth.deleteCalls, 0);
-  });
-
-  testWidgets('failure displays a safe message and preserves account', (
-    tester,
-  ) async {
-    final fixture = _Fixture()..store.failPrivateDeletion = true;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AccountDeletionScreen(
-          service: fixture.service,
-          accountOverride: fixture.account,
-          suspendSession: () async {},
-          completeSession: () async {},
-          restoreSession: () async {},
-        ),
-      ),
-    );
-    await _reachConfirmation(tester);
-    await tester.ensureVisible(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'DELETE');
-    await tester.pump();
-    await tester.ensureVisible(
-      find.widgetWithText(FilledButton, 'Permanently delete account'),
-    );
-    await tester.tap(
-      find.widgetWithText(FilledButton, 'Permanently delete account'),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Account deletion failed safely. Please try again.'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('private-token-value'), findsNothing);
-    expect(fixture.store.users, isNotEmpty);
-    expect(fixture.auth.deleteCalls, 0);
-  });
-
-  testWidgets('debug diagnostics capture identity around session suspension', (
-    tester,
-  ) async {
-    final fixture = _Fixture();
-    String? firebaseUid = 'member';
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AccountDeletionScreen(
-          service: fixture.service,
-          accountOverride: fixture.account,
-          currentFirebaseUid: () => firebaseUid,
-          suspendSession: () async {
-            firebaseUid = null;
-            fixture.auth.identity = null;
-          },
-          completeSession: () async {},
-          restoreSession: () async {},
-        ),
-      ),
-    );
-    await _reachConfirmation(tester);
-    await tester.ensureVisible(find.byType(TextField));
-    await tester.enterText(find.byType(TextField), 'DELETE');
-    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'correct-password');
     final deleteButton = find.widgetWithText(
       FilledButton,
       'Permanently delete account',
@@ -218,29 +101,93 @@ void main() {
     await tester.tap(deleteButton);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('Sign in again before deleting your account.'),
-      findsOneWidget,
+    expect(fixture.authentication.reauthenticateCalls, 1);
+    expect(fixture.authentication.deleteCalls, 1);
+    expect(fixture.authentication.signOutCalls, 0);
+    expect(completed, 1);
+    expect(find.text('Signed-out entry'), findsOneWidget);
+    expect(find.byType(AccountDeletionScreen), findsNothing);
+  });
+
+  testWidgets('incorrect password changes nothing', (tester) async {
+    final fixture = _Fixture();
+    await _pumpDeletionScreen(tester, fixture);
+
+    await tester.enterText(find.byType(TextField), 'incorrect-password');
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('The current password is incorrect.'), findsOneWidget);
+    expect(fixture.store.users, isNotEmpty);
+    expect(fixture.authentication.deleteCalls, 0);
+  });
+
+  testWidgets('Google verification immediately deletes', (tester) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.google},
     );
-    expect(find.text('Authorization UID: member'), findsOneWidget);
-    expect(find.text('Firebase UID before suspension: member'), findsOneWidget);
-    expect(find.text('Firebase UID after suspension: null'), findsOneWidget);
-    expect(
-      find.text('FirebaseAuth.currentUser became null: Yes'),
-      findsOneWidget,
+    var completed = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AccountDeletionScreen(
+          service: fixture.service,
+          accountOverride: fixture.account,
+          completeSession: () async => completed++,
+        ),
+      ),
     );
+
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
     expect(
-      find.text('Deletion service UID after suspension: null'),
+      fixture.authentication.lastMethod,
+      AccountReauthenticationMethod.google,
+    );
+    expect(fixture.authentication.deleteCalls, 1);
+    expect(completed, 1);
+  });
+
+  testWidgets('Google cancellation changes nothing', (tester) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.google},
+    )..authentication.googleCancelled = true;
+    await _pumpDeletionScreen(tester, fixture);
+
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Google verification was cancelled. Nothing was deleted.'),
       findsOneWidget,
     );
     expect(fixture.store.users, isNotEmpty);
-    expect(fixture.auth.deleteCalls, 0);
+    expect(fixture.authentication.deleteCalls, 0);
+  });
+
+  testWidgets('raw deletion failures are not displayed', (tester) async {
+    final fixture = _Fixture()..store.failPrivateDeletion = true;
+    await _pumpDeletionScreen(tester, fixture);
+
+    await tester.enterText(find.byType(TextField), 'correct-password');
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Account deletion failed safely. Please try again.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('private-token-value'), findsNothing);
   });
 
   for (final size in const [Size(320, 568), Size(360, 640), Size(412, 915)]) {
     for (final scale in const [1.0, 1.5]) {
       testWidgets(
-        'deletion explanation fits ${size.width}x${size.height} at $scale',
+        'deletion screen fits ${size.width}x${size.height} at $scale',
         (tester) async {
           tester.view.physicalSize = size;
           tester.view.devicePixelRatio = 1;
@@ -272,70 +219,95 @@ void main() {
   }
 }
 
-Future<void> _reachConfirmation(WidgetTester tester) async {
-  await tester.ensureVisible(find.text('Continue to verification'));
-  await tester.tap(find.text('Continue to verification'));
-  await tester.pumpAndSettle();
-  await tester.ensureVisible(find.byType(TextField));
-  await tester.enterText(find.byType(TextField), 'correct-password');
-  await tester.ensureVisible(find.text('Verify and continue'));
-  await tester.tap(find.text('Verify and continue'));
-  await tester.pumpAndSettle();
-  expect(find.text('Final confirmation'), findsOneWidget);
-}
+Future<void> _pumpDeletionScreen(WidgetTester tester, _Fixture fixture) =>
+    tester.pumpWidget(
+      MaterialApp(
+        home: AccountDeletionScreen(
+          service: fixture.service,
+          accountOverride: fixture.account,
+          completeSession: () async {},
+        ),
+      ),
+    );
 
 class _Fixture {
-  _Fixture({UserAccountRole role = UserAccountRole.parent})
-    : account = UserAccount(
-        id: 'member',
-        firstName: 'OTA',
-        lastName: 'Member',
-        email: 'member@example.com',
-        role: role,
-        linkedStudentProfileIds: const ['child', 'self-profile'],
-        selectedStudentProfileId: 'child',
-        locationId: 'cheshire',
-      ),
-      auth = _WidgetAuth(),
-      store = _WidgetStore(role: role) {
-    service = AccountDeletionService(authGateway: auth, store: store);
+  _Fixture({
+    UserAccountRole role = UserAccountRole.parent,
+    Set<AccountReauthenticationMethod> methods = const {
+      AccountReauthenticationMethod.password,
+    },
+  }) : account = UserAccount(
+         id: 'member',
+         firstName: 'OTA',
+         lastName: 'Member',
+         email: 'member@example.com',
+         role: role,
+         linkedStudentProfileIds: const ['child', 'self-profile'],
+         selectedStudentProfileId: 'child',
+         locationId: 'cheshire',
+       ),
+       authentication = _WidgetAuthentication(methods),
+       store = _WidgetStore(role: role) {
+    service = AccountDeletionService(
+      authentication: authentication,
+      store: store,
+    );
   }
 
   final UserAccount account;
-  final _WidgetAuth auth;
+  final _WidgetAuthentication authentication;
   final _WidgetStore store;
   late final AccountDeletionService service;
 }
 
-class _WidgetAuth implements AccountDeletionAuthGateway {
-  AccountDeletionIdentity? identity = const AccountDeletionIdentity(
-    uid: 'member',
-    email: 'member@example.com',
-    methods: {AccountReauthenticationMethod.password},
-  );
+class _WidgetAuthentication implements AccountDeletionAuthentication {
+  _WidgetAuthentication(this.methods);
+
+  final Set<AccountReauthenticationMethod> methods;
+  final User user = _WidgetUser();
+  int reauthenticateCalls = 0;
   int deleteCalls = 0;
+  int signOutCalls = 0;
+  bool googleCancelled = false;
+  AccountReauthenticationMethod? lastMethod;
 
   @override
-  AccountDeletionIdentity? get currentIdentity => identity;
+  User? get currentUser => user;
 
   @override
-  Future<void> reauthenticateWithPassword(String password) async {
-    if (password != 'correct-password') {
+  Set<AccountReauthenticationMethod> methodsFor(User user) => methods;
+
+  @override
+  Future<void> reauthenticate(
+    User user,
+    AccountReauthenticationMethod method, {
+    String? password,
+  }) async {
+    reauthenticateCalls++;
+    lastMethod = method;
+    if (method == AccountReauthenticationMethod.password &&
+        password != 'correct-password') {
       throw const AccountDeletionException(
         AccountDeletionError.incorrectPassword,
         'The current password is incorrect.',
       );
     }
+    if (method == AccountReauthenticationMethod.google && googleCancelled) {
+      throw const AccountDeletionException(
+        AccountDeletionError.cancelled,
+        'Google verification was cancelled. Nothing was deleted.',
+      );
+    }
   }
 
   @override
-  Future<void> reauthenticateWithGoogle() async {}
+  Future<void> revokeProviderToken(
+    User user,
+    AccountReauthenticationMethod method,
+  ) async {}
 
   @override
-  Future<void> deleteCurrentUser() async {
-    deleteCalls++;
-    identity = null;
-  }
+  Future<void> delete(User user) async => deleteCalls++;
 }
 
 class _WidgetStore implements AccountDeletionStore {
@@ -366,4 +338,12 @@ class _WidgetStore implements AccountDeletionStore {
   ) async {
     users.remove(account.uid);
   }
+}
+
+class _WidgetUser implements User {
+  @override
+  String get uid => 'member';
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

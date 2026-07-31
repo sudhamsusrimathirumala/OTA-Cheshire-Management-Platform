@@ -8,7 +8,7 @@ import '../../models/user_account.dart';
 import '../firestore/firestore_collections.dart';
 import 'firebase_authentication_service.dart';
 
-enum AccountReauthenticationMethod { password, google }
+enum AccountReauthenticationMethod { password, google, apple }
 
 enum AccountDeletionError {
   unauthenticated,
@@ -39,18 +39,6 @@ class AccountDeletionException implements Exception {
   String toString() => message;
 }
 
-class AccountDeletionAuthorization {
-  const AccountDeletionAuthorization({
-    required this.uid,
-    required this.method,
-    required this.expiresAt,
-  });
-
-  final String uid;
-  final AccountReauthenticationMethod method;
-  final DateTime expiresAt;
-}
-
 class AccountDeletionRecord {
   const AccountDeletionRecord({
     required this.uid,
@@ -65,23 +53,19 @@ class AccountDeletionRecord {
   final List<String> linkedStudentProfileIds;
 }
 
-class AccountDeletionIdentity {
-  const AccountDeletionIdentity({
-    required this.uid,
-    required this.email,
-    required this.methods,
+abstract interface class AccountDeletionAuthentication {
+  User? get currentUser;
+  Set<AccountReauthenticationMethod> methodsFor(User user);
+  Future<void> reauthenticate(
+    User user,
+    AccountReauthenticationMethod method, {
+    String? password,
   });
-
-  final String uid;
-  final String? email;
-  final Set<AccountReauthenticationMethod> methods;
-}
-
-abstract interface class AccountDeletionAuthGateway {
-  AccountDeletionIdentity? get currentIdentity;
-  Future<void> reauthenticateWithPassword(String password);
-  Future<void> reauthenticateWithGoogle();
-  Future<void> deleteCurrentUser();
+  Future<void> revokeProviderToken(
+    User user,
+    AccountReauthenticationMethod method,
+  );
+  Future<void> delete(User user);
 }
 
 abstract interface class AccountDeletionStore {
@@ -91,85 +75,24 @@ abstract interface class AccountDeletionStore {
 }
 
 class AccountDeletionService {
-  AccountDeletionService({
-    required this.authGateway,
-    required this.store,
-    DateTime Function()? clock,
-  }) : _clock = clock ?? DateTime.now;
+  AccountDeletionService({required this.authentication, required this.store});
 
-  final AccountDeletionAuthGateway authGateway;
+  final AccountDeletionAuthentication authentication;
   final AccountDeletionStore store;
-  final DateTime Function() _clock;
   Future<void>? _activeDeletion;
 
-  Set<AccountReauthenticationMethod> get availableMethods =>
-      authGateway.currentIdentity?.methods ?? const {};
-
-  Future<AccountDeletionAuthorization> reauthenticate(
-    AccountReauthenticationMethod method, {
-    String? password,
-  }) async {
-    final identity = authGateway.currentIdentity;
-    if (identity == null) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unauthenticated,
-        'Sign in again before deleting your account.',
-      );
-    }
-    final account = await store.loadAccount(identity.uid);
-    _validateMemberAccount(account);
-    return _reauthenticateIdentity(identity, method, password: password);
+  Set<AccountReauthenticationMethod> get availableMethods {
+    final user = authentication.currentUser;
+    return user == null ? const {} : authentication.methodsFor(user);
   }
 
-  Future<AccountDeletionAuthorization> reauthenticateRemainingSignIn(
+  Future<void> deleteAccount(
     AccountReauthenticationMethod method, {
     String? password,
-  }) async {
-    final identity = authGateway.currentIdentity;
-    if (identity == null) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unauthenticated,
-        'Sign in again before removing the remaining sign-in account.',
-        firestoreDeletionCompleted: true,
-      );
-    }
-    return _reauthenticateIdentity(identity, method, password: password);
-  }
-
-  Future<AccountDeletionAuthorization> _reauthenticateIdentity(
-    AccountDeletionIdentity identity,
-    AccountReauthenticationMethod method, {
-    String? password,
-  }) async {
-    if (!identity.methods.contains(method)) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unsupportedProvider,
-        'Choose a sign-in method currently connected to this account.',
-      );
-    }
-    if (method == AccountReauthenticationMethod.password) {
-      final value = password ?? '';
-      if (value.isEmpty) {
-        throw const AccountDeletionException(
-          AccountDeletionError.incorrectPassword,
-          'Enter your current password.',
-        );
-      }
-      await authGateway.reauthenticateWithPassword(value);
-    } else {
-      await authGateway.reauthenticateWithGoogle();
-    }
-    return AccountDeletionAuthorization(
-      uid: identity.uid,
-      method: method,
-      expiresAt: _clock().add(const Duration(minutes: 5)),
-    );
-  }
-
-  Future<void> deleteAccount(AccountDeletionAuthorization authorization) {
+  }) {
     final active = _activeDeletion;
     if (active != null) return active;
-    final operation = _deleteAccount(authorization);
+    final operation = _deleteAccount(method, password: password);
     _activeDeletion = operation;
     unawaited(
       operation.then<void>(
@@ -185,28 +108,41 @@ class AccountDeletionService {
   }
 
   Future<void> _deleteAccount(
-    AccountDeletionAuthorization authorization,
-  ) async {
-    final identity = authGateway.currentIdentity;
-    if (identity == null || identity.uid != authorization.uid) {
+    AccountReauthenticationMethod method, {
+    String? password,
+  }) async {
+    final user = authentication.currentUser;
+    if (user == null) {
       throw const AccountDeletionException(
         AccountDeletionError.unauthenticated,
         'Sign in again before deleting your account.',
       );
     }
-    if (_clock().isAfter(authorization.expiresAt)) {
+    final uid = user.uid;
+    final methods = authentication.methodsFor(user);
+    if (!methods.contains(method) ||
+        method == AccountReauthenticationMethod.apple) {
       throw const AccountDeletionException(
-        AccountDeletionError.recentLoginRequired,
-        'Please verify your sign-in again before deleting your account.',
+        AccountDeletionError.unsupportedProvider,
+        'Choose a sign-in method currently connected to this account.',
+      );
+    }
+    if (method == AccountReauthenticationMethod.password &&
+        (password == null || password.isEmpty)) {
+      throw const AccountDeletionException(
+        AccountDeletionError.incorrectPassword,
+        'Enter your current password.',
       );
     }
 
-    final account = await store.loadAccount(identity.uid);
+    final account = await store.loadAccount(uid);
     _validateMemberAccount(account);
-    await store.deletePrivateDocuments(identity.uid);
+    await authentication.reauthenticate(user, method, password: password);
+    await authentication.revokeProviderToken(user, method);
+    await store.deletePrivateDocuments(uid);
     await store.deleteLinkedProfilesAndUser(account!);
     try {
-      await authGateway.deleteCurrentUser();
+      await authentication.delete(user);
     } on AccountDeletionException catch (error) {
       throw AccountDeletionException(
         error.error,
@@ -219,42 +155,6 @@ class AccountDeletionService {
         AccountDeletionError.authenticationDeletionFailed,
         'Your OTA data was deleted, but the sign-in account could not be '
         'removed. Try removing the sign-in account again.',
-        firestoreDeletionCompleted: true,
-      );
-    }
-  }
-
-  Future<void> retryAuthenticationDeletion(
-    AccountDeletionAuthorization authorization,
-  ) async {
-    final identity = authGateway.currentIdentity;
-    if (identity == null || identity.uid != authorization.uid) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unauthenticated,
-        'Sign in again before removing the remaining sign-in account.',
-        firestoreDeletionCompleted: true,
-      );
-    }
-    if (_clock().isAfter(authorization.expiresAt)) {
-      throw const AccountDeletionException(
-        AccountDeletionError.recentLoginRequired,
-        'Please verify your sign-in again before removing the remaining '
-        'sign-in account.',
-        firestoreDeletionCompleted: true,
-      );
-    }
-    try {
-      await authGateway.deleteCurrentUser();
-    } on AccountDeletionException catch (error) {
-      throw AccountDeletionException(
-        error.error,
-        'The remaining sign-in account could not be removed. Try again.',
-        firestoreDeletionCompleted: true,
-      );
-    } catch (_) {
-      throw const AccountDeletionException(
-        AccountDeletionError.authenticationDeletionFailed,
-        'The remaining sign-in account could not be removed. Try again.',
         firestoreDeletionCompleted: true,
       );
     }
@@ -289,8 +189,9 @@ class AccountDeletionService {
   }
 }
 
-class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
-  FirebaseAccountDeletionAuthGateway(
+class FirebaseAccountDeletionAuthentication
+    implements AccountDeletionAuthentication {
+  FirebaseAccountDeletionAuthentication(
     this._authentication, {
     GoogleSignIn? googleSignIn,
   }) : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
@@ -300,29 +201,41 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
   Future<void>? _googleInitialization;
 
   @override
-  AccountDeletionIdentity? get currentIdentity {
-    final user = _authentication.currentUser;
-    if (user == null) return null;
+  User? get currentUser => _authentication.currentUser;
+
+  @override
+  Set<AccountReauthenticationMethod> methodsFor(User user) {
     final providers = user.providerData
         .map((value) => value.providerId)
         .toSet();
-    return AccountDeletionIdentity(
-      uid: user.uid,
-      email: user.email,
-      methods: {
-        if (providers.contains(EmailAuthProvider.PROVIDER_ID))
-          AccountReauthenticationMethod.password,
-        if (providers.contains(GoogleAuthProvider.PROVIDER_ID))
-          AccountReauthenticationMethod.google,
-      },
-    );
+    return {
+      if (providers.contains(EmailAuthProvider.PROVIDER_ID))
+        AccountReauthenticationMethod.password,
+      if (providers.contains(GoogleAuthProvider.PROVIDER_ID))
+        AccountReauthenticationMethod.google,
+    };
   }
 
   @override
-  Future<void> reauthenticateWithPassword(String password) async {
-    final user = _authentication.currentUser;
-    final email = user?.email;
-    if (user == null || email == null || email.isEmpty) {
+  Future<void> reauthenticate(
+    User user,
+    AccountReauthenticationMethod method, {
+    String? password,
+  }) => switch (method) {
+    AccountReauthenticationMethod.password => _reauthenticateWithPassword(
+      user,
+      password ?? '',
+    ),
+    AccountReauthenticationMethod.google => _reauthenticateWithGoogle(user),
+    AccountReauthenticationMethod.apple => throw const AccountDeletionException(
+      AccountDeletionError.unsupportedProvider,
+      'Apple account verification is not available yet.',
+    ),
+  };
+
+  Future<void> _reauthenticateWithPassword(User user, String password) async {
+    final email = user.email;
+    if (email == null || email.isEmpty) {
       throw const AccountDeletionException(
         AccountDeletionError.unsupportedProvider,
         'Password verification is unavailable for this account.',
@@ -337,15 +250,7 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
     }
   }
 
-  @override
-  Future<void> reauthenticateWithGoogle() async {
-    final user = _authentication.currentUser;
-    if (user == null) {
-      throw const AccountDeletionException(
-        AccountDeletionError.unauthenticated,
-        'Sign in again before deleting your account.',
-      );
-    }
+  Future<void> _reauthenticateWithGoogle(User user) async {
     try {
       _googleInitialization ??= _googleSignIn.initialize();
       await _googleInitialization;
@@ -385,14 +290,20 @@ class FirebaseAccountDeletionAuthGateway implements AccountDeletionAuthGateway {
   }
 
   @override
-  Future<void> deleteCurrentUser() async {
-    final user = _authentication.currentUser;
-    if (user == null) {
+  Future<void> revokeProviderToken(
+    User user,
+    AccountReauthenticationMethod method,
+  ) async {
+    if (method == AccountReauthenticationMethod.apple) {
       throw const AccountDeletionException(
-        AccountDeletionError.unauthenticated,
-        'The sign-in account is already unavailable.',
+        AccountDeletionError.unsupportedProvider,
+        'Apple account deletion is not available yet.',
       );
     }
+  }
+
+  @override
+  Future<void> delete(User user) async {
     try {
       await user.delete();
     } on FirebaseAuthException catch (error) {
@@ -538,6 +449,6 @@ AccountDeletionException _mapDeletionAuthException(
 AccountDeletionService createFirebaseAccountDeletionService({
   required AuthenticationService authentication,
 }) => AccountDeletionService(
-  authGateway: FirebaseAccountDeletionAuthGateway(authentication),
+  authentication: FirebaseAccountDeletionAuthentication(authentication),
   store: FirestoreAccountDeletionStore(),
 );

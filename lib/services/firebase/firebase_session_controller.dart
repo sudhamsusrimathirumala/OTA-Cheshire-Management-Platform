@@ -107,17 +107,6 @@ class FirebaseSessionController extends ChangeNotifier {
     await _replaceAuthUser(null);
   }
 
-  Future<void> suspendForAccountDeletion() async {
-    justCreatedProfiles = false;
-    ++_sessionGeneration;
-    ++_profilesGeneration;
-    ++_locationGeneration;
-    stage = SessionStage.loading;
-    errorMessage = null;
-    notifyListeners();
-    await _cancelFirestoreSubscriptions();
-  }
-
   Future<void> completeAccountDeletion() async {
     try {
       await signOutCleanup?.call();
