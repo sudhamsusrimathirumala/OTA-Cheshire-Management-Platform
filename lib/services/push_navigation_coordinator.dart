@@ -55,11 +55,14 @@ class PushNavigationCoordinator {
       description: 'Announcements, events, and resources from the academy.',
       importance: Importance.high,
     );
+    if (kDebugMode) debugPrint('OTA startup: push channel start');
     await _localNotifications
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
         >()
         ?.createNotificationChannel(androidChannel);
+    if (kDebugMode) debugPrint('OTA startup: push channel complete');
+    if (kDebugMode) debugPrint('OTA startup: local notifications start');
     await _localNotifications.initialize(
       settings: const InitializationSettings(
         android: AndroidInitializationSettings('ic_stat_ota'),
@@ -77,18 +80,27 @@ class PushNavigationCoordinator {
         }
       },
     );
+    if (kDebugMode) debugPrint('OTA startup: local notifications complete');
+    if (kDebugMode) {
+      debugPrint('OTA startup: foreground presentation start');
+    }
     await service.messaging.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
       sound: true,
     );
+    if (kDebugMode) {
+      debugPrint('OTA startup: foreground presentation complete');
+    }
     _foregroundSubscription = FirebaseMessaging.onMessage.listen(
       showForegroundMessage,
     );
     _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _queueRemoteMessage,
     );
+    if (kDebugMode) debugPrint('OTA startup: initial push message start');
     final initial = await service.messaging.getInitialMessage();
+    if (kDebugMode) debugPrint('OTA startup: initial push message complete');
     if (initial != null) _queueRemoteMessage(initial);
   }
 
