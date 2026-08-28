@@ -1,6 +1,6 @@
 {
   "projects": {
     "dev": "ota-management-platform",
-    "prod": "academy-production-project-id-required"
+    "prod": "ota-management-platform-e4847"
   }
 }

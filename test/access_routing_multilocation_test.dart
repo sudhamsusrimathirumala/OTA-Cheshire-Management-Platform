@@ -305,14 +305,27 @@ void main() {
       );
     });
 
-    test('production configuration and entrypoints fail closed', () {
+    test('production configuration identifies only the production project', () {
       expect(
-        () => ProductionFirebaseOptions.currentPlatform,
-        throwsA(isA<StateError>()),
+        ProductionFirebaseOptions.android.projectId,
+        'ota-management-platform-e4847',
       );
+      expect(
+        ProductionFirebaseOptions.android.appId,
+        '1:675595858362:android:815d377e29d8938e806d83',
+      );
+      expect(
+        ProductionFirebaseOptions.ios.projectId,
+        'ota-management-platform-e4847',
+      );
+      expect(
+        ProductionFirebaseOptions.ios.appId,
+        '1:675595858362:ios:acb8af23e611d52f806d83',
+      );
+      expect(ProductionFirebaseOptions.ios.iosBundleId, 'com.otacheshire.app');
       final source = File('lib/main_prod.dart').readAsStringSync();
       expect(source, isNot(contains('firebase_options_dev')));
-      expect(source, isNot(contains('ota-management-platform')));
+      expect(source, isNot(contains("'ota-management-platform'")));
       expect(() => default_entry.main(), throwsUnsupportedError);
     });
   });

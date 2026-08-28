@@ -5,14 +5,13 @@
 The repository defines two explicit environments:
 
 - `dev` belongs to the existing `ota-management-platform` Firebase project.
-- `prod` will belong to a separate academy-owned Firebase project that does not
-  exist in this repository yet.
+- `prod` belongs to the academy Firebase project
+  `ota-management-platform-e4847`.
 
 Environment choice comes from the entrypoint and native flavor, not from
 `kDebugMode`. `main_dev.dart` imports only development options. `main_prod.dart`
-imports only the production placeholder, which throws a clear configuration
-error and contains no development project identifiers. Debug Student/Admin
-shortcuts additionally require the dev environment and a debug build.
+imports only the production options. Debug Student/Admin shortcuts additionally
+require the dev environment and a debug build.
 
 `lib/main.dart` is deliberately fail-closed and never chooses an environment.
 Android pins every Flutter compilation task to the entrypoint for its selected
@@ -39,9 +38,8 @@ Firebase project. Changing it to a `.dev` package requires registering a new
 Android app in that project and downloading a matching configuration; editing
 the package inside the existing file would create invalid credentials.
 
-The prod flavor is named `Olympic Taekwondo Academy` and currently uses
-`com.academy.olympictaekwondo.placeholder`. The academy must confirm the final
-package name, register it in the production Firebase project, and provide:
+The prod flavor is named `Olympic Taekwondo Academy` and uses the permanent
+Android application ID `com.otacheshire.app`. Its matching configuration is:
 
 `android/app/src/prod/google-services.json`
 
@@ -65,9 +63,11 @@ script accepts only:
 There is no fallback between them, and a missing matching plist fails the
 Xcode build clearly. The current dev bundle ID remains
 `com.example.otaCheshireManagementPlatform` to match the existing generated
-development options. The prod bundle ID is the placeholder
-`com.academy.olympictaekwondo.placeholder`. Both must be reviewed in the
-Firebase console and Apple Developer account before release.
+development options. The prod bundle ID is `com.otacheshire.app`, matching the
+production Firebase iOS app. Production configurations use
+`Runner/Info-Prod.plist`, which contains the `REVERSED_CLIENT_ID` URL scheme
+from the production Firebase plist; dev configurations continue to use
+`Runner/Info.plist` unchanged.
 
 On a Mac with Xcode, CocoaPods/Flutter tooling, and Apple signing access:
 
@@ -77,13 +77,11 @@ flutter build ios --flavor prod -t lib/main_prod.dart
 flutter build ipa --flavor prod -t lib/main_prod.dart
 ```
 
-Before those commands, the academy must provide the final production bundle
-ID, Apple Team ID, signing certificate/profile, and production plist. Register
-the iOS app in Firebase, enable Email/Password and Google providers, add the
-`REVERSED_CLIENT_ID` URL scheme from the matching plist in Xcode, and verify
+Before those commands, the academy must provide the Apple Team ID and signing
+certificate/profile. Enable Email/Password and Google providers and verify
 password-reset authorized domains/action settings. Email/password and reset
-code is platform-neutral Firebase Auth code; Google Sign-In requires this
-native URL-scheme setup.
+code is platform-neutral Firebase Auth code; Google Sign-In uses the configured
+production URL scheme.
 
 Never commit Apple signing certificates, `.p12` files, private keys,
 provisioning profiles, App Store Connect API private keys, or keystore
@@ -92,39 +90,35 @@ passwords.
 ## Firebase options
 
 `lib/firebase_options_dev.dart` contains normal client configuration generated
-for `ota-management-platform`. `lib/firebase_options_prod.dart` is a deliberate
-fail-closed placeholder. After the academy project exists, generate production
-options for the final package/bundle identifiers and review the diff to ensure
-that no development project ID, app ID, sender ID, storage bucket, or API key
-appears in the production file.
+for `ota-management-platform`. `lib/firebase_options_prod.dart` contains the
+Android and iOS client configurations for `ota-management-platform-e4847` and
+remains fail-closed on platforms that have not been configured. Production
+values must not contain development project IDs, app IDs, sender IDs, storage
+buckets, or API keys.
 
 ## CLI and deployment safety
 
-`.firebaserc` defines `dev` and a deliberately invalid prod placeholder. Never
-run an unqualified deployment. Firestore Rules commands must always name the
-alias:
+`.firebaserc` defines separate `dev` and `prod` aliases. Never run an
+unqualified deployment. Firestore Rules commands must always name the alias:
 
 ```powershell
 firebase deploy --only firestore:rules --project dev
 firebase deploy --only firestore:rules --project prod
 ```
 
-Production deployment is forbidden until the academy project ID replaces the
-placeholder and a human explicitly confirms the production target. Verify the
-resolved project in the CLI output before approving any deployment. The
-development project currently remains on Spark. Blaze billing and Cloud
-Functions deployment remain pending explicit academy approval and must never be
-inferred from the presence of Functions code in this repository.
+Production deployment remains forbidden until a human explicitly authorizes
+the production target. Verify the resolved project in the CLI output before
+approving any deployment. The development project currently remains on Spark.
+Blaze billing and Cloud Functions deployment remain pending explicit academy
+approval and must never be inferred from the presence of Functions code in this
+repository.
 
 ## Academy-provided items still required
 
-- Production Firebase project ID and ownership/access details.
-- Final Android application ID and matching production JSON.
-- Final iOS bundle ID and matching production plist.
 - A refreshed development iOS plist for the registered dev bundle.
 - Firebase Auth provider setup, OAuth support email, and authorized domains.
 - Android debug/release SHA fingerprints and OAuth clients.
-- iOS reversed-client-ID URL scheme and Apple signing/team configuration.
+- Apple signing/team configuration.
 - Private Android and Apple release-signing material, stored outside Git.
 - Explicit Blaze billing approval and authorization for the reviewed Functions
   deployment target.
