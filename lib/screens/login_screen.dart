@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../routes.dart';
 import '../services/firebase/firebase_authentication_service.dart';
@@ -247,11 +248,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     if (widget.appleSupported ?? appleSignInSupported) ...[
                       const SizedBox(height: 14),
-                      OtaActionButton(
-                        label: 'CONTINUE WITH APPLE',
-                        variant: OtaActionButtonVariant.secondary,
-                        icon: const Icon(Icons.apple, size: 24),
+                      SignInWithAppleButton(
                         onPressed: _loading ? null : _appleSignIn,
+                        height: 58,
+                        style: SignInWithAppleButtonStyle.whiteOutlined,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(18),
+                        ),
                       ),
                     ],
                     const SizedBox(height: 24),

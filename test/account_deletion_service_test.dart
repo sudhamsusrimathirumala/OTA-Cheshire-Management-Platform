@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/account_deletion_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
 
 void main() {
   late List<String> events;
@@ -135,9 +136,9 @@ void main() {
       orderedEquals([
         'load-account',
         'reauth-apple',
+        'revoke-apple',
         'delete-private',
         'delete-profiles-and-user',
-        'revoke-apple',
         'delete-auth',
       ]),
     );
@@ -162,7 +163,7 @@ void main() {
     expect(authentication.deletedUser, isNull);
   });
 
-  test('Apple revocation failure reports partial deletion safely', () async {
+  test('Apple revocation failure performs no destructive deletion', () async {
     authentication.failAppleRevocation = true;
 
     await expectLater(
@@ -172,7 +173,7 @@ void main() {
             .having(
               (value) => value.firestoreDeletionCompleted,
               'Firestore completed',
-              isTrue,
+              isFalse,
             )
             .having(
               (value) => value.message,
@@ -182,8 +183,39 @@ void main() {
       ),
     );
 
-    expect(store.users, isEmpty);
+    expect(
+      events,
+      orderedEquals(['load-account', 'reauth-apple', 'revoke-apple']),
+    );
+    expect(store.users, isNotEmpty);
+    expect(store.profiles, containsAll(['child', 'self-profile']));
+    expect(store.privateDocuments, isNotEmpty);
+    expect(store.privateDeleteCalls, 0);
     expect(authentication.deletedUser, isNull);
+  });
+
+  test('Apple deletion verification is available when supported', () {
+    final authentication = FirebaseAccountDeletionAuthentication(
+      _AppleAuthenticationService(),
+      appleSupported: true,
+    );
+
+    expect(
+      authentication.methodsFor(_ProviderUser(AppleAuthProvider.PROVIDER_ID)),
+      contains(AccountReauthenticationMethod.apple),
+    );
+  });
+
+  test('Apple deletion verification is hidden when unsupported', () {
+    final authentication = FirebaseAccountDeletionAuthentication(
+      _AppleAuthenticationService(),
+      appleSupported: false,
+    );
+
+    expect(
+      authentication.methodsFor(_ProviderUser(AppleAuthProvider.PROVIDER_ID)),
+      isNot(contains(AccountReauthenticationMethod.apple)),
+    );
   });
 
   for (final role in [UserAccountRole.admin, UserAccountRole.superAdmin]) {
@@ -420,6 +452,47 @@ class _FakeUser implements User {
 
   @override
   String? get email => 'member@example.com';
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProviderUser implements User {
+  _ProviderUser(String providerId)
+    : _providerData = [_ProviderInfo(providerId)];
+
+  final List<UserInfo> _providerData;
+
+  @override
+  List<UserInfo> get providerData => _providerData;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _ProviderInfo implements UserInfo {
+  _ProviderInfo(this.providerId);
+
+  @override
+  final String providerId;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _AppleAuthenticationService
+    implements AuthenticationService, AppleAuthenticationService {
+  @override
+  User? get currentUser => null;
+
+  @override
+  Stream<User?> authStateChanges() => const Stream.empty();
+
+  @override
+  Future<void> revokeAppleToken(String authorizationCode) async {}
+
+  @override
+  Future<String> reauthenticateWithApple(User user) async => 'authorization';
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

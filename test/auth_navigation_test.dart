@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/auth_gate.dart';
@@ -103,8 +104,9 @@ void main() {
     ]) {
       final route = screen is LoginScreen ? OtaRoutes.login : OtaRoutes.signup;
       await tester.pumpWidget(app(route: route, screen: screen));
-      await tester.ensureVisible(find.text('CONTINUE WITH APPLE'));
-      await tester.tap(find.text('CONTINUE WITH APPLE'));
+      expect(find.byType(SignInWithAppleButton), findsOneWidget);
+      await tester.ensureVisible(find.text('Sign in with Apple'));
+      await tester.tap(find.text('Sign in with Apple'));
       await tester.pumpAndSettle();
       expect(find.text('AUTH GATE'), findsOneWidget);
     }
@@ -119,7 +121,7 @@ void main() {
         screen: const LoginScreen(appleSupported: false),
       ),
     );
-    expect(find.text('CONTINUE WITH APPLE'), findsNothing);
+    expect(find.byType(SignInWithAppleButton), findsNothing);
 
     await tester.pumpWidget(
       app(
@@ -127,7 +129,7 @@ void main() {
         screen: const SignupScreen(appleSupported: false),
       ),
     );
-    expect(find.text('CONTINUE WITH APPLE'), findsNothing);
+    expect(find.byType(SignInWithAppleButton), findsNothing);
   });
 
   testWidgets('Apple cancellation stays on login with a distinct message', (
@@ -146,13 +148,52 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('CONTINUE WITH APPLE'));
-    await tester.tap(find.text('CONTINUE WITH APPLE'));
+    await tester.ensureVisible(find.text('Sign in with Apple'));
+    await tester.tap(find.text('Sign in with Apple'));
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.text('Sign in with Apple was cancelled.'), findsOneWidget);
     expect(find.text('AUTH GATE'), findsNothing);
+  });
+
+  testWidgets('Apple buttons disable while authentication is busy', (
+    tester,
+  ) async {
+    for (final isLogin in [true, false]) {
+      final completer = Completer<void>();
+      var calls = 0;
+      Future<void> appleSignIn() {
+        calls++;
+        return completer.future;
+      }
+
+      final screen = isLogin
+          ? LoginScreen(appleSupported: true, appleSignIn: appleSignIn)
+          : SignupScreen(appleSupported: true, appleSignIn: appleSignIn);
+      await tester.pumpWidget(
+        app(
+          route: isLogin ? OtaRoutes.login : OtaRoutes.signup,
+          screen: screen,
+        ),
+      );
+
+      await tester.ensureVisible(find.text('Sign in with Apple'));
+      await tester.tap(find.text('Sign in with Apple'));
+      await tester.pump();
+
+      expect(calls, 1);
+      expect(
+        tester
+            .widget<SignInWithAppleButton>(find.byType(SignInWithAppleButton))
+            .onPressed,
+        isNull,
+      );
+
+      completer.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('AUTH GATE'), findsOneWidget);
+    }
   });
 
   testWidgets('authentication failure stays on the current screen', (

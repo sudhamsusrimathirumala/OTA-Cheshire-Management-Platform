@@ -149,10 +149,24 @@ class AccountDeletionService {
       method,
       password: password,
     );
+    if (method == AccountReauthenticationMethod.apple) {
+      try {
+        await authentication.revokeProviderToken(user, method, proof);
+      } on AccountDeletionException {
+        rethrow;
+      } catch (_) {
+        throw const AccountDeletionException(
+          AccountDeletionError.deletionFailed,
+          'Apple authorization could not be revoked. Nothing was deleted.',
+        );
+      }
+    }
     await store.deletePrivateDocuments(uid);
     await store.deleteLinkedProfilesAndUser(account!);
     try {
-      await authentication.revokeProviderToken(user, method, proof);
+      if (method != AccountReauthenticationMethod.apple) {
+        await authentication.revokeProviderToken(user, method, proof);
+      }
       await authentication.delete(user);
     } on AccountDeletionException catch (error) {
       throw AccountDeletionException(
@@ -205,10 +219,13 @@ class FirebaseAccountDeletionAuthentication
   FirebaseAccountDeletionAuthentication(
     this._authentication, {
     GoogleSignIn? googleSignIn,
-  }) : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+    bool? appleSupported,
+  }) : _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+       _appleSupported = appleSupported ?? appleSignInSupported;
 
   final AuthenticationService _authentication;
   final GoogleSignIn _googleSignIn;
+  final bool _appleSupported;
   Future<void>? _googleInitialization;
 
   @override
@@ -225,6 +242,7 @@ class FirebaseAccountDeletionAuthentication
       if (providers.contains(GoogleAuthProvider.PROVIDER_ID))
         AccountReauthenticationMethod.google,
       if (providers.contains(AppleAuthProvider.PROVIDER_ID) &&
+          _appleSupported &&
           _authentication.appleAuthentication != null)
         AccountReauthenticationMethod.apple,
     };
