@@ -1,8 +1,8 @@
 # Production Firebase Android configuration
 
-Place the academy-owned production `google-services.json` in this directory
-after the final Android application ID is confirmed and registered in the
-production Firebase project.
+The academy-owned production `google-services.json` in this directory is for
+Firebase project `ota-management-platform-e4847` and Android application ID
+`com.otacheshire.app`.
 
 Do not copy the development file into this directory. A production build is
-expected to fail until the real file is provided.
+expected to use only the matching production configuration.

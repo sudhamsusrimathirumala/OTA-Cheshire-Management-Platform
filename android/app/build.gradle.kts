@@ -40,8 +40,7 @@ android {
         }
         create("prod") {
             dimension = "environment"
-            // Placeholder only. Replace after the academy confirms ownership.
-            applicationId = "com.academy.olympictaekwondo.placeholder"
+            applicationId = "com.otacheshire.app"
             resValue("string", "app_name", "Olympic Taekwondo Academy")
         }
     }

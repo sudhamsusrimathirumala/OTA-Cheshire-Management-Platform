@@ -1,7 +1,8 @@
 # Production Firebase iOS configuration
 
-Place the academy-owned production `GoogleService-Info.plist` in this directory
-after the production Firebase project and final Apple bundle identifier exist.
+The academy-owned production `GoogleService-Info.plist` in this directory is
+for Firebase project `ota-management-platform-e4847` and iOS bundle ID
+`com.otacheshire.app`.
 
-Do not copy the development plist here. Production builds are expected to fail
-until the real production file is supplied.
+Do not copy the development plist here. Production builds are expected to use
+only the matching production configuration.

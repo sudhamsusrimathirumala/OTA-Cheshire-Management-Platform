@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "675595858362",
+    "project_id": "ota-management-platform-e4847",
+    "storage_bucket": "ota-management-platform-e4847.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:675595858362:android:815d377e29d8938e806d83",
+        "android_client_info": {
+          "package_name": "com.otacheshire.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "675595858362-fgcp3lqcru2feuaugpdvl491fugs0ofo.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBJEHdAfzLK6W9LBgzYdtIdT8w8qAsykXA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "675595858362-fgcp3lqcru2feuaugpdvl491fugs0ofo.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
