@@ -13,7 +13,6 @@ import '../../models/notification_item.dart';
 import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
-import '../announcement_audience.dart';
 import '../debug_view_controller.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
@@ -64,6 +63,24 @@ String firebaseSessionDataFingerprint({
   ].join('\u0000');
 }
 
+@visibleForTesting
+List<NotificationItem> mergeAuthorizedAnnouncementItems({
+  required Iterable<NotificationItem> everyone,
+  required Iterable<NotificationItem> targeted,
+  int limit = FirebaseAppDataService.memberAnnouncementLimit,
+}) {
+  final byId = <String, NotificationItem>{};
+  for (final item in everyone) {
+    byId[item.id] = item;
+  }
+  for (final item in targeted) {
+    byId[item.id] = item;
+  }
+  final merged = byId.values.toList()
+    ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+  return List<NotificationItem>.unmodifiable(merged.take(limit));
+}
+
 class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   FirebaseAppDataService({
     required this._adminLocations,
@@ -91,6 +108,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _announcementsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+  _targetedAnnouncementsSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
   _notificationReadsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _eventsSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
@@ -109,6 +128,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String _activeLocationsFingerprint = '';
   bool _superAdminContentInitialized = false;
   QuerySnapshot<Map<String, dynamic>>? _latestAnnouncementsSnapshot;
+  QuerySnapshot<Map<String, dynamic>>? _latestTargetedAnnouncementsSnapshot;
   Set<String> _notificationReadIds = const <String>{};
   String? _notificationReadsUid;
   bool _markAllNotificationsInProgress = false;
@@ -184,7 +204,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _sessionDataFingerprint = sessionFingerprint;
       final announcements = _latestAnnouncementsSnapshot;
       if (announcements != null && session.stage == SessionStage.member) {
-        _notifications = _announcementsFromSnapshot(announcements);
+        _rebuildMemberNotifications();
       }
       notifyListeners();
       return;
@@ -216,7 +236,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         final studentView =
             firebaseSessionController.stage == SessionStage.member;
         _listenToSchedule(firestore, locationId, studentView);
-        _listenToAnnouncements(firestore, locationId, studentView);
+        _listenToAnnouncements(
+          firestore,
+          locationId,
+          studentView,
+          uid: firebaseSessionController.authUser?.uid,
+        );
         if (studentView) {
           final uid = firebaseSessionController.authUser?.uid;
           if (uid != null) _listenToNotificationReads(firestore, uid);
@@ -237,6 +262,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _stopFirestoreListeners() {
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
+    unawaited(_targetedAnnouncementsSubscription?.cancel());
     unawaited(_notificationReadsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
@@ -245,6 +271,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _cancelSuperAdminContentListeners();
     _scheduleSubscription = null;
     _announcementsSubscription = null;
+    _targetedAnnouncementsSubscription = null;
     _notificationReadsSubscription = null;
     _eventsSubscription = null;
     _resourcesSubscription = null;
@@ -260,6 +287,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _clearData() {
     _schedule = const <int, List<ClassSession>>{};
     _notifications = const <NotificationItem>[];
+    _latestAnnouncementsSnapshot = null;
+    _latestTargetedAnnouncementsSnapshot = null;
     _notificationReadIds = const <String>{};
     _notificationReadsUid = null;
     _notificationReadIdsFingerprint = '';
@@ -348,15 +377,17 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _listenToAnnouncements(
     FirebaseFirestore firestore,
     String? locationId,
-    bool publishedOnly,
-  ) {
+    bool publishedOnly, {
+    String? uid,
+  }) {
     Query<Map<String, dynamic>> query = firestore.collection(
       FirestoreCollections.announcements,
     );
     query = query.where('locationId', isEqualTo: locationId);
-    if (publishedOnly) query = query.where('status', isEqualTo: 'published');
     if (publishedOnly) {
       query = query
+          .where('status', isEqualTo: 'published')
+          .where('audienceType', isEqualTo: 'everyone')
           .orderBy('publishedAt', descending: true)
           .limit(memberAnnouncementLimit);
     }
@@ -364,6 +395,19 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       _handleAnnouncementsSnapshot,
       onError: _handleAnnouncementsError,
     );
+    if (publishedOnly && uid != null) {
+      _targetedAnnouncementsSubscription = firestore
+          .collection(FirestoreCollections.users)
+          .doc(uid)
+          .collection('announcementDeliveries')
+          .orderBy('publishedAt', descending: true)
+          .limit(memberAnnouncementLimit)
+          .snapshots()
+          .listen(
+            _handleTargetedAnnouncementsSnapshot,
+            onError: _handleTargetedAnnouncementsError,
+          );
+    }
   }
 
   void _listenToEvents(
@@ -678,9 +722,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     if (_latestAnnouncementsSnapshot != null &&
         firebaseSessionController.stage == SessionStage.member) {
-      _notifications = _announcementsFromSnapshot(
-        _latestAnnouncementsSnapshot!,
-      );
+      _rebuildMemberNotifications();
     }
     _isScheduleLoading = false;
     _scheduleErrorMessage = null;
@@ -703,14 +745,49 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminAnnouncements = firebaseSessionController.stage == SessionStage.admin
         ? _adminAnnouncementsFromSnapshot(snapshot)
         : const <AcademyAnnouncement>[];
-    _notifications = firebaseSessionController.stage == SessionStage.member
-        ? _announcementsFromSnapshot(snapshot)
-        : const <NotificationItem>[];
+    if (firebaseSessionController.stage == SessionStage.member) {
+      _rebuildMemberNotifications();
+    } else {
+      _notifications = const <NotificationItem>[];
+    }
     _syncNotificationReadListener();
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
     notifyListeners();
+  }
+
+  void _handleTargetedAnnouncementsSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    _loadTimeZonesForSnapshot(snapshot);
+    _latestTargetedAnnouncementsSnapshot = snapshot;
+    _rebuildMemberNotifications();
+    _syncNotificationReadListener();
+    _isUsingFallbackData = false;
+    _isAnnouncementsLoading = false;
+    _announcementsErrorMessage = null;
+    notifyListeners();
+  }
+
+  void _rebuildMemberNotifications() {
+    var everyoneItems = const <NotificationItem>[];
+    final everyone = _latestAnnouncementsSnapshot;
+    if (everyone != null) {
+      everyoneItems = _announcementsFromSnapshot(everyone);
+    }
+    var targetedItems = const <NotificationItem>[];
+    final targeted = _latestTargetedAnnouncementsSnapshot;
+    if (targeted != null) {
+      targetedItems = _announcementsFromSnapshot(
+        targeted,
+        authorizedDelivery: true,
+      );
+    }
+    _notifications = mergeAuthorizedAnnouncementItems(
+      everyone: everyoneItems,
+      targeted: targetedItems,
+    );
   }
 
   void _listenToNotificationReads(FirebaseFirestore firestore, String uid) {
@@ -740,10 +817,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .listen(
           (snapshot) {
             _notificationReadIds = snapshot.docs.map((doc) => doc.id).toSet();
-            final announcements = _latestAnnouncementsSnapshot;
-            if (announcements != null) {
-              _notifications = _announcementsFromSnapshot(announcements);
-            }
+            _rebuildMemberNotifications();
             notifyListeners();
           },
           onError: (Object error) {
@@ -758,6 +832,16 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
     _debugFirebaseError('announcements', error);
+    notifyListeners();
+  }
+
+  void _handleTargetedAnnouncementsError(Object error) {
+    _latestTargetedAnnouncementsSnapshot = null;
+    _rebuildMemberNotifications();
+    _isAnnouncementsLoading = false;
+    _announcementsErrorMessage =
+        'Unable to load targeted announcements from Firestore.';
+    _debugFirebaseError('targeted announcements', error);
     notifyListeners();
   }
 
@@ -863,6 +947,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminLocations.removeListener(_handleAdminLocationsChanged);
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
+    unawaited(_targetedAnnouncementsSubscription?.cancel());
     unawaited(_notificationReadsSubscription?.cancel());
     unawaited(_eventsSubscription?.cancel());
     unawaited(_resourcesSubscription?.cancel());
@@ -1144,10 +1229,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   void _applyNotificationReadIds(Set<String> ids) {
     _notificationReadIds = Set<String>.unmodifiable(ids);
-    final announcements = _latestAnnouncementsSnapshot;
-    if (announcements != null) {
-      _notifications = _announcementsFromSnapshot(announcements);
-    }
+    _rebuildMemberNotifications();
     notifyListeners();
   }
 
@@ -1265,8 +1347,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   List<NotificationItem> _announcementsFromSnapshot(
-    QuerySnapshot<Map<String, dynamic>> snapshot,
-  ) {
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    bool authorizedDelivery = false,
+  }) {
     if (snapshot.docs.isEmpty) {
       return const <NotificationItem>[];
     }
@@ -1274,7 +1357,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     final announcements = <NotificationItem>[];
 
     for (final document in snapshot.docs) {
-      final announcement = _notificationFromAnnouncementDocument(document);
+      final announcement = _notificationFromAnnouncementDocument(
+        document,
+        authorizedDelivery: authorizedDelivery,
+      );
       if (announcement != null) {
         announcements.add(announcement);
       }
@@ -1285,8 +1371,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   NotificationItem? _notificationFromAnnouncementDocument(
-    QueryDocumentSnapshot<Map<String, dynamic>> document,
-  ) {
+    QueryDocumentSnapshot<Map<String, dynamic>> document, {
+    required bool authorizedDelivery,
+  }) {
     final data = document.data();
     final title = _stringValue(data['title']);
     final summary = _stringValue(data['summary']);
@@ -1299,13 +1386,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     final publishedAt = _dateTimeValue(data['publishedAt']);
     final createdAt = _dateTimeValue(data['createdAt']);
     final updatedAt = _dateTimeValue(data['updatedAt']);
-    final targetBelts = _stringListValue(data['targetBelts']);
-    final targetClassTypeIds = _stringListValue(data['targetClassTypeIds']);
-    final targetStudentProfileIds = _stringListValue(
-      data['targetStudentProfileIds'],
-    );
-    final targetUserIds = _stringListValue(data['targetUserIds']);
-
     if (title == null ||
         summary == null ||
         body == null ||
@@ -1322,13 +1402,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
     if (locationId != selectedStudentProfile.locationId ||
         status != 'published' ||
-        !_announcementTargetsSelectedAudience(
-          audienceType: audienceType,
-          targetBelts: targetBelts,
-          targetClassTypeIds: targetClassTypeIds,
-          targetStudentProfileIds: targetStudentProfileIds,
-          targetUserIds: targetUserIds,
-        )) {
+        (authorizedDelivery
+            ? data['announcementId'] != document.id
+            : audienceType != 'everyone')) {
       return null;
     }
 
@@ -1500,35 +1576,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   StudentProfile? _studentProfileFromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) => studentProfileFromFirestoreData(document.id, document.data());
-
-  bool _announcementTargetsSelectedAudience({
-    required String audienceType,
-    required List<String> targetBelts,
-    required List<String> targetClassTypeIds,
-    required List<String> targetStudentProfileIds,
-    required List<String> targetUserIds,
-  }) {
-    final account = currentUserAccount;
-    final profiles = account.role == UserAccountRole.parent
-        ? firebaseSessionController.profiles
-              .where(
-                (profile) =>
-                    profile.isActive &&
-                    profile.locationId == account.locationId &&
-                    account.linkedStudentProfileIds.contains(profile.id),
-              )
-              .toList(growable: false)
-        : <StudentProfile>[selectedStudentProfile];
-    return announcementMatchesAccount(
-      audienceType: audienceType,
-      targetBelts: targetBelts,
-      targetClassTypeIds: targetClassTypeIds,
-      targetStudentProfileIds: targetStudentProfileIds,
-      targetUserIds: targetUserIds,
-      account: account,
-      profiles: profiles,
-    );
-  }
 
   bool _recordIsInSessionScope(String locationId) {
     final session = firebaseSessionController;

@@ -4,6 +4,7 @@ import {
   FieldValue,
   Firestore,
   Timestamp,
+  WriteBatch,
   getFirestore,
 } from "firebase-admin/firestore";
 import {getMessaging} from "firebase-admin/messaging";
@@ -13,12 +14,15 @@ import {
   AccountRecord,
   ContentType,
   ProfileRecord,
+  announcementDeliveryData,
   canClaimDispatch,
   chunkTargets,
   eligibleAccountIds,
   isFirstPublication,
+  isTargetedPublishedAnnouncement,
   isPermanentMessagingError,
   notificationPayload,
+  targetedDeliveryPlan,
 } from "./push_logic";
 
 if (getApps().length === 0) initializeApp();
@@ -28,8 +32,13 @@ const triggerOptions = {region: pushFunctionRegion, maxInstances: 2, retry: true
 
 export const pushPublishedAnnouncement = onDocumentWritten(
   {...triggerOptions, document: "announcements/{contentId}"},
-  (event) => dispatchPublication("announcement", event.params.contentId,
-    event.data?.before.data(), event.data?.after.data()),
+  async (event) => {
+    const contentId = event.params.contentId;
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    await syncTargetedAnnouncementDeliveries(contentId, after);
+    await dispatchPublication("announcement", contentId, before, after);
+  },
 );
 
 export const pushPublishedEvent = onDocumentWritten(
@@ -121,6 +130,42 @@ async function dispatchPublication(
   }
 }
 
+async function syncTargetedAnnouncementDeliveries(
+  contentId: string,
+  after: Record<string, unknown> | undefined,
+): Promise<void> {
+  const existingSnapshot = await db.collectionGroup("announcementDeliveries")
+    .where("announcementId", "==", contentId).get();
+  const existingByUid = new Map(existingSnapshot.docs.map((document) => [
+    document.ref.parent.parent?.id ?? "",
+    document.ref,
+  ]));
+  let recipientIds: string[] = [];
+  if (isTargetedPublishedAnnouncement(after)) {
+    const {accounts, profiles} = await loadAudienceInputs(String(after?.locationId));
+    recipientIds = eligibleAccountIds("announcement", after!, accounts, profiles);
+  }
+  const plan = targetedDeliveryPlan([...existingByUid.keys()], recipientIds);
+  const writes: Array<(batch: WriteBatch) => void> = [];
+  for (const uid of plan.deleteUids) {
+    const reference = existingByUid.get(uid);
+    if (reference) writes.push((batch) => batch.delete(reference));
+  }
+  if (after && isTargetedPublishedAnnouncement(after)) {
+    const delivery = announcementDeliveryData(contentId, after);
+    for (const uid of plan.upsertUids) {
+      const reference = db.collection("users").doc(uid)
+        .collection("announcementDeliveries").doc(contentId);
+      writes.push((batch) => batch.set(reference, delivery));
+    }
+  }
+  for (let index = 0; index < writes.length; index += 450) {
+    const batch = db.batch();
+    writes.slice(index, index + 450).forEach((write) => write(batch));
+    await batch.commit();
+  }
+}
+
 async function claimDispatch(
   firestore: Firestore,
   dispatchId: string,
@@ -171,6 +216,9 @@ async function loadAudienceInputs(locationId: string): Promise<{
     id: item.id,
     isActive: item.get("isActive") === true,
     locationId: String(item.get("locationId")),
+    linkedUserId: typeof item.get("linkedUserId") === "string" ? item.get("linkedUserId") : undefined,
+    guardianUserIds: Array.isArray(item.get("guardianUserIds")) ?
+      item.get("guardianUserIds").filter((id: unknown) => typeof id === "string") : [],
     beltRank: typeof item.get("beltRank") === "string" ? item.get("beltRank") : undefined,
     preferredClassGroupIds: Array.isArray(item.get("preferredClassGroupIds")) ?
       item.get("preferredClassGroupIds").filter((id: unknown) => typeof id === "string") : [],

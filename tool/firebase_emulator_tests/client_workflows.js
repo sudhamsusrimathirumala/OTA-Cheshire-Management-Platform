@@ -22,6 +22,9 @@ export async function createProfiles(db, {
     locationId,
     linkedStudentProfileIds: profileIds,
     selectedStudentProfileId: profileIds[0],
+    ...(role === 'parent' ? {
+      parentSelfProfileId: parentIsStudent ? profileIds[0] : '',
+    } : {}),
     ...(googleAccountId ? {googleAccountId} : {}),
     ...(studentProfileDefaults ? {studentProfileDefaults} : {}),
     createdAt: timestamp,

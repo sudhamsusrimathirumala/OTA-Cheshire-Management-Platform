@@ -208,6 +208,39 @@ void main() {
       expect(events.last, 'delete-auth');
     },
   );
+  test('account deletion ownership is exclusive and location-bound', () {
+    final account = _record();
+    expect(
+      accountOwnsDeletionProfile(account, {
+        'locationId': 'cheshire',
+        'guardianUserIds': ['member'],
+      }),
+      isTrue,
+    );
+    expect(
+      accountOwnsDeletionProfile(account, {
+        'locationId': 'cheshire',
+        'guardianUserIds': ['member', 'other'],
+      }),
+      isFalse,
+    );
+    expect(
+      accountOwnsDeletionProfile(account, {
+        'locationId': 'cheshire',
+        'linkedUserId': 'member',
+        'guardianUserIds': <String>[],
+      }),
+      isTrue,
+    );
+    expect(
+      accountOwnsDeletionProfile(account, {
+        'locationId': 'other',
+        'linkedUserId': 'member',
+        'guardianUserIds': <String>[],
+      }),
+      isFalse,
+    );
+  });
 }
 
 AccountDeletionRecord _record({

@@ -236,8 +236,19 @@ class FirestoreProfileService {
             .collection(FirestoreCollections.users)
             .doc(identity.uid);
         final user = (await transaction.get(userRef)).data();
+        final profile = (await transaction.get(
+          _firestore
+              .collection(FirestoreCollections.studentProfiles)
+              .doc(profileId),
+        )).data();
         final linked = _stringList(user?['linkedStudentProfileIds']);
-        if (!linked.contains(profileId)) {
+        if (!linked.contains(profileId) ||
+            !accountManagesStoredProfile(
+              uid: identity.uid,
+              user: user,
+              profileId: profileId,
+              profile: profile,
+            )) {
           throw const ProfileServiceException(
             ProfileServiceError.permissionDenied,
             'This student profile is not linked to your account.',
@@ -284,6 +295,7 @@ class FirestoreProfileService {
                     .doc(session.id),
               )).data();
         if (!accountManagesStoredProfile(
+          uid: identity.uid,
           user: user,
           profileId: profile.id,
           profile: storedProfile,
@@ -411,24 +423,28 @@ class FirestoreProfileService {
             'This account has reached the student profile limit.',
           );
         }
-        for (final id in linked) {
-          final existing = (await transaction.get(
-            _firestore.collection(FirestoreCollections.studentProfiles).doc(id),
-          )).data();
-          if (existing?['isActive'] == true &&
-              existing?['linkedUserId'] == identity.uid) {
-            throw const ProfileServiceException(
-              ProfileServiceError.alreadyExists,
-              'Your student profile is already linked to this account.',
-            );
-          }
+        if (user == null || !user.containsKey('parentSelfProfileId')) {
+          throw const ProfileServiceException(
+            ProfileServiceError.invalidData,
+            'This account needs an academy profile-link update before adding '
+            'a parent student profile.',
+          );
+        }
+        final recordedSelfProfileId = _optionalString(
+          user['parentSelfProfileId'],
+        );
+        if (recordedSelfProfileId != null) {
+          throw const ProfileServiceException(
+            ProfileServiceError.alreadyExists,
+            'Your student profile is already linked to this account.',
+          );
         }
         final timestamp = FieldValue.serverTimestamp();
         transaction.set(
           profileRef,
           parentSelfProfileCreationData(
             input: input,
-            accountData: user!,
+            accountData: user,
             parentUid: identity.uid,
             locationId: locationId,
             timestamp: timestamp,
@@ -437,6 +453,7 @@ class FirestoreProfileService {
         );
         transaction.update(userRef, {
           'linkedStudentProfileIds': [...linked, profileRef.id],
+          'parentSelfProfileId': profileRef.id,
           'updatedAt': timestamp,
         });
       });
@@ -491,10 +508,12 @@ class FirestoreProfileService {
         final selectedId = user?['selectedStudentProfileId'] == profileId
             ? nextSelectedId
             : user?['selectedStudentProfileId'];
+        final removingSelfProfile = profile?['linkedUserId'] == identity.uid;
         final timestamp = FieldValue.serverTimestamp();
         transaction.update(userRef, {
           'linkedStudentProfileIds': remainingIds,
           'selectedStudentProfileId': selectedId,
+          if (removingSelfProfile) 'parentSelfProfileId': '',
           'updatedAt': timestamp,
         });
         transaction.update(profileRef, {
@@ -542,6 +561,7 @@ class FirestoreProfileService {
         final user = (await transaction.get(userRef)).data();
         final profile = (await transaction.get(profileRef)).data();
         if (!accountManagesStoredProfile(
+          uid: identity.uid,
           user: user,
           profileId: input.profileId,
           profile: profile,
@@ -576,6 +596,7 @@ class FirestoreProfileService {
 }
 
 bool accountManagesStoredProfile({
+  required String uid,
   required Map<String, dynamic>? user,
   required String profileId,
   required Map<String, dynamic>? profile,
@@ -588,7 +609,11 @@ bool accountManagesStoredProfile({
       !_stringList(user['linkedStudentProfileIds']).contains(profileId)) {
     return false;
   }
-  return true;
+  final guardianUserIds = _stringList(profile['guardianUserIds']);
+  return (profile['linkedUserId'] == uid && guardianUserIds.isEmpty) ||
+      (profile['linkedUserId'] == null &&
+          guardianUserIds.length == 1 &&
+          guardianUserIds.single == uid);
 }
 
 bool canSetPreferredClass(StudentProfile profile, ClassSession session) =>
@@ -900,6 +925,8 @@ ProfileCreationPlan buildProfileCreationPlan({
       'locationId': locationId,
       'linkedStudentProfileIds': profileIds,
       'selectedStudentProfileId': selectedProfileId,
+      if (request.role == ProfileAccountRole.parent)
+        'parentSelfProfileId': request.parentIsStudent ? selectedProfileId : '',
       'googleAccountId': ?googleId,
       if (request.role == ProfileAccountRole.parent && !request.parentIsStudent)
         'studentProfileDefaults': <String, Object?>{

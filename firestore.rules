@@ -37,36 +37,20 @@ service cloud.firestore {
           currentUser().role in ['student', 'parent'];
     }
 
-    function allLinkedProfilesDeleted(ids) {
-      return ids is list &&
-          ids.size() >= 1 && ids.size() <= 11 &&
-          !existsAfter(profilePath(ids[0])) &&
-          (ids.size() < 2 || !existsAfter(profilePath(ids[1]))) &&
-          (ids.size() < 3 || !existsAfter(profilePath(ids[2]))) &&
-          (ids.size() < 4 || !existsAfter(profilePath(ids[3]))) &&
-          (ids.size() < 5 || !existsAfter(profilePath(ids[4]))) &&
-          (ids.size() < 6 || !existsAfter(profilePath(ids[5]))) &&
-          (ids.size() < 7 || !existsAfter(profilePath(ids[6]))) &&
-          (ids.size() < 8 || !existsAfter(profilePath(ids[7]))) &&
-          (ids.size() < 9 || !existsAfter(profilePath(ids[8]))) &&
-          (ids.size() < 10 || !existsAfter(profilePath(ids[9]))) &&
-          (ids.size() < 11 || !existsAfter(profilePath(ids[10])));
-    }
-
     function validOwnAccountDeletion(uid) {
       return memberDeletingOwnAccount(uid) &&
           resource.data.linkedStudentProfileIds is list &&
+          resource.data.linkedStudentProfileIds.size() >= 1 &&
+          resource.data.linkedStudentProfileIds.size() <= 11 &&
           resource.data.linkedStudentProfileIds.toSet().size() ==
-              resource.data.linkedStudentProfileIds.size() &&
-          allLinkedProfilesDeleted(resource.data.linkedStudentProfileIds);
+              resource.data.linkedStudentProfileIds.size();
     }
 
     function validLinkedProfileDeletion(profileId) {
       return memberDeletingOwnAccount(request.auth.uid) &&
           profileId in currentUser().linkedStudentProfileIds &&
+          profileOwnedBy(request.auth.uid, resource.data) &&
           resource.data.locationId == currentUser().locationId &&
-          (resource.data.get('linkedUserId', '') == request.auth.uid ||
-           request.auth.uid in resource.data.guardianUserIds) &&
           !existsAfter(userPath(request.auth.uid));
     }
 
@@ -103,14 +87,24 @@ service cloud.firestore {
           .get('identities', {}).get('google.com', []);
     }
 
-    function managesProfile(profileId) {
-      return activeUser() &&
-          profileId in currentUser().linkedStudentProfileIds;
+    function profileOwnedBy(uid, profileData) {
+      return profileData.guardianUserIds is list &&
+          ((profileData.get('linkedUserId', '') == uid &&
+            profileData.guardianUserIds.size() == 0) ||
+           (profileData.get('linkedUserId', '') == '' &&
+            profileData.guardianUserIds == [uid]));
+    }
+
+    function selfProfileOwnedBy(uid, profileData) {
+      return profileData.get('linkedUserId', '') == uid &&
+          profileData.guardianUserIds is list &&
+          profileData.guardianUserIds.size() == 0;
     }
 
     function userManagesProfile(profileId, profileData) {
       return activeUser() &&
           profileId in currentUser().linkedStudentProfileIds &&
+          profileOwnedBy(request.auth.uid, profileData) &&
           profileData.isActive == true &&
           profileData.locationId == currentUser().locationId;
     }
@@ -188,7 +182,8 @@ service cloud.firestore {
           currentUser().selectedStudentProfileId is string &&
           currentUser().selectedStudentProfileId in
               currentUser().linkedStudentProfileIds &&
-          exists(profilePath(currentUser().selectedStudentProfileId));
+          exists(profilePath(currentUser().selectedStudentProfileId)) &&
+          profileOwnedBy(request.auth.uid, selectedProfile());
     }
 
     function selectedProfile() {
@@ -214,52 +209,35 @@ service cloud.firestore {
           (hasUser() && currentUser().locationId == locationId);
     }
 
-    function allInitialProfilesExist(ids) {
-      return ids is list &&
-          ids.size() >= 1 && ids.size() <= 11 &&
-          ids.toSet().size() == ids.size() &&
-          existsAfter(profilePath(ids[0])) &&
-          (ids.size() < 2 || existsAfter(profilePath(ids[1]))) &&
-          (ids.size() < 3 || existsAfter(profilePath(ids[2]))) &&
-          (ids.size() < 4 || existsAfter(profilePath(ids[3]))) &&
-          (ids.size() < 5 || existsAfter(profilePath(ids[4]))) &&
-          (ids.size() < 6 || existsAfter(profilePath(ids[5]))) &&
-          (ids.size() < 7 || existsAfter(profilePath(ids[6]))) &&
-          (ids.size() < 8 || existsAfter(profilePath(ids[7]))) &&
-          (ids.size() < 9 || existsAfter(profilePath(ids[8]))) &&
-          (ids.size() < 10 || existsAfter(profilePath(ids[9]))) &&
-          (ids.size() < 11 || existsAfter(profilePath(ids[10])));
+    function validLinkedProfileList(data) {
+      return data.linkedStudentProfileIds is list &&
+          data.linkedStudentProfileIds.size() >= 1 &&
+          data.linkedStudentProfileIds.size() <= 11 &&
+          data.linkedStudentProfileIds.toSet().size() ==
+              data.linkedStudentProfileIds.size() &&
+          data.selectedStudentProfileId is string &&
+          data.selectedStudentProfileId in data.linkedStudentProfileIds;
     }
 
-    function initialProfileRelationship(uid, profileId, userData) {
-      let profile = getAfter(profilePath(profileId)).data;
-      return profile.locationId == userData.locationId &&
+    function initialSelectedProfileValid(uid, userData) {
+      let profile = getAfter(profilePath(userData.selectedStudentProfileId)).data;
+      return profileOwnedBy(uid, profile) &&
+          profile.locationId == userData.locationId &&
           profile.isActive == true &&
-          (userData.role == 'student'
-            ? userData.linkedStudentProfileIds.size() == 1 &&
-              profileId == userData.selectedStudentProfileId &&
-              profile.linkedUserId == uid &&
-              profile.guardianUserIds.size() == 0
-            : ((profile.keys().hasAny(['linkedUserId']) &&
-                profileId == userData.selectedStudentProfileId &&
-                profile.linkedUserId == uid &&
-                profile.guardianUserIds.size() == 0) ||
-               (!profile.keys().hasAny(['linkedUserId']) &&
-                profile.guardianUserIds == [uid])));
+          (userData.role == 'parent' ||
+           (userData.linkedStudentProfileIds.size() == 1 &&
+            selfProfileOwnedBy(uid, profile)));
     }
 
-    function allInitialProfilesMatch(uid, ids, userData) {
-      return initialProfileRelationship(uid, ids[0], userData) &&
-          (ids.size() < 2 || initialProfileRelationship(uid, ids[1], userData)) &&
-          (ids.size() < 3 || initialProfileRelationship(uid, ids[2], userData)) &&
-          (ids.size() < 4 || initialProfileRelationship(uid, ids[3], userData)) &&
-          (ids.size() < 5 || initialProfileRelationship(uid, ids[4], userData)) &&
-          (ids.size() < 6 || initialProfileRelationship(uid, ids[5], userData)) &&
-          (ids.size() < 7 || initialProfileRelationship(uid, ids[6], userData)) &&
-          (ids.size() < 8 || initialProfileRelationship(uid, ids[7], userData)) &&
-          (ids.size() < 9 || initialProfileRelationship(uid, ids[8], userData)) &&
-          (ids.size() < 10 || initialProfileRelationship(uid, ids[9], userData)) &&
-          (ids.size() < 11 || initialProfileRelationship(uid, ids[10], userData));
+    function validParentSelfMarker(uid, data) {
+      return data.role != 'parent'
+          ? !data.keys().hasAny(['parentSelfProfileId'])
+          : data.parentSelfProfileId is string &&
+              (data.parentSelfProfileId == '' ||
+               (data.parentSelfProfileId in data.linkedStudentProfileIds &&
+                data.parentSelfProfileId == data.selectedStudentProfileId &&
+                selfProfileOwnedBy(
+                  uid, getAfter(profilePath(data.parentSelfProfileId)).data)));
     }
 
     function validInitialUser(uid, data) {
@@ -267,7 +245,7 @@ service cloud.firestore {
             'firstName', 'lastName', 'email', 'role', 'isActive',
             'locationId', 'linkedStudentProfileIds',
             'selectedStudentProfileId', 'phoneNumber', 'googleAccountId',
-            'studentProfileDefaults',
+            'studentProfileDefaults', 'parentSelfProfileId',
             'createdAt', 'updatedAt'
           ]) &&
           data.keys().hasAll([
@@ -281,7 +259,7 @@ service cloud.firestore {
           data.role in ['student', 'parent'] &&
           data.isActive == true &&
           activeLocation(data.locationId) &&
-          data.linkedStudentProfileIds is list &&
+          validLinkedProfileList(data) &&
           data.selectedStudentProfileId == data.linkedStudentProfileIds[0] &&
           (!data.keys().hasAny(['phoneNumber']) ||
             (data.phoneNumber is string && data.phoneNumber.size() > 0)) &&
@@ -291,8 +269,8 @@ service cloud.firestore {
             (data.role == 'parent' &&
              validStudentProfileDefaults(data.studentProfileDefaults))) &&
           data.createdAt == request.time && data.updatedAt == request.time &&
-          allInitialProfilesExist(data.linkedStudentProfileIds) &&
-          allInitialProfilesMatch(uid, data.linkedStudentProfileIds, data);
+          validParentSelfMarker(uid, data) &&
+          initialSelectedProfileValid(uid, data);
     }
 
     function validInitialProfile(profileId, data) {
@@ -323,7 +301,15 @@ service cloud.firestore {
           data.isActive == true &&
           data.createdAt == request.time && data.updatedAt == request.time &&
           profileId in user.linkedStudentProfileIds &&
-          initialProfileRelationship(request.auth.uid, profileId, user);
+          profileOwnedBy(request.auth.uid, data) &&
+          (user.role == 'student'
+            ? user.linkedStudentProfileIds.size() == 1 &&
+              profileId == user.selectedStudentProfileId &&
+              selfProfileOwnedBy(request.auth.uid, data)
+            : (user.parentSelfProfileId == profileId
+                ? selfProfileOwnedBy(request.auth.uid, data)
+                : data.get('linkedUserId', '') == '' &&
+                  data.guardianUserIds == [request.auth.uid]));
     }
 
     function validOwnAccountUpdate() {
@@ -333,6 +319,7 @@ service cloud.firestore {
           ]) &&
           request.resource.data.selectedStudentProfileId in
               resource.data.linkedStudentProfileIds &&
+          selectedProfileValidAfter(request.resource.data) &&
           request.resource.data.firstName is string &&
           request.resource.data.firstName.size() > 0 &&
           request.resource.data.lastName is string &&
@@ -421,56 +408,26 @@ service cloud.firestore {
           request.resource.data.updatedAt == request.time;
     }
 
-    function linkedProfileValidAfter(uid, profileId, userData) {
-      let profile = getAfter(profilePath(profileId)).data;
-      return profile.isActive == true &&
-          profile.locationId == userData.locationId &&
-          ((profile.get('linkedUserId', '') == uid &&
-            profile.guardianUserIds.size() == 0) ||
-           (profile.get('linkedUserId', '') == '' &&
-            profile.guardianUserIds == [uid]));
+    function selectedProfileValidAfter(userData) {
+      let profile = getAfter(profilePath(userData.selectedStudentProfileId)).data;
+      return userData.selectedStudentProfileId in
+              userData.linkedStudentProfileIds &&
+          profileOwnedBy(request.auth.uid, profile) &&
+          profile.isActive == true &&
+          profile.locationId == userData.locationId;
     }
 
-    function allLinkedProfilesValidAfter(uid, ids, userData) {
-      return ids.size() >= 1 && ids.size() <= 11 &&
-          ids.toSet().size() == ids.size() &&
-          linkedProfileValidAfter(uid, ids[0], userData) &&
-          (ids.size() < 2 || linkedProfileValidAfter(uid, ids[1], userData)) &&
-          (ids.size() < 3 || linkedProfileValidAfter(uid, ids[2], userData)) &&
-          (ids.size() < 4 || linkedProfileValidAfter(uid, ids[3], userData)) &&
-          (ids.size() < 5 || linkedProfileValidAfter(uid, ids[4], userData)) &&
-          (ids.size() < 6 || linkedProfileValidAfter(uid, ids[5], userData)) &&
-          (ids.size() < 7 || linkedProfileValidAfter(uid, ids[6], userData)) &&
-          (ids.size() < 8 || linkedProfileValidAfter(uid, ids[7], userData)) &&
-          (ids.size() < 9 || linkedProfileValidAfter(uid, ids[8], userData)) &&
-          (ids.size() < 10 || linkedProfileValidAfter(uid, ids[9], userData)) &&
-          (ids.size() < 11 || linkedProfileValidAfter(uid, ids[10], userData));
-    }
-
-    function removedProfileSafe(uid, profileId, remainingIds, locationId) {
-      let before = get(profilePath(profileId)).data;
-      let after = getAfter(profilePath(profileId)).data;
-      return profileId in remainingIds ||
-          (before.isActive == true &&
-           before.locationId == locationId &&
-           after.isActive == false &&
-           after.locationId == locationId &&
-           after.get('linkedUserId', '') == before.get('linkedUserId', '') &&
-           after.guardianUserIds == before.guardianUserIds);
-    }
-
-    function allRemovedProfilesSafe(uid, oldIds, newIds, locationId) {
-      return removedProfileSafe(uid, oldIds[0], newIds, locationId) &&
-          (oldIds.size() < 2 || removedProfileSafe(uid, oldIds[1], newIds, locationId)) &&
-          (oldIds.size() < 3 || removedProfileSafe(uid, oldIds[2], newIds, locationId)) &&
-          (oldIds.size() < 4 || removedProfileSafe(uid, oldIds[3], newIds, locationId)) &&
-          (oldIds.size() < 5 || removedProfileSafe(uid, oldIds[4], newIds, locationId)) &&
-          (oldIds.size() < 6 || removedProfileSafe(uid, oldIds[5], newIds, locationId)) &&
-          (oldIds.size() < 7 || removedProfileSafe(uid, oldIds[6], newIds, locationId)) &&
-          (oldIds.size() < 8 || removedProfileSafe(uid, oldIds[7], newIds, locationId)) &&
-          (oldIds.size() < 9 || removedProfileSafe(uid, oldIds[8], newIds, locationId)) &&
-          (oldIds.size() < 10 || removedProfileSafe(uid, oldIds[9], newIds, locationId)) &&
-          (oldIds.size() < 11 || removedProfileSafe(uid, oldIds[10], newIds, locationId));
+    function validParentSelfMarkerUpdate(oldData, newData) {
+      let oldSelf = oldData.get('parentSelfProfileId', '');
+      let newSelf = newData.get('parentSelfProfileId', '');
+      return (newSelf == oldSelf &&
+              (newSelf == '' || newSelf in newData.linkedStudentProfileIds)) ||
+          (oldSelf == '' && newSelf is string && newSelf != '' &&
+           newSelf in newData.linkedStudentProfileIds &&
+           selfProfileOwnedBy(
+             request.auth.uid, getAfter(profilePath(newSelf)).data)) ||
+          (oldSelf != '' && newSelf == '' &&
+           !(oldSelf in newData.linkedStudentProfileIds));
     }
 
     function validParentFamilyUpdate() {
@@ -480,16 +437,14 @@ service cloud.firestore {
       let removing = newIds.size() == oldIds.size() - 1 && oldIds.hasAll(newIds);
       return activeUser() && currentUser().role == 'parent' &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'linkedStudentProfileIds', 'selectedStudentProfileId', 'updatedAt'
+            'linkedStudentProfileIds', 'selectedStudentProfileId',
+            'parentSelfProfileId', 'updatedAt'
           ]) &&
           request.resource.data.updatedAt == request.time &&
-          request.resource.data.selectedStudentProfileId in newIds &&
+          validLinkedProfileList(request.resource.data) &&
           (adding || removing) &&
-          allLinkedProfilesValidAfter(request.auth.uid, newIds, request.resource.data) &&
-          (adding ||
-           (removing &&
-            allRemovedProfilesSafe(request.auth.uid, oldIds, newIds,
-              resource.data.locationId)));
+          selectedProfileValidAfter(request.resource.data) &&
+          validParentSelfMarkerUpdate(resource.data, request.resource.data);
     }
 
     function validParentChildCreate(profileId, data) {
@@ -520,61 +475,6 @@ service cloud.firestore {
           data.createdAt == request.time && data.updatedAt == request.time;
     }
 
-    function activeLinkedSelfProfile(profileId) {
-      return exists(profilePath(profileId)) &&
-          get(profilePath(profileId)).data.isActive == true &&
-          get(profilePath(profileId)).data.get('linkedUserId', '') ==
-              request.auth.uid;
-    }
-
-    function hasActiveLinkedSelfProfile(ids) {
-      return activeLinkedSelfProfile(ids[0]) ||
-          (ids.size() > 1 && activeLinkedSelfProfile(ids[1])) ||
-          (ids.size() > 2 && activeLinkedSelfProfile(ids[2])) ||
-          (ids.size() > 3 && activeLinkedSelfProfile(ids[3])) ||
-          (ids.size() > 4 && activeLinkedSelfProfile(ids[4])) ||
-          (ids.size() > 5 && activeLinkedSelfProfile(ids[5])) ||
-          (ids.size() > 6 && activeLinkedSelfProfile(ids[6])) ||
-          (ids.size() > 7 && activeLinkedSelfProfile(ids[7])) ||
-          (ids.size() > 8 && activeLinkedSelfProfile(ids[8])) ||
-          (ids.size() > 9 && activeLinkedSelfProfile(ids[9])) ||
-          (ids.size() > 10 && activeLinkedSelfProfile(ids[10]));
-    }
-
-    function validParentSelfProfileCreate(profileId, data) {
-      let afterUser = getAfter(userPath(request.auth.uid)).data;
-      return activeUser() && currentUser().role == 'parent' &&
-          !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds) &&
-          profileId in afterUser.linkedStudentProfileIds &&
-          afterUser.linkedStudentProfileIds.size() ==
-              currentUser().linkedStudentProfileIds.size() + 1 &&
-          data.keys().hasOnly([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
-            'guardianEmail', 'guardianUserIds', 'linkedUserId',
-            'preferredClassGroupIds', 'stickerProgress', 'promotionHistory',
-            'testingNotes', 'isActive', 'createdAt', 'updatedAt'
-          ]) &&
-          data.keys().hasAll([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
-            'guardianUserIds', 'linkedUserId', 'preferredClassGroupIds',
-            'stickerProgress', 'promotionHistory', 'testingNotes', 'isActive',
-            'createdAt', 'updatedAt'
-          ]) &&
-          data.firstName is string && data.firstName.size() > 0 &&
-          data.lastName is string && data.lastName.size() > 0 &&
-          data.dateOfBirth is timestamp && canonicalBelt(data.beltRank) &&
-          data.locationId == currentUser().locationId &&
-          validGuardianEmail(data) &&
-          data.guardianUserIds.size() == 0 &&
-          data.linkedUserId == request.auth.uid &&
-          validPreferredClasses(data) &&
-          data.preferredClassGroupIds.size() == 0 &&
-          validStickerProgress(data) &&
-          data.promotionHistory is list && data.testingNotes is list &&
-          data.isActive == true &&
-          data.createdAt == request.time && data.updatedAt == request.time;
-    }
-
     function validParentManagedProfileCreate(profileId, data) {
       let afterUser = getAfter(userPath(request.auth.uid)).data;
       let selfProfile = data.get('linkedUserId', '') == request.auth.uid;
@@ -582,8 +482,12 @@ service cloud.firestore {
           profileId in afterUser.linkedStudentProfileIds &&
           afterUser.linkedStudentProfileIds.size() ==
               currentUser().linkedStudentProfileIds.size() + 1 &&
-          (!selfProfile ||
-           !hasActiveLinkedSelfProfile(currentUser().linkedStudentProfileIds)) &&
+          (selfProfile
+            ? currentUser().keys().hasAny(['parentSelfProfileId']) &&
+              currentUser().parentSelfProfileId == '' &&
+              afterUser.parentSelfProfileId == profileId
+            : afterUser.get('parentSelfProfileId', '') ==
+              currentUser().get('parentSelfProfileId', '')) &&
           data.keys().hasOnly([
             'firstName', 'lastName', 'dateOfBirth', 'beltRank', 'locationId',
             'guardianEmail', 'guardianUserIds', 'linkedUserId',
@@ -620,10 +524,15 @@ service cloud.firestore {
           profileId in currentUser().linkedStudentProfileIds &&
           resource.data.isActive == true &&
           resource.data.locationId == currentUser().locationId &&
+          profileOwnedBy(request.auth.uid, resource.data) &&
           !(profileId in afterUser.linkedStudentProfileIds) &&
           afterUser.linkedStudentProfileIds.size() >= 1 &&
           afterUser.selectedStudentProfileId in
               afterUser.linkedStudentProfileIds &&
+          (currentUser().get('parentSelfProfileId', '') == profileId
+            ? afterUser.get('parentSelfProfileId', '') == ''
+            : afterUser.get('parentSelfProfileId', '') ==
+              currentUser().get('parentSelfProfileId', '')) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'isActive', 'updatedAt'
           ]) &&
@@ -652,7 +561,8 @@ service cloud.firestore {
     }
 
     function publishedAnnouncement() {
-      return resource.data.status == 'published';
+      return resource.data.status == 'published' &&
+          resource.data.audienceType == 'everyone';
     }
 
     function publishedEvent() {
@@ -726,6 +636,12 @@ service cloud.firestore {
             request.resource.data.updatedAt == request.time &&
             request.resource.data.lastSeenAt == request.time;
       }
+
+      match /announcementDeliveries/{announcementId} {
+        allow read: if activePushDeviceOwner(uid);
+        allow delete: if memberDeletingOwnAccount(uid);
+        allow create, update: if false;
+      }
     }
 
     match /pushDispatches/{dispatchId} {
@@ -737,7 +653,7 @@ service cloud.firestore {
           (validParentManagedProfileCreate(profileId, request.resource.data) ||
            validInitialProfile(profileId, request.resource.data));
       allow read: if signedIn() &&
-          (managesProfile(profileId) ||
+          (userManagesProfile(profileId, resource.data) ||
            superAdmin() ||
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));

@@ -317,7 +317,11 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
     : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
-  static const _privateSubcollections = ['pushDevices', 'notificationReads'];
+  static const _privateSubcollections = [
+    'pushDevices',
+    'notificationReads',
+    'announcementDeliveries',
+  ];
 
   @override
   Future<AccountDeletionRecord?> loadAccount(String uid) async {
@@ -395,13 +399,7 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
     );
     for (final snapshot in snapshots) {
       final data = snapshot.data();
-      final guardianIds = data?['guardianUserIds'];
-      final ownsProfile =
-          data != null &&
-          data['locationId'] == account.locationId &&
-          (data['linkedUserId'] == account.uid ||
-              (guardianIds is List && guardianIds.contains(account.uid)));
-      if (!ownsProfile) {
+      if (!accountOwnsDeletionProfile(account, data)) {
         throw const AccountDeletionException(
           AccountDeletionError.invalidAccountData,
           'A linked student profile could not be verified. Contact the '
@@ -419,6 +417,24 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
     );
     await batch.commit();
   }
+}
+
+bool accountOwnsDeletionProfile(
+  AccountDeletionRecord account,
+  Map<String, dynamic>? data,
+) {
+  if (data == null || data['locationId'] != account.locationId) return false;
+  final guardianIds = data['guardianUserIds'];
+  final exclusiveParentOwner =
+      data['linkedUserId'] == null &&
+      guardianIds is List &&
+      guardianIds.length == 1 &&
+      guardianIds.single == account.uid;
+  final selfOwner =
+      data['linkedUserId'] == account.uid &&
+      guardianIds is List &&
+      guardianIds.isEmpty;
+  return exclusiveParentOwner || selfOwner;
 }
 
 AccountDeletionException _mapDeletionAuthException(

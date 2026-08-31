@@ -12,6 +12,8 @@ export interface ProfileRecord {
   id: string;
   isActive: boolean;
   locationId: string;
+  linkedUserId?: string;
+  guardianUserIds?: string[];
   beltRank?: string;
   preferredClassGroupIds?: string[];
 }
@@ -57,13 +59,60 @@ export function eligibleAccountIds(
     const linked = account.linkedStudentProfileIds
       .map((id) => profilesById.get(id))
       .filter((profile): profile is ProfileRecord =>
-        profile !== undefined && profile.isActive && profile.locationId === locationId);
+        profile !== undefined && profile.isActive &&
+        profile.locationId === locationId && accountOwnsProfile(account, profile));
     if (linked.length === 0) continue;
     if (type !== "announcement" || announcementMatches(content, account, linked)) {
       result.add(account.id);
     }
   }
   return [...result].sort();
+}
+
+export function accountOwnsProfile(
+  account: AccountRecord,
+  profile: ProfileRecord,
+): boolean {
+  const guardians = profile.guardianUserIds ?? [];
+  return (profile.linkedUserId === account.id && guardians.length === 0) ||
+    (profile.linkedUserId === undefined &&
+      guardians.length === 1 && guardians[0] === account.id);
+}
+
+export function isTargetedPublishedAnnouncement(
+  content: Record<string, unknown> | undefined,
+): boolean {
+  return content?.status === "published" &&
+    typeof content.locationId === "string" && content.locationId.length > 0 &&
+    content.audienceType !== "everyone";
+}
+
+export function announcementDeliveryData(
+  announcementId: string,
+  content: Record<string, unknown>,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {announcementId};
+  const memberVisibleFields = [
+    "title", "summary", "body", "announcementType", "priority",
+    "requiresAction", "status", "audienceType", "locationId",
+    "publishedAt", "createdAt", "updatedAt",
+  ];
+  for (const field of memberVisibleFields) {
+    if (content[field] !== undefined) result[field] = content[field];
+  }
+  return result;
+}
+
+export function targetedDeliveryPlan(
+  existingUids: string[],
+  recipientUids: string[],
+): {deleteUids: string[]; upsertUids: string[]} {
+  const recipients = new Set(recipientUids);
+  return {
+    deleteUids: [...new Set(existingUids)]
+      .filter((uid) => !recipients.has(uid)).sort(),
+    upsertUids: [...recipients].sort(),
+  };
 }
 
 function announcementMatches(

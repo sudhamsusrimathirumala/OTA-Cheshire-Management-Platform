@@ -6,6 +6,7 @@
       "fields": [
         {"fieldPath": "locationId", "order": "ASCENDING"},
         {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "audienceType", "order": "ASCENDING"},
         {"fieldPath": "publishedAt", "order": "DESCENDING"}
       ]
     },

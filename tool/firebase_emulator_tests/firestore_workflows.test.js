@@ -80,6 +80,9 @@ async function seedAccount({
       role, isActive, locationId,
       linkedStudentProfileIds: profileIds,
       ...(selectedProfileId ? {selectedStudentProfileId: selectedProfileId} : {}),
+      ...(role === 'parent' ? {
+        parentSelfProfileId: selfManaged ? selectedProfileId : '',
+      } : {}),
       createdAt: new Date(), updatedAt: new Date(),
     });
     for (const profileId of profileIds) {
@@ -103,7 +106,9 @@ async function seedContent() {
     const base = {locationId: 'cheshire', createdAt: new Date(), updatedAt: new Date()};
     await setDoc(doc(db, 'classSessions', 'active-class'), {...base, isActive: true});
     await setDoc(doc(db, 'classSessions', 'inactive-class'), {...base, isActive: false});
-    await setDoc(doc(db, 'announcements', 'published'), {...base, status: 'published'});
+    await setDoc(doc(db, 'announcements', 'published'), {
+      ...base, status: 'published', audienceType: 'everyone',
+    });
     await setDoc(doc(db, 'announcements', 'draft'), {...base, status: 'draft'});
     await setDoc(doc(db, 'events', 'published'), {
       ...base, isPublished: true, isArchived: false,
@@ -168,6 +173,30 @@ test('parent atomically creates one-location household profiles', async () => {
   }
 });
 
+test('parent onboarding supports 9, 10, and 11 linked profiles', async () => {
+  for (const count of [9, 10, 11]) {
+    const uid = `family-${count}`;
+    const profileIds = Array.from(
+      {length: count},
+      (_, index) => `${uid}-profile-${index}`,
+    );
+    const db = auth(uid);
+    await assertSucceeds(createProfiles(db, {
+      uid,
+      email: `${uid}@example.com`,
+      role: 'parent',
+      profileIds,
+      parentIsStudent: count === 11,
+    }));
+    const user = (await getDoc(doc(db, 'users', uid))).data();
+    assert.equal(user.linkedStudentProfileIds.length, count);
+    assert.equal(
+      user.parentSelfProfileId,
+      count === 11 ? profileIds[0] : '',
+    );
+  }
+});
+
 test('parent onboarding may atomically retain self-profile defaults', async () => {
   const db = auth('parent-defaults');
   await assertSucceeds(createProfiles(db, {
@@ -225,6 +254,20 @@ test('parent cannot claim another user profile or change ownership', async () =>
   await assertFails(updateDoc(doc(db, 'studentProfiles', 'owner-profile'), {
     guardianUserIds: ['other'], updatedAt: serverTimestamp(),
   }));
+  await assertSucceeds(updateDoc(doc(db, 'users', 'owner'), {
+    linkedStudentProfileIds: ['owner-profile', 'other-profile'],
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(getDoc(doc(db, 'studentProfiles', 'other-profile')));
+  await assertFails(selectProfile(db, 'owner', 'other-profile'));
+
+  await seedContent();
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(doc(context.firestore(), 'users', 'owner'), {
+      selectedStudentProfileId: 'other-profile',
+    });
+  });
+  await assertFails(getDoc(doc(db, 'announcements', 'published')));
 });
 
 test('managed profile edits allow canonical fields and reject escalation', async () => {
@@ -261,7 +304,7 @@ test('managed profile edits allow canonical fields and reject escalation', async
   }));
 });
 
-test('linked profile edits ignore selection and legacy relationship fields', async () => {
+test('linked profile edits ignore selection but require authoritative ownership', async () => {
   await seedAccount({
     uid: 'parent',
     profileIds: ['selected-child', 'other-child'],
@@ -277,20 +320,14 @@ test('linked profile edits ignore selection and legacy relationship fields', asy
     });
   });
   const db = auth('parent');
-  await assertSucceeds(updateManagedProfile(db, 'selected-child'));
-  await assertSucceeds(updateManagedProfile(db, 'other-child', {
+  await assertFails(updateManagedProfile(db, 'selected-child'));
+  await assertFails(updateManagedProfile(db, 'other-child', {
     firstName: 'Other', guardianEmail: 'guardian@example.com',
     beltRank: 'Blue',
     stickerProgress: {current: 4, required: 5, nextRank: 'Blue-Red'},
   }));
 
-  const other = (await getDoc(doc(db, 'studentProfiles', 'other-child'))).data();
-  assert.equal(other.firstName, 'Other');
-  assert.equal(other.guardianEmail, 'guardian@example.com');
-  assert.equal(other.beltRank, 'Blue');
-  assert.deepEqual(other.stickerProgress, {
-    current: 4, required: 5, nextRank: 'Blue-Red',
-  });
+  await assertFails(getDoc(doc(db, 'studentProfiles', 'other-child')));
 });
 
 test('student edits linked profile while invalid linked access is denied', async () => {
@@ -301,7 +338,7 @@ test('student edits linked profile while invalid linked access is denied', async
       {linkedUserId: 'legacy-user', guardianUserIds: ['legacy-guardian']},
     );
   });
-  await assertSucceeds(updateManagedProfile(
+  await assertFails(updateManagedProfile(
     auth('student-account'), 'student-account-profile',
     {guardianEmail: 'student@example.com'},
   ));
@@ -430,7 +467,7 @@ test('linked profile preference updates do not require current selection', async
       {linkedUserId: 'legacy-user', guardianUserIds: ['legacy-guardian']},
     );
   });
-  await assertSucceeds(updatePreferredClass(
+  await assertFails(updatePreferredClass(
     auth('family-self'), 'family-self-profile', 'level-3-standard',
   ));
 });
@@ -489,6 +526,7 @@ test('parent atomically adds one linked self student profile', async () => {
   let batch = writeBatch(db);
   batch.update(userRef, {
     linkedStudentProfileIds: ['parent-profile', 'parent-self'],
+    parentSelfProfileId: 'parent-self',
     updatedAt: serverTimestamp(),
   });
   batch.set(selfRef, {
@@ -505,6 +543,7 @@ test('parent atomically adds one linked self student profile', async () => {
   batch = writeBatch(db);
   batch.update(userRef, {
     linkedStudentProfileIds: ['parent-profile', 'parent-self', 'duplicate-self'],
+    parentSelfProfileId: 'duplicate-self',
     updatedAt: serverTimestamp(),
   });
   batch.set(doc(db, 'studentProfiles', 'duplicate-self'), {
@@ -522,6 +561,7 @@ test('parent atomically adds one linked self student profile', async () => {
   batch.update(userRef, {
     linkedStudentProfileIds: ['parent-profile'],
     selectedStudentProfileId: 'parent-profile',
+    parentSelfProfileId: '',
     updatedAt: serverTimestamp(),
   });
   batch.update(selfRef, {isActive: false, updatedAt: serverTimestamp()});
@@ -537,6 +577,7 @@ test('parent atomically adds one linked self student profile', async () => {
   batch = writeBatch(db);
   batch.update(userRef, {
     linkedStudentProfileIds: ['parent-profile', 'parent-self-replacement'],
+    parentSelfProfileId: 'parent-self-replacement',
     updatedAt: serverTimestamp(),
   });
   batch.set(replacementRef, {
@@ -547,6 +588,73 @@ test('parent atomically adds one linked self student profile', async () => {
     stickerProgress: {current: 0, required: 0, nextRank: 'Green-Blue'},
     promotionHistory: [], testingNotes: [], isActive: true,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+});
+
+test('family add, self-add, remove, and select work at the 11-profile boundary', async () => {
+  const childFields = (uid) => ({
+    firstName: 'Boundary', lastName: 'Child',
+    dateOfBirth: new Date('2015-01-02T00:00:00Z'), beltRank: 'White',
+    locationId: 'cheshire', guardianEmail: `${uid}@example.com`,
+    guardianUserIds: [uid], preferredClassGroupIds: [],
+    stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
+    promotionHistory: [], testingNotes: [], isActive: true,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+
+  const childIds = Array.from({length: 10}, (_, index) => `near-child-${index}`);
+  await seedAccount({uid: 'near-limit', profileIds: childIds});
+  const db = auth('near-limit');
+  const userRef = doc(db, 'users', 'near-limit');
+  const addedRef = doc(db, 'studentProfiles', 'near-child-10');
+  let batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: [...childIds, 'near-child-10'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(addedRef, childFields('near-limit'));
+  await assertSucceeds(batch.commit());
+  await assertSucceeds(selectProfile(db, 'near-limit', 'near-child-10'));
+
+  const overflowRef = doc(db, 'studentProfiles', 'near-child-11');
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: [...childIds, 'near-child-10', 'near-child-11'],
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(overflowRef, childFields('near-limit'));
+  await assertFails(batch.commit());
+
+  batch = writeBatch(db);
+  batch.update(userRef, {
+    linkedStudentProfileIds: [...childIds, 'near-child-10'].filter(
+      (id) => id !== 'near-child-0',
+    ),
+    selectedStudentProfileId: 'near-child-10',
+    updatedAt: serverTimestamp(),
+  });
+  batch.update(doc(db, 'studentProfiles', 'near-child-0'), {
+    isActive: false, updatedAt: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+
+  const selfChildIds = Array.from(
+    {length: 10},
+    (_, index) => `self-child-${index}`,
+  );
+  await seedAccount({uid: 'self-near-limit', profileIds: selfChildIds});
+  const selfDb = auth('self-near-limit');
+  const selfRef = doc(selfDb, 'studentProfiles', 'boundary-self');
+  batch = writeBatch(selfDb);
+  batch.update(doc(selfDb, 'users', 'self-near-limit'), {
+    linkedStudentProfileIds: [...selfChildIds, 'boundary-self'],
+    parentSelfProfileId: 'boundary-self',
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(selfRef, {
+    ...childFields('self-near-limit'),
+    guardianUserIds: [], linkedUserId: 'self-near-limit',
   });
   await assertSucceeds(batch.commit());
 });
@@ -605,11 +713,76 @@ test('active matching account reads only published student content', async () =>
   await assertFails(getDoc(doc(db, 'events', 'other-event')));
 
   await assertSucceeds(getDocs(query(
+    collection(db, 'announcements'),
+    where('locationId', '==', 'cheshire'),
+    where('status', '==', 'published'),
+    where('audienceType', '==', 'everyone'),
+  )));
+  await assertSucceeds(getDocs(query(
     collection(db, 'events'),
     where('locationId', '==', 'cheshire'),
     where('isPublished', '==', true),
     where('isArchived', '==', false),
   )));
+});
+
+test('targeted announcements are readable only through the recipient inbox', async () => {
+  await seedAccount({uid: 'recipient'});
+  await seedAccount({uid: 'non-recipient'});
+  await seedAccount({
+    uid: 'other-location', locationId: 'other', profileLocationId: 'other',
+  });
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const content = {
+      announcementId: 'targeted', title: 'Private update', summary: 'Summary',
+      body: 'Recipient-only body', announcementType: 'general',
+      priority: 'general', requiresAction: false, status: 'published',
+      audienceType: 'students', locationId: 'cheshire',
+      publishedAt: new Date(), createdAt: new Date(), updatedAt: new Date(),
+      targetStudentProfileIds: ['recipient-profile'],
+    };
+    await setDoc(doc(db, 'announcements', 'targeted'), content);
+    await setDoc(
+      doc(db, 'users', 'recipient', 'announcementDeliveries', 'targeted'),
+      content,
+    );
+  });
+
+  await assertFails(getDoc(doc(auth('recipient'), 'announcements', 'targeted')));
+  await assertFails(getDoc(
+    doc(auth('non-recipient'), 'announcements', 'targeted'),
+  ));
+  await assertSucceeds(getDoc(doc(auth('admin'), 'announcements', 'targeted')));
+  await assertSucceeds(getDoc(doc(
+    auth('recipient'), 'users', 'recipient',
+    'announcementDeliveries', 'targeted',
+  )));
+  await assertFails(getDoc(doc(
+    auth('non-recipient'), 'users', 'recipient',
+    'announcementDeliveries', 'targeted',
+  )));
+  await assertFails(getDoc(doc(
+    auth('other-location'), 'users', 'recipient',
+    'announcementDeliveries', 'targeted',
+  )));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await updateDoc(doc(db, 'announcements', 'targeted'), {
+      body: 'Changed target body', targetStudentProfileIds: ['non-recipient-profile'],
+    });
+    await deleteDoc(doc(
+      db, 'users', 'recipient', 'announcementDeliveries', 'targeted',
+    ));
+  });
+  await assertFails(getDoc(doc(auth('recipient'), 'announcements', 'targeted')));
+  const removed = await assertSucceeds(getDoc(doc(
+    auth('recipient'), 'users', 'recipient',
+    'announcementDeliveries', 'targeted',
+  )));
+  assert.equal(removed.exists(), false);
 });
 
 test('signed-out, wrong-location, inactive account, and inactive profile are denied', async () => {

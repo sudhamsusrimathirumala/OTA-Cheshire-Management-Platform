@@ -55,6 +55,9 @@ beforeEach(async () => {
       enabled: true, createdAt: new Date(), updatedAt: new Date(),
       lastSeenAt: new Date(),
     });
+    await setDoc(doc(
+      db, 'users', 'parent', 'announcementDeliveries', 'targeted',
+    ), {announcementId: 'targeted'});
   });
 });
 
@@ -99,10 +102,33 @@ test('member may delete private documents and their complete account', async () 
   const db = auth('parent');
   await assertSucceeds(deleteDoc(doc(db, 'users', 'parent', 'notificationReads', 'notice')));
   await assertSucceeds(deleteDoc(doc(db, 'users', 'parent', 'pushDevices', 'install')));
+  await assertSucceeds(deleteDoc(doc(
+    db, 'users', 'parent', 'announcementDeliveries', 'targeted',
+  )));
   await assertSucceeds(deleteOwnAccount(db, 'parent', ['child']));
   await assertSucceeds(getDoc(doc(db, 'users', 'parent')).then((value) => {
     if (value.exists()) throw new Error('user still exists');
   }));
+});
+
+test('complete account deletion supports 9, 10, and 11 linked profiles', async () => {
+  for (const count of [9, 10, 11]) {
+    const uid = `family-${count}`;
+    const profileIds = Array.from(
+      {length: count},
+      (_, index) => `${uid}-profile-${index}`,
+    );
+    await env.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await setDoc(doc(db, 'users', uid), account('parent', profileIds, 'cheshire'));
+      for (const profileId of profileIds) {
+        await setDoc(doc(db, 'studentProfiles', profileId), profile('cheshire', {
+          guardianEmail: `${uid}@example.com`, guardianUserIds: [uid],
+        }));
+      }
+    });
+    await assertSucceeds(deleteOwnAccount(auth(uid), uid, profileIds));
+  }
 });
 
 test('linked profile cannot be deleted outside complete account deletion', async () => {

@@ -3,10 +3,13 @@ import test from "node:test";
 import {
   canClaimDispatch,
   chunkTargets,
+  announcementDeliveryData,
   eligibleAccountIds,
   isFirstPublication,
+  isTargetedPublishedAnnouncement,
   isPermanentMessagingError,
   notificationPayload,
+  targetedDeliveryPlan,
   compatibleClassGroups,
 } from "../src/push_logic";
 
@@ -20,7 +23,7 @@ test("only first valid publication triggers", () => {
 
 test("canonical and legacy class audiences match equivalently", () => {
   const account = [{id: "parent", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["adult"]}];
-  const profiles = [{id: "adult", isActive: true, locationId: "cheshire", preferredClassGroupIds: ["adult-standard"]}];
+  const profiles = [{id: "adult", isActive: true, locationId: "cheshire", guardianUserIds: ["parent"], preferredClassGroupIds: ["adult-standard"]}];
   for (const target of ["adult-standard", "teen-adult"]) {
     assert.deepEqual(eligibleAccountIds("announcement", {locationId: "cheshire", audienceType: "classType", targetClassTypeIds: [target]}, account, profiles), ["parent"]);
   }
@@ -31,10 +34,11 @@ test("canonical and legacy class audiences match equivalently", () => {
 test("audiences deduplicate parents and broadcast events by location", () => {
   const accounts = [{id: "parent", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["a", "b"]}];
   const profiles = [
-    {id: "a", isActive: true, locationId: "cheshire", beltRank: "Blue", preferredClassGroupIds: ["teen-adult"]},
-    {id: "b", isActive: true, locationId: "cheshire", beltRank: "Blue", preferredClassGroupIds: ["teen-adult"]},
+    {id: "a", isActive: true, locationId: "cheshire", guardianUserIds: ["parent"], beltRank: "White", preferredClassGroupIds: ["level-1-standard"]},
+    {id: "b", isActive: true, locationId: "cheshire", guardianUserIds: ["parent"], beltRank: "Blue", preferredClassGroupIds: ["teen-adult"]},
   ];
   assert.deepEqual(eligibleAccountIds("announcement", {locationId: "cheshire", audienceType: "belt", targetBelts: ["Blue"]}, accounts, profiles), ["parent"]);
+  assert.deepEqual(eligibleAccountIds("announcement", {locationId: "cheshire", audienceType: "students", targetStudentProfileIds: ["b"]}, accounts, profiles), ["parent"]);
   assert.deepEqual(eligibleAccountIds("event", {locationId: "cheshire"}, accounts, profiles), ["parent"]);
   assert.deepEqual(eligibleAccountIds("resource", {locationId: "other"}, accounts, profiles), []);
 });
@@ -46,8 +50,57 @@ test("disabled, admin, unlinked, and wrong-location accounts are excluded", () =
     {id: "unlinked", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: []},
     {id: "elsewhere", role: "parent", isActive: true, locationId: "other", linkedStudentProfileIds: ["profile"]},
   ];
-  const profiles = [{id: "profile", isActive: true, locationId: "cheshire"}];
+  const profiles = [{id: "profile", isActive: true, locationId: "cheshire", guardianUserIds: ["disabled"]}];
   assert.deepEqual(eligibleAccountIds("event", {locationId: "cheshire"}, accounts, profiles), []);
+});
+
+test("forged linked profile IDs never participate in announcement targeting", () => {
+  const accounts = [
+    {id: "owner", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["owner-profile"]},
+    {id: "attacker", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["owner-profile"]},
+  ];
+  const profiles = [{
+    id: "owner-profile", isActive: true, locationId: "cheshire",
+    guardianUserIds: ["owner"], beltRank: "Blue",
+  }];
+  assert.deepEqual(eligibleAccountIds(
+    "announcement",
+    {locationId: "cheshire", audienceType: "belt", targetBelts: ["Blue"]},
+    accounts,
+    profiles,
+  ), ["owner"]);
+});
+
+test("targeted delivery copies are deterministic and archive-safe", () => {
+  const content = {
+    title: "Private", summary: "Summary", body: "Body",
+    status: "published", audienceType: "students", locationId: "cheshire",
+    targetStudentProfileIds: ["child"], updatedAt: "revision-1",
+  };
+  assert.equal(isTargetedPublishedAnnouncement(content), true);
+  assert.equal(isTargetedPublishedAnnouncement({...content, audienceType: "everyone"}), false);
+  assert.equal(isTargetedPublishedAnnouncement({...content, status: "archived"}), false);
+  assert.equal(isTargetedPublishedAnnouncement(undefined), false);
+  assert.deepEqual(
+    announcementDeliveryData("notice", content),
+    {
+      announcementId: "notice", title: "Private", summary: "Summary",
+      body: "Body", status: "published", audienceType: "students",
+      locationId: "cheshire", updatedAt: "revision-1",
+    },
+  );
+  assert.deepEqual(
+    announcementDeliveryData("notice", content),
+    announcementDeliveryData("notice", content),
+  );
+  assert.deepEqual(
+    targetedDeliveryPlan(["old", "kept"], ["kept", "new"]),
+    {deleteUids: ["old"], upsertUids: ["kept", "new"]},
+  );
+  assert.deepEqual(
+    targetedDeliveryPlan(["old", "kept"], []),
+    {deleteUids: ["kept", "old"], upsertUids: []},
+  );
 });
 
 test("multicast batching caps at 500 and deduplicates", () => {
