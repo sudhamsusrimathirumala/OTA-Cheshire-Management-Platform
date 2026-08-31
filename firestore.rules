@@ -40,18 +40,72 @@ service cloud.firestore {
     function validOwnAccountDeletion(uid) {
       return memberDeletingOwnAccount(uid) &&
           resource.data.linkedStudentProfileIds is list &&
+          resource.data.linkedStudentProfileIds.size() == 0 &&
+          resource.data.get('accountDeletionInProgress', false) == true;
+    }
+
+    function validAccountDeletionStart() {
+      return memberDeletingOwnAccount(request.auth.uid) &&
+          resource.data.get('accountDeletionInProgress', false) == false &&
+          resource.data.linkedStudentProfileIds is list &&
           resource.data.linkedStudentProfileIds.size() >= 1 &&
           resource.data.linkedStudentProfileIds.size() <= 11 &&
           resource.data.linkedStudentProfileIds.toSet().size() ==
-              resource.data.linkedStudentProfileIds.size();
+              resource.data.linkedStudentProfileIds.size() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'accountDeletionInProgress', 'updatedAt'
+          ]) &&
+          request.resource.data.accountDeletionInProgress == true &&
+          request.resource.data.updatedAt == request.time;
+    }
+
+    function validDeletionSelection(data) {
+      return (data.linkedStudentProfileIds.size() == 0 &&
+              !data.keys().hasAny(['selectedStudentProfileId'])) ||
+          (data.linkedStudentProfileIds.size() > 0 &&
+           selectedProfileValidAfter(data));
+    }
+
+    function validAccountDeletionProgressUpdate() {
+      let oldIds = resource.data.linkedStudentProfileIds;
+      let newIds = request.resource.data.linkedStudentProfileIds;
+      let deletedId = request.resource.data.get('profileMutationId', '');
+      return memberDeletingOwnAccount(request.auth.uid) &&
+          resource.data.get('accountDeletionInProgress', false) == true &&
+          request.resource.data.get('accountDeletionInProgress', false) == true &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'linkedStudentProfileIds', 'selectedStudentProfileId',
+            'parentSelfProfileId', 'profileMutationId', 'updatedAt'
+          ]) &&
+          request.resource.data.updatedAt == request.time &&
+          oldIds is list && newIds is list &&
+          oldIds.size() >= 1 && oldIds.size() <= 11 &&
+          newIds.size() == oldIds.size() - 1 &&
+          oldIds.hasAll(newIds) &&
+          newIds.toSet().size() == newIds.size() &&
+          deletedId is string && deletedId != '' &&
+          deletedId in oldIds && !(deletedId in newIds) &&
+          !existsAfter(profilePath(deletedId)) &&
+          validDeletionSelection(request.resource.data) &&
+          (resource.data.get('parentSelfProfileId', '') == deletedId
+            ? request.resource.data.get('parentSelfProfileId', '') == ''
+            : request.resource.data.get('parentSelfProfileId', '') ==
+              resource.data.get('parentSelfProfileId', ''));
     }
 
     function validLinkedProfileDeletion(profileId) {
+      let afterUser = getAfter(userPath(request.auth.uid)).data;
       return memberDeletingOwnAccount(request.auth.uid) &&
+          currentUser().get('accountDeletionInProgress', false) == true &&
           profileId in currentUser().linkedStudentProfileIds &&
           profileOwnedBy(request.auth.uid, resource.data) &&
           resource.data.locationId == currentUser().locationId &&
-          !existsAfter(userPath(request.auth.uid));
+          existsAfter(userPath(request.auth.uid)) &&
+          afterUser.get('accountDeletionInProgress', false) == true &&
+          afterUser.get('profileMutationId', '') == profileId &&
+          !(profileId in afterUser.linkedStudentProfileIds) &&
+          afterUser.linkedStudentProfileIds.size() ==
+              currentUser().linkedStudentProfileIds.size() - 1;
     }
 
     function superAdmin() {
@@ -436,15 +490,28 @@ service cloud.firestore {
       let adding = newIds.size() == oldIds.size() + 1 && newIds.hasAll(oldIds);
       let removing = newIds.size() == oldIds.size() - 1 && oldIds.hasAll(newIds);
       return activeUser() && currentUser().role == 'parent' &&
+          currentUser().get('accountDeletionInProgress', false) == false &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'linkedStudentProfileIds', 'selectedStudentProfileId',
-            'parentSelfProfileId', 'updatedAt'
-          ]) &&
+              'linkedStudentProfileIds', 'selectedStudentProfileId',
+              'parentSelfProfileId', 'profileMutationId', 'updatedAt'
+            ]) &&
           request.resource.data.updatedAt == request.time &&
           validLinkedProfileList(request.resource.data) &&
-          (adding || removing) &&
+          ((adding && request.resource.data.get('profileMutationId', '') ==
+             resource.data.get('profileMutationId', '')) ||
+           (removing && validParentFamilyRemoval(oldIds, newIds))) &&
           selectedProfileValidAfter(request.resource.data) &&
           validParentSelfMarkerUpdate(resource.data, request.resource.data);
+    }
+
+    function validParentFamilyRemoval(oldIds, newIds) {
+      let removedId = request.resource.data.get('profileMutationId', '');
+      let removedProfile = getAfter(profilePath(removedId)).data;
+      return removedId is string && removedId != '' &&
+          removedId in oldIds && !(removedId in newIds) &&
+          profileOwnedBy(request.auth.uid, removedProfile) &&
+          removedProfile.locationId == currentUser().locationId &&
+          removedProfile.isActive == false;
     }
 
     function validParentChildCreate(profileId, data) {
@@ -526,6 +593,7 @@ service cloud.firestore {
           resource.data.locationId == currentUser().locationId &&
           profileOwnedBy(request.auth.uid, resource.data) &&
           !(profileId in afterUser.linkedStudentProfileIds) &&
+          afterUser.get('profileMutationId', '') == profileId &&
           afterUser.linkedStudentProfileIds.size() >= 1 &&
           afterUser.selectedStudentProfileId in
               afterUser.linkedStudentProfileIds &&
@@ -608,7 +676,8 @@ service cloud.firestore {
       allow update: if signedIn() &&
           ((request.auth.uid == uid &&
             (validParentFamilyUpdate() || validOwnContactUpdate() ||
-             validOwnAccountUpdate())) ||
+             validOwnAccountUpdate() || validAccountDeletionStart() ||
+             validAccountDeletionProgressUpdate())) ||
            validAdminAccountActivation());
       allow delete: if (superAdmin() && request.auth.uid != uid) ||
           validOwnAccountDeletion(uid);

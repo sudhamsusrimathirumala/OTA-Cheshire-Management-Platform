@@ -45,12 +45,14 @@ class AccountDeletionRecord {
     required this.role,
     required this.locationId,
     required this.linkedStudentProfileIds,
+    this.deletionInProgress = false,
   });
 
   final String uid;
   final UserAccountRole role;
   final String locationId;
   final List<String> linkedStudentProfileIds;
+  final bool deletionInProgress;
 }
 
 abstract interface class AccountDeletionAuthentication {
@@ -177,7 +179,7 @@ class AccountDeletionService {
     }
     final ids = account.linkedStudentProfileIds;
     if (account.locationId.isEmpty ||
-        ids.isEmpty ||
+        (ids.isEmpty && !account.deletionInProgress) ||
         ids.length > 11 ||
         ids.toSet().length != ids.length ||
         ids.any((id) => id.trim().isEmpty)) {
@@ -340,7 +342,11 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
     };
     final locationId = data['locationId'];
     final linked = data['linkedStudentProfileIds'];
-    if (role == null || locationId is! String || linked is! List) {
+    final deletionInProgress = data['accountDeletionInProgress'] ?? false;
+    if (role == null ||
+        locationId is! String ||
+        linked is! List ||
+        deletionInProgress is! bool) {
       throw const AccountDeletionException(
         AccountDeletionError.invalidAccountData,
         'Your OTA account record could not be verified.',
@@ -358,6 +364,7 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
       role: role,
       locationId: locationId,
       linkedStudentProfileIds: ids,
+      deletionInProgress: deletionInProgress,
     );
   }
 
@@ -408,14 +415,53 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
       }
     }
 
-    final batch = _firestore.batch();
-    for (final reference in profileReferences) {
-      batch.delete(reference);
+    final userReference = _firestore
+        .collection(FirestoreCollections.users)
+        .doc(account.uid);
+    if (!account.deletionInProgress) {
+      await userReference.update({
+        'accountDeletionInProgress': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
-    batch.delete(
-      _firestore.collection(FirestoreCollections.users).doc(account.uid),
-    );
-    await batch.commit();
+
+    for (final profileReference in profileReferences) {
+      await _firestore.runTransaction((transaction) async {
+        final userSnapshot = await transaction.get(userReference);
+        final profileSnapshot = await transaction.get(profileReference);
+        final userData = userSnapshot.data();
+        if (userData == null) return;
+        final linked = userData['linkedStudentProfileIds'];
+        if (linked is! List || !linked.contains(profileReference.id)) return;
+        final currentIds = linked.whereType<String>().toList(growable: false);
+        if (currentIds.length != linked.length ||
+            !accountOwnsDeletionProfile(account, profileSnapshot.data())) {
+          throw const AccountDeletionException(
+            AccountDeletionError.invalidAccountData,
+            'A linked student profile could not be verified. Contact the '
+            'academy before trying again.',
+          );
+        }
+        final remainingIds = currentIds
+            .where((id) => id != profileReference.id)
+            .toList(growable: false);
+        final selectedId = userData['selectedStudentProfileId'];
+        final nextSelectedId =
+            selectedId is String && remainingIds.contains(selectedId)
+            ? selectedId
+            : (remainingIds.isEmpty ? null : remainingIds.first);
+        transaction.update(userReference, {
+          'linkedStudentProfileIds': remainingIds,
+          'selectedStudentProfileId': nextSelectedId ?? FieldValue.delete(),
+          if (userData['parentSelfProfileId'] == profileReference.id)
+            'parentSelfProfileId': '',
+          'profileMutationId': profileReference.id,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        transaction.delete(profileReference);
+      });
+    }
+    await userReference.delete();
   }
 }
 

@@ -493,10 +493,18 @@ test('parent adds and removes a child only through atomic family writes', async 
   });
   await assertSucceeds(batch.commit());
 
+  await assertFails(updateDoc(userRef, {
+    linkedStudentProfileIds: ['parent-profile'],
+    selectedStudentProfileId: 'parent-profile',
+    profileMutationId: 'new-child',
+    updatedAt: serverTimestamp(),
+  }));
+
   batch = writeBatch(db);
   batch.update(userRef, {
     linkedStudentProfileIds: ['parent-profile'],
     selectedStudentProfileId: 'parent-profile',
+    profileMutationId: 'new-child',
     updatedAt: serverTimestamp(),
   });
   batch.update(childRef, {isActive: false, updatedAt: serverTimestamp()});
@@ -562,6 +570,7 @@ test('parent atomically adds one linked self student profile', async () => {
     linkedStudentProfileIds: ['parent-profile'],
     selectedStudentProfileId: 'parent-profile',
     parentSelfProfileId: '',
+    profileMutationId: 'parent-self',
     updatedAt: serverTimestamp(),
   });
   batch.update(selfRef, {isActive: false, updatedAt: serverTimestamp()});
@@ -632,6 +641,7 @@ test('family add, self-add, remove, and select work at the 11-profile boundary',
       (id) => id !== 'near-child-0',
     ),
     selectedStudentProfileId: 'near-child-10',
+    profileMutationId: 'near-child-0',
     updatedAt: serverTimestamp(),
   });
   batch.update(doc(db, 'studentProfiles', 'near-child-0'), {

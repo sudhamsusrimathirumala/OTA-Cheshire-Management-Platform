@@ -177,6 +177,24 @@ void main() {
   });
 
   test(
+    'deletion resumes when the final linked profile is already gone',
+    () async {
+      store.users['member'] = _record(
+        linkedStudentProfileIds: const [],
+        deletionInProgress: true,
+      );
+
+      await service.deleteAccount(
+        AccountReauthenticationMethod.password,
+        password: 'correct-password',
+      );
+
+      expect(store.users, isEmpty);
+      expect(authentication.deletedUser, same(authentication.user));
+    },
+  );
+
+  test(
     'Auth deletion failure is safe and does not expose credentials',
     () async {
       authentication.failAuthDeletion = true;
@@ -245,11 +263,14 @@ void main() {
 
 AccountDeletionRecord _record({
   UserAccountRole role = UserAccountRole.parent,
+  List<String> linkedStudentProfileIds = const ['child', 'self-profile'],
+  bool deletionInProgress = false,
 }) => AccountDeletionRecord(
   uid: 'member',
   role: role,
   locationId: 'cheshire',
-  linkedStudentProfileIds: const ['child', 'self-profile'],
+  linkedStudentProfileIds: linkedStudentProfileIds,
+  deletionInProgress: deletionInProgress,
 );
 
 class _FakeDeletionAuthentication implements AccountDeletionAuthentication {

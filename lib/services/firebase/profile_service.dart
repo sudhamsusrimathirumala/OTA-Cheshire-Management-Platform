@@ -514,6 +514,7 @@ class FirestoreProfileService {
           'linkedStudentProfileIds': remainingIds,
           'selectedStudentProfileId': selectedId,
           if (removingSelfProfile) 'parentSelfProfileId': '',
+          'profileMutationId': profileId,
           'updatedAt': timestamp,
         });
         transaction.update(profileRef, {
