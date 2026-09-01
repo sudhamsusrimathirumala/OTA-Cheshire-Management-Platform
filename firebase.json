@@ -21,6 +21,19 @@
           "projectId": "ota-management-platform",
           "appId": "1:835576059374:android:abd14d2a4564a748822aff",
           "fileOutput": "android/app/src/dev/google-services.json"
+        },
+        "prod": {
+          "projectId": "ota-management-platform-e4847",
+          "appId": "1:675595858362:android:815d377e29d8938e806d83",
+          "fileOutput": "android/app/src/prod/google-services.json"
+        }
+      },
+      "ios": {
+        "prod": {
+          "projectId": "ota-management-platform-e4847",
+          "appId": "1:675595858362:ios:acb8af23e611d52f806d83",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Firebase/prod/GoogleService-Info.plist"
         }
       },
       "dart": {
@@ -32,6 +45,13 @@
             "macos": "1:835576059374:ios:6c88cf13dca65a37822aff",
             "web": "1:835576059374:web:dd2c9a784388f436822aff",
             "windows": "1:835576059374:web:3bad5d73893465d2822aff"
+          }
+        },
+        "lib/firebase_options_prod.dart": {
+          "projectId": "ota-management-platform-e4847",
+          "configurations": {
+            "android": "1:675595858362:android:815d377e29d8938e806d83",
+            "ios": "1:675595858362:ios:acb8af23e611d52f806d83"
           }
         }
       }
