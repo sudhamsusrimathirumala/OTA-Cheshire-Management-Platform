@@ -145,7 +145,7 @@ service cloud.firestore {
       return profileData.guardianUserIds is list &&
           ((profileData.get('linkedUserId', '') == uid &&
             profileData.guardianUserIds.size() == 0) ||
-           (profileData.get('linkedUserId', '') == '' &&
+           (!profileData.keys().hasAny(['linkedUserId']) &&
             profileData.guardianUserIds == [uid]));
     }
 
@@ -198,9 +198,12 @@ service cloud.firestore {
     function validPreferredClasses(data) {
       return data.preferredClassGroupIds is list &&
           data.preferredClassGroupIds.size() <= 1 &&
-          (data.preferredClassGroupIds.size() == 0 ||
-           (data.preferredClassGroupIds[0] is string &&
-            data.preferredClassGroupIds[0].size() > 0));
+           (data.preferredClassGroupIds.size() == 0 ||
+            (data.preferredClassGroupIds[0] is string &&
+             data.preferredClassGroupIds[0].size() > 0 &&
+             data.preferredClassGroupIds[0].size() <= 100 &&
+             data.preferredClassGroupIds[0].matches(
+               '^[A-Za-z0-9][A-Za-z0-9_-]*$')));
     }
 
     function validStickerProgress(data) {
@@ -412,18 +415,8 @@ service cloud.firestore {
     }
 
     function validManagedStickerUpdate() {
-      let stickerChanged = request.resource.data.stickerProgress
-          .diff(resource.data.stickerProgress).affectedKeys();
-      return request.resource.data.stickerProgress is map &&
-          resource.data.stickerProgress is map &&
-          stickerChanged.hasOnly(['current', 'required', 'nextRank']) &&
-          request.resource.data.stickerProgress.current is int &&
-          request.resource.data.stickerProgress.current >= 0 &&
-          request.resource.data.stickerProgress.required is int &&
-          request.resource.data.stickerProgress.required >= 0 &&
-          (!stickerChanged.hasAny(['nextRank']) ||
-           request.resource.data.stickerProgress.nextRank ==
-               expectedNextRank(request.resource.data.beltRank));
+      return canonicalBelt(request.resource.data.beltRank) &&
+          validStickerProgress(request.resource.data);
     }
 
     function validManagedProfileUpdate(profileId) {
@@ -442,12 +435,10 @@ service cloud.firestore {
             request.resource.data.lastName.size() > 0)) &&
           (!changed.hasAny(['dateOfBirth']) ||
            request.resource.data.dateOfBirth is timestamp) &&
-          (!changed.hasAny(['beltRank']) ||
-           canonicalBelt(request.resource.data.beltRank)) &&
+          (!changed.hasAny(['beltRank', 'stickerProgress']) ||
+           validManagedStickerUpdate()) &&
           (!changed.hasAny(['guardianEmail']) ||
            validGuardianEmail(request.resource.data)) &&
-          (!changed.hasAny(['stickerProgress']) ||
-           validManagedStickerUpdate()) &&
           request.resource.data.updatedAt == request.time;
     }
 
@@ -612,16 +603,186 @@ service cloud.firestore {
       return canAdminLocation(resource.data.locationId) &&
           request.resource.data.locationId == resource.data.locationId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-            'firstName', 'lastName', 'dateOfBirth', 'beltRank',
-            'guardianEmail', 'preferredClassGroupIds', 'stickerProgress',
-            'promotionHistory', 'testingNotes', 'isActive', 'updatedAt'
+            'beltRank', 'stickerProgress', 'updatedAt'
           ]) &&
           canonicalBelt(request.resource.data.beltRank) &&
-          validGuardianEmail(request.resource.data) &&
-          validPreferredClasses(request.resource.data) &&
           validStickerProgress(request.resource.data) &&
-          request.resource.data.isActive is bool &&
           request.resource.data.updatedAt == request.time;
+    }
+
+    function validAnnouncementData(data) {
+      return data.title is string && data.title.size() > 0 &&
+          data.summary is string && data.body is string &&
+          data.announcementType is string &&
+          data.announcementType.size() > 0 &&
+          data.priority in ['general', 'important'] &&
+          data.requiresAction is bool &&
+          data.status in ['draft', 'published', 'archived'] &&
+          data.audienceType in ['everyone', 'belt', 'classType', 'students'] &&
+          data.locationId is string && data.locationId.size() > 0 &&
+          data.targetBelts is list &&
+          data.targetClassTypeIds is list &&
+          data.targetStudentProfileIds is list &&
+          data.targetUserIds is list &&
+          data.createdAt is timestamp && data.updatedAt is timestamp &&
+          (!data.keys().hasAny(['publishedAt']) ||
+           data.publishedAt is timestamp);
+    }
+
+    function validAnnouncementCreate(data) {
+      return data.keys().hasOnly([
+            'title', 'summary', 'body', 'announcementType', 'priority',
+            'requiresAction', 'status', 'audienceType', 'locationId',
+            'publishedAt', 'createdAt', 'updatedAt', 'targetBelts',
+            'targetClassTypeIds', 'targetStudentProfileIds', 'targetUserIds'
+          ]) &&
+          data.keys().hasAll([
+            'title', 'summary', 'body', 'announcementType', 'priority',
+            'requiresAction', 'status', 'audienceType', 'locationId',
+            'createdAt', 'updatedAt', 'targetBelts', 'targetClassTypeIds',
+            'targetStudentProfileIds', 'targetUserIds'
+          ]) &&
+          validAnnouncementData(data);
+    }
+
+    function validAnnouncementUpdate() {
+      return request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title', 'summary', 'body', 'announcementType', 'priority',
+            'requiresAction', 'status', 'audienceType', 'publishedAt',
+            'updatedAt', 'targetBelts', 'targetClassTypeIds',
+            'targetStudentProfileIds', 'targetUserIds'
+          ]) &&
+          validAnnouncementData(request.resource.data);
+    }
+
+    function validClassSessionData(data) {
+      return data.className is string && data.className.size() > 0 &&
+          data.classTypeId is string && data.classTypeId.size() > 0 &&
+          data.bulkGroupId is string && data.bulkGroupId.size() > 0 &&
+          data.locationId is string && data.locationId.size() > 0 &&
+          data.weekday is int && data.weekday >= 1 && data.weekday <= 7 &&
+          data.startMinutes is int && data.startMinutes >= 0 &&
+          data.startMinutes < 1440 &&
+          data.endMinutes is int && data.endMinutes > data.startMinutes &&
+          data.endMinutes <= 1440 &&
+          data.eligibleBelts is list && data.description is string &&
+          data.isActive is bool && data.createdAt is timestamp &&
+          data.updatedAt is timestamp &&
+          (!data.keys().hasAny(['eligibilityNote']) ||
+           data.eligibilityNote is string) &&
+          (!data.keys().hasAny(['resumesOn']) || data.resumesOn is timestamp);
+    }
+
+    function validClassSessionCreate(data) {
+      return data.keys().hasOnly([
+            'className', 'classTypeId', 'bulkGroupId', 'locationId', 'weekday',
+            'startMinutes', 'endMinutes', 'eligibleBelts', 'description',
+            'eligibilityNote', 'isActive', 'resumesOn', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'className', 'classTypeId', 'bulkGroupId', 'locationId', 'weekday',
+            'startMinutes', 'endMinutes', 'eligibleBelts', 'description',
+            'isActive', 'createdAt', 'updatedAt'
+          ]) &&
+          validClassSessionData(data);
+    }
+
+    function validClassSessionUpdate() {
+      return request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'className', 'classTypeId', 'bulkGroupId', 'weekday',
+            'startMinutes', 'endMinutes', 'eligibleBelts', 'description',
+            'eligibilityNote', 'isActive', 'resumesOn', 'updatedAt'
+          ]) &&
+          validClassSessionData(request.resource.data);
+    }
+
+    function validEventData(data) {
+      return data.title is string && data.title.size() > 0 &&
+          data.description is string &&
+          data.locationId is string && data.locationId.size() > 0 &&
+          data.eventType in [
+            'parentNightOut', 'tournament', 'summerCamp', 'beltTesting',
+            'seminar', 'specialEvent'
+          ] &&
+          data.startDateTime is timestamp && data.endDateTime is timestamp &&
+          data.endDateTime > data.startDateTime &&
+          data.linkedResourceIds is list && data.linkedResourceIds.size() <= 1 &&
+          ((data.linkedResourceIds.size() == 0 &&
+            !data.keys().hasAny(['primaryRegistrationResourceId'])) ||
+           (data.linkedResourceIds.size() == 1 &&
+            data.primaryRegistrationResourceId is string &&
+            data.primaryRegistrationResourceId == data.linkedResourceIds[0])) &&
+          data.isPublished is bool && data.isArchived is bool &&
+          data.createdAt is timestamp && data.updatedAt is timestamp &&
+          (!data.keys().hasAny(['registrationDeadline']) ||
+           data.registrationDeadline is timestamp);
+    }
+
+    function validEventCreate(data) {
+      return data.keys().hasOnly([
+            'title', 'description', 'locationId', 'eventType', 'startDateTime',
+            'endDateTime', 'registrationDeadline', 'linkedResourceIds',
+            'primaryRegistrationResourceId', 'isPublished', 'isArchived',
+            'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'title', 'description', 'locationId', 'eventType', 'startDateTime',
+            'endDateTime', 'linkedResourceIds', 'isPublished', 'isArchived',
+            'createdAt', 'updatedAt'
+          ]) &&
+          validEventData(data);
+    }
+
+    function validEventUpdate() {
+      return request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title', 'description', 'eventType', 'startDateTime', 'endDateTime',
+            'registrationDeadline', 'linkedResourceIds',
+            'primaryRegistrationResourceId', 'isPublished', 'isArchived',
+            'updatedAt'
+          ]) &&
+          validEventData(request.resource.data);
+    }
+
+    function validResourceData(data) {
+      return data.title is string && data.title.size() > 0 &&
+          data.description is string && data.resourceSection == 'general' &&
+          data.category in [
+            'registration', 'testing', 'academy-information', 'general'
+          ] &&
+          data.locationId is string && data.locationId.size() > 0 &&
+          data.isPublished is bool && data.isArchived is bool &&
+          data.createdAt is timestamp && data.updatedAt is timestamp &&
+          (!data.keys().hasAny(['linkUrl']) ||
+           (data.linkUrl is string &&
+            data.linkUrl.matches('^https?://[^\\s]+$')));
+    }
+
+    function validResourceCreate(data) {
+      return data.keys().hasOnly([
+            'title', 'description', 'resourceSection', 'category', 'linkUrl',
+            'locationId', 'isPublished', 'isArchived', 'createdAt', 'updatedAt'
+          ]) &&
+          data.keys().hasAll([
+            'title', 'description', 'resourceSection', 'category', 'locationId',
+            'isPublished', 'isArchived', 'createdAt', 'updatedAt'
+          ]) &&
+          validResourceData(data);
+    }
+
+    function validResourceUpdate() {
+      return request.resource.data.locationId == resource.data.locationId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'title', 'description', 'resourceSection', 'category', 'linkUrl',
+            'isPublished', 'isArchived', 'updatedAt'
+          ]) &&
+          validResourceData(request.resource.data);
     }
 
     function publishedClassSession() {
@@ -683,8 +844,8 @@ service cloud.firestore {
           validOwnAccountDeletion(uid);
 
       match /notificationReads/{announcementId} {
-        allow read, delete: if signedIn() && request.auth.uid == uid;
-        allow create, update: if signedIn() && request.auth.uid == uid &&
+        allow read, delete: if activePushDeviceOwner(uid);
+        allow create, update: if activePushDeviceOwner(uid) &&
             request.resource.data.keys().hasOnly(['readAt']) &&
             request.resource.data.keys().hasAll(['readAt']) &&
             request.resource.data.readAt == request.time;
@@ -745,10 +906,11 @@ service cloud.firestore {
       allow read: if canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedClassSession());
       allow create: if canAdminLocation(request.resource.data.locationId) &&
-          activeLocation(request.resource.data.locationId);
+          activeLocation(request.resource.data.locationId) &&
+          validClassSessionCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId;
+          validClassSessionUpdate();
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
@@ -757,10 +919,11 @@ service cloud.firestore {
       allow read: if canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedAnnouncement());
       allow create: if canAdminLocation(request.resource.data.locationId) &&
-          activeLocation(request.resource.data.locationId);
+          activeLocation(request.resource.data.locationId) &&
+          validAnnouncementCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId;
+          validAnnouncementUpdate();
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
@@ -769,10 +932,11 @@ service cloud.firestore {
       allow read: if canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedEvent());
       allow create: if canAdminLocation(request.resource.data.locationId) &&
-          activeLocation(request.resource.data.locationId);
+          activeLocation(request.resource.data.locationId) &&
+          validEventCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId;
+          validEventUpdate();
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
@@ -781,10 +945,11 @@ service cloud.firestore {
       allow read: if canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedResource());
       allow create: if canAdminLocation(request.resource.data.locationId) &&
-          activeLocation(request.resource.data.locationId);
+          activeLocation(request.resource.data.locationId) &&
+          validResourceCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          request.resource.data.locationId == resource.data.locationId;
+          validResourceUpdate();
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }

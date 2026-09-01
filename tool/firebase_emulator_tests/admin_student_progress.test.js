@@ -35,4 +35,15 @@ test('admin progress update is same-location and admin-only for unlinked profile
   await assertFails(updateDoc(doc(auth('parent'), 'studentProfiles', 'student-profile'), progress));
   await assertFails(updateDoc(doc(auth('student'), 'studentProfiles', 'parent-profile'), progress));
   await assertFails(updateDoc(doc(auth('admin'), 'studentProfiles', 'parent-profile'), {...progress, locationId: 'other'}));
+  await assertFails(updateDoc(doc(auth('admin'), 'studentProfiles', 'parent-profile'), {
+    beltRank: 'Blue', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(auth('admin'), 'studentProfiles', 'parent-profile'), {
+    beltRank: 'Blue',
+    stickerProgress: {current: 2, required: 5, nextRank: 'Green-Blue'},
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(doc(auth('admin'), 'studentProfiles', 'parent-profile'), {
+    adminNote: 'injected', updatedAt: serverTimestamp(),
+  }));
 });

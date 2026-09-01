@@ -261,6 +261,24 @@ test('parent cannot claim another user profile or change ownership', async () =>
   await assertFails(getDoc(doc(db, 'studentProfiles', 'other-profile')));
   await assertFails(selectProfile(db, 'owner', 'other-profile'));
 
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'owner-profile'),
+      {guardianUserIds: ['owner', 'other']},
+    );
+  });
+  await assertFails(getDoc(doc(db, 'studentProfiles', 'owner-profile')));
+  await assertFails(updateDoc(doc(db, 'studentProfiles', 'owner-profile'), {
+    firstName: 'Claimed', updatedAt: serverTimestamp(),
+  }));
+  await env.withSecurityRulesDisabled(async (context) => {
+    await updateDoc(
+      doc(context.firestore(), 'studentProfiles', 'owner-profile'),
+      {guardianUserIds: ['owner'], linkedUserId: ''},
+    );
+  });
+  await assertFails(getDoc(doc(db, 'studentProfiles', 'owner-profile')));
+
   await seedContent();
   await env.withSecurityRulesDisabled(async (context) => {
     await updateDoc(doc(context.firestore(), 'users', 'owner'), {
@@ -278,6 +296,18 @@ test('managed profile edits allow canonical fields and reject escalation', async
   await assertSucceeds(updateDoc(profileRef, {
     firstName: 'Updated', beltRank: 'Yellow',
     stickerProgress: {current: 7, required: 3, nextRank: 'Yellow-Green'},
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    beltRank: 'Blue', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    beltRank: 'Blue',
+    stickerProgress: {current: 1, required: 5, nextRank: 'Green-Blue'},
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    stickerProgress: {current: -1, required: 5, nextRank: 'Yellow-Green'},
     updatedAt: serverTimestamp(),
   }));
   await assertSucceeds(updatePreferredClass(
@@ -408,6 +438,17 @@ test('preference-only updates accept legacy profile data and reject other change
   });
   await assertSucceeds(updatePreferredClass(db, 'parent-profile', 'level-2-standard'));
   await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: ['level 3'], updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: ['level-1-standard', 'level-2-standard'],
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
+    preferredClassGroupIds: [`x${'a'.repeat(100)}`],
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(updateDoc(profileRef, {
     preferredClassGroupIds: ['level-3-standard'], beltRank: 'Yellow',
     updatedAt: serverTimestamp(),
   }));
@@ -515,6 +556,7 @@ test('parent adds and removes a child only through atomic family writes', async 
     );
     assert.equal(removed.data().isActive, false);
   });
+  await assertFails(getDoc(childRef));
 
   const finalBatch = writeBatch(db);
   finalBatch.update(userRef, {
@@ -672,6 +714,7 @@ test('family add, self-add, remove, and select work at the 11-profile boundary',
 test('notification read state uses the exact private nested client path', async () => {
   await seedAccount({uid: 'reader'});
   await seedAccount({uid: 'other'});
+  await seedAccount({uid: 'inactive-reader', isActive: false});
   const ownRef = doc(auth('reader'), 'users', 'reader', 'notificationReads', 'notice');
   await assertSucceeds(markNotificationRead(auth('reader'), 'reader', 'notice'));
   await assertSucceeds(getDoc(ownRef));
@@ -706,6 +749,83 @@ test('notification read state uses the exact private nested client path', async 
   await assertSucceeds(markNotificationUnread(auth('reader'), 'reader', 'notice'));
   assert.equal((await getDoc(ownRef)).exists(), false);
   await assertFails(markNotificationUnread(auth('other'), 'reader', 'notice-2'));
+
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(
+      context.firestore(), 'users', 'inactive-reader',
+      'notificationReads', 'notice',
+    ), {readAt: new Date()});
+  });
+  const inactiveRef = doc(
+    auth('inactive-reader'), 'users', 'inactive-reader',
+    'notificationReads', 'notice',
+  );
+  await assertFails(getDoc(inactiveRef));
+  await assertFails(updateDoc(inactiveRef, {readAt: serverTimestamp()}));
+  await assertFails(deleteDoc(inactiveRef));
+});
+
+test('admin content writes accept app schemas and reject injected fields', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  const db = auth('admin');
+  const now = new Date();
+  const announcementRef = doc(db, 'announcements', 'admin-schema');
+  const classRef = doc(db, 'classSessions', 'admin-schema');
+  const eventRef = doc(db, 'events', 'admin-schema');
+  const resourceRef = doc(db, 'resources', 'admin-schema');
+
+  await assertSucceeds(setDoc(announcementRef, {
+    title: 'Notice', summary: 'Summary', body: 'Body',
+    announcementType: 'general', priority: 'general', requiresAction: false,
+    status: 'draft', audienceType: 'everyone', locationId: 'cheshire',
+    targetBelts: [], targetClassTypeIds: [], targetStudentProfileIds: [],
+    targetUserIds: [], createdAt: now, updatedAt: now,
+  }));
+  await assertSucceeds(setDoc(classRef, {
+    className: 'Level 1', classTypeId: 'level-1',
+    bulkGroupId: 'level-1-standard', locationId: 'cheshire', weekday: 2,
+    startMinutes: 600, endMinutes: 660, eligibleBelts: ['White'],
+    description: 'Class', isActive: true, createdAt: now, updatedAt: now,
+  }));
+  await assertSucceeds(setDoc(eventRef, {
+    title: 'Seminar', description: 'Event', locationId: 'cheshire',
+    eventType: 'seminar', startDateTime: new Date('2027-01-01T15:00:00Z'),
+    endDateTime: new Date('2027-01-01T16:00:00Z'), linkedResourceIds: [],
+    isPublished: false, isArchived: false, createdAt: now, updatedAt: now,
+  }));
+  await assertSucceeds(setDoc(resourceRef, {
+    title: 'Registration', description: 'Form', resourceSection: 'general',
+    category: 'registration', linkUrl: 'https://example.com/form',
+    locationId: 'cheshire', isPublished: false, isArchived: false,
+    createdAt: now, updatedAt: now,
+  }));
+
+  await assertSucceeds(updateDoc(announcementRef, {
+    status: 'archived', updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(classRef, {
+    isActive: false, updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(eventRef, {
+    isArchived: true, updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(resourceRef, {
+    isArchived: true, updatedAt: serverTimestamp(),
+  }));
+
+  for (const reference of [announcementRef, classRef, eventRef, resourceRef]) {
+    await assertFails(updateDoc(reference, {
+      injectedAdminField: true, updatedAt: serverTimestamp(),
+    }));
+  }
+  await assertFails(updateDoc(eventRef, {
+    locationId: 'other', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(db, 'resources', 'bad-schema'), {
+    title: 'Bad', description: 'Bad', resourceSection: 'general',
+    category: 'registration', locationId: 'cheshire', isPublished: false,
+    isArchived: false, createdAt: now, updatedAt: now, unexpected: true,
+  }));
 });
 
 test('active matching account reads only published student content', async () => {
