@@ -108,6 +108,14 @@ service cloud.firestore {
               currentUser().linkedStudentProfileIds.size() - 1;
     }
 
+    function deletionProfileReadable(profileId) {
+      return memberDeletingOwnAccount(request.auth.uid) &&
+          currentUser().get('accountDeletionInProgress', false) == true &&
+          profileId in currentUser().linkedStudentProfileIds &&
+          profileOwnedBy(request.auth.uid, resource.data) &&
+          resource.data.locationId == currentUser().locationId;
+    }
+
     function superAdmin() {
       return activeUser() && currentUser().role == 'superAdmin';
     }
@@ -844,7 +852,9 @@ service cloud.firestore {
           validOwnAccountDeletion(uid);
 
       match /notificationReads/{announcementId} {
-        allow read, delete: if activePushDeviceOwner(uid);
+        allow read: if activePushDeviceOwner(uid);
+        allow delete: if activePushDeviceOwner(uid) ||
+            memberDeletingOwnAccount(uid);
         allow create, update: if activePushDeviceOwner(uid) &&
             request.resource.data.keys().hasOnly(['readAt']) &&
             request.resource.data.keys().hasAll(['readAt']) &&
@@ -884,6 +894,7 @@ service cloud.firestore {
            validInitialProfile(profileId, request.resource.data));
       allow read: if signedIn() &&
           (userManagesProfile(profileId, resource.data) ||
+           deletionProfileReadable(profileId) ||
            superAdmin() ||
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));

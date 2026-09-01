@@ -138,11 +138,13 @@ class AccountDeletionService {
     }
 
     final account = await store.loadAccount(uid);
-    _validateMemberAccount(account);
+    if (account != null) _validateMemberAccount(account);
     await authentication.reauthenticate(user, method, password: password);
     await authentication.revokeProviderToken(user, method);
-    await store.deletePrivateDocuments(uid);
-    await store.deleteLinkedProfilesAndUser(account!);
+    if (account != null) {
+      await store.deletePrivateDocuments(uid);
+      await store.deleteLinkedProfilesAndUser(account);
+    }
     try {
       await authentication.delete(user);
     } on AccountDeletionException catch (error) {
@@ -162,13 +164,7 @@ class AccountDeletionService {
     }
   }
 
-  void _validateMemberAccount(AccountDeletionRecord? account) {
-    if (account == null) {
-      throw const AccountDeletionException(
-        AccountDeletionError.accountMissing,
-        'Your OTA account record could not be found.',
-      );
-    }
+  void _validateMemberAccount(AccountDeletionRecord account) {
     if (account.role == UserAccountRole.admin ||
         account.role == UserAccountRole.superAdmin) {
       throw const AccountDeletionException(
@@ -392,6 +388,16 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
   Future<void> deleteLinkedProfilesAndUser(
     AccountDeletionRecord account,
   ) async {
+    final userReference = _firestore
+        .collection(FirestoreCollections.users)
+        .doc(account.uid);
+    if (!account.deletionInProgress) {
+      await userReference.update({
+        'accountDeletionInProgress': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+
     final profileReferences = account.linkedStudentProfileIds
         .map(
           (id) => _firestore
@@ -413,16 +419,6 @@ class FirestoreAccountDeletionStore implements AccountDeletionStore {
           'academy before trying again.',
         );
       }
-    }
-
-    final userReference = _firestore
-        .collection(FirestoreCollections.users)
-        .doc(account.uid);
-    if (!account.deletionInProgress) {
-      await userReference.update({
-        'accountDeletionInProgress': true,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
     }
 
     for (final profileReference in profileReferences) {

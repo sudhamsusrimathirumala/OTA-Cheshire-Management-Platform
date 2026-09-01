@@ -762,7 +762,7 @@ test('notification read state uses the exact private nested client path', async 
   );
   await assertFails(getDoc(inactiveRef));
   await assertFails(updateDoc(inactiveRef, {readAt: serverTimestamp()}));
-  await assertFails(deleteDoc(inactiveRef));
+  await assertSucceeds(deleteDoc(inactiveRef));
 });
 
 test('admin content writes accept app schemas and reject injected fields', async () => {

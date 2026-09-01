@@ -39,6 +39,9 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', 'parent'), account('parent', ['child'], 'cheshire'));
     await setDoc(doc(db, 'users', 'other-parent'), account('parent', ['other-child'], 'cheshire'));
     await setDoc(doc(db, 'users', 'cross-location'), account('student', ['cross-profile'], 'cheshire'));
+    await setDoc(doc(db, 'users', 'inactive-parent'), {
+      ...account('parent', ['inactive-child'], 'cheshire'), isActive: false,
+    });
     await setDoc(doc(db, 'users', 'admin'), account('admin', [], 'cheshire'));
     await setDoc(doc(db, 'users', 'super-admin'), account('superAdmin', [], ''));
     await setDoc(doc(db, 'studentProfiles', 'child'), profile('cheshire', {
@@ -50,9 +53,16 @@ beforeEach(async () => {
     await setDoc(doc(db, 'studentProfiles', 'cross-profile'), profile('other', {
       guardianUserIds: [], linkedUserId: 'cross-location',
     }));
+    await setDoc(doc(db, 'studentProfiles', 'inactive-child'), profile('cheshire', {
+      guardianEmail: 'inactive-parent@example.com',
+      guardianUserIds: ['inactive-parent'],
+    }));
     await setDoc(doc(db, 'users', 'parent', 'notificationReads', 'notice'), {
       readAt: new Date(),
     });
+    await setDoc(doc(
+      db, 'users', 'inactive-parent', 'notificationReads', 'notice',
+    ), {readAt: new Date()});
     await setDoc(doc(db, 'users', 'parent', 'pushDevices', 'install'), {
       fcmToken: 'test-token', platform: 'android', appEnvironment: 'dev',
       enabled: true, createdAt: new Date(), updatedAt: new Date(),
@@ -142,6 +152,23 @@ test('member may delete private documents and their complete account', async () 
   await assertSucceeds(getDoc(doc(db, 'users', 'parent')).then((value) => {
     if (value.exists()) throw new Error('user still exists');
   }));
+});
+
+test('inactive member may delete notification reads and complete deletion', async () => {
+  const db = auth('inactive-parent');
+  const readRef = doc(
+    db, 'users', 'inactive-parent', 'notificationReads', 'notice',
+  );
+  await assertFails(getDoc(readRef));
+  await assertFails(setDoc(readRef, {readAt: serverTimestamp()}));
+  await assertFails(updateDoc(readRef, {readAt: serverTimestamp()}));
+  await assertFails(deleteDoc(doc(
+    auth('parent'), 'users', 'inactive-parent', 'notificationReads', 'notice',
+  )));
+  await assertSucceeds(deleteDoc(readRef));
+  await assertSucceeds(deleteOwnAccount(
+    db, 'inactive-parent', ['inactive-child'],
+  ));
 });
 
 test('complete account deletion supports 9, 10, and 11 linked profiles', async () => {

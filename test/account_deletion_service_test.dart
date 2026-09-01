@@ -226,6 +226,79 @@ void main() {
       expect(events.last, 'delete-auth');
     },
   );
+
+  test(
+    'retry deletes Auth when the Firestore account is already absent',
+    () async {
+      authentication.failAuthDeletion = true;
+      await expectLater(
+        service.deleteAccount(
+          AccountReauthenticationMethod.password,
+          password: 'correct-password',
+        ),
+        throwsA(isA<AccountDeletionException>()),
+      );
+
+      authentication.failAuthDeletion = false;
+      events.clear();
+      await service.deleteAccount(
+        AccountReauthenticationMethod.password,
+        password: 'correct-password',
+      );
+
+      expect(
+        events,
+        orderedEquals(['load-account', 'reauth-password', 'delete-auth']),
+      );
+      expect(authentication.deleteCalls, 2);
+    },
+  );
+
+  test('repeated Auth deletion failure remains retryable', () async {
+    authentication.failAuthDeletion = true;
+
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await expectLater(
+        service.deleteAccount(
+          AccountReauthenticationMethod.password,
+          password: 'correct-password',
+        ),
+        throwsA(
+          isA<AccountDeletionException>().having(
+            (value) => value.firestoreDeletionCompleted,
+            'Firestore completed',
+            isTrue,
+          ),
+        ),
+      );
+    }
+
+    expect(authentication.reauthenticateCalls, 2);
+    expect(authentication.deleteCalls, 2);
+    expect(store.privateDeleteCalls, 1);
+  });
+
+  test('malformed existing member account remains rejected', () async {
+    store.users['member'] = _record(linkedStudentProfileIds: const []);
+
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.password,
+        password: 'correct-password',
+      ),
+      throwsA(
+        isA<AccountDeletionException>().having(
+          (value) => value.error,
+          'error',
+          AccountDeletionError.invalidAccountData,
+        ),
+      ),
+    );
+
+    expect(authentication.reauthenticateCalls, 0);
+    expect(authentication.deleteCalls, 0);
+  });
+
   test('account deletion ownership is exclusive and location-bound', () {
     final account = _record();
     expect(
