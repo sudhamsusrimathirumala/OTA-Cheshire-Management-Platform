@@ -548,6 +548,29 @@ Run the narrow layout regression at 1.0x and 1.5x text scale when changing dense
 
 The audit report's collection names and examples help explain why cleanup/migration tooling exists. Re-run the audit deliberately against the intended project before making any current claim; never infer live resolution or live failure solely from the checked-in snapshot.
 
+### Maintenance entrypoints and safeguards
+
+The standard development-flavor commands are:
+
+```powershell
+# Read-only
+flutter run --flavor dev -t lib/firestore_audit_main.dart
+flutter run --flavor dev -t lib/firestore_export_main.dart
+
+# Write-capable; inspect the target, source guard, plan, and confirmation first
+flutter run --flavor dev -t lib/firestore_cleanup_main.dart
+flutter run --flavor dev -t lib/firestore_schema_update_main.dart
+flutter run --flavor dev -t lib/seed_firestore_main.dart
+flutter run --flavor dev -t tool/seed_firestore.dart
+
+# Historical approval-data removal: dry-run by default and development-only
+node tool/remove_approval_data.mjs --project=ota-management-platform
+```
+
+Audit/export refuse release-mode operation. Cleanup first generates a deterministic plan, shows unresolved relationships and warnings, requires an exact confirmation and project match, applies field-level changes without deleting whole documents, stops at the failed document, and audits again after success. Schema updates are allow-listed in source. Seeding and migration paths have source-level enablement/target checks that must be reviewed at the commit being run; do not bypass them from a documentation command.
+
+The historical approval-data script is scoped to the development project, requires exactly one active location and a short-lived operator token for apply mode, and does not modify Firebase Authentication users. Its dry-run output must be reviewed before using the exact confirmation shown by the script. No command here grants deployment or production-data authorization.
+
 ## Change-impact checklist
 
 Use the smallest applicable slice, but follow every dependency edge that the change crosses.

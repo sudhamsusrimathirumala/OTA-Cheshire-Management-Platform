@@ -500,7 +500,7 @@ The prod debug build deliberately exercises production Dart/native Firebase sele
 | **Complete in repository** | Member/admin flows; Auth integrations; family/profile model; current Rules/indexes; server-authorized delivery and push code; bounded deletion; dev/prod Android/iOS configuration; integrated Apple code; fail-closed Android signing; tracked lockfile/wrapper; test suites; prod-flavor CI; removed tracked IDE metadata |
 | **Ready in code, not proven deployed** | Production Rules/index definitions, Functions, production Firebase clients, push architecture, deletion security path, Apple capability declarations |
 | **External setup required** | Explicit Firebase deployment authorization; billing/Functions approval; upload keystore and Play App Signing; final fingerprints/OAuth; Apple Team/certs/profiles; Firebase Apple provider; APNs; Mac/Xcode archive; physical iPhone tests; TestFlight/Play internal tests; store-console work; final academy curriculum/content/link approval |
-| **Future/optional** | Write-capable bulk schedule actions, operational multi-location rollout, guardian display-name enrichment, attendance/reporting/analytics under a privacy plan, richer media, reminders/messaging |
+| **Future/optional** | Dependency/toolchain upgrades, write-capable bulk schedule actions, operational multi-location rollout, guardian display-name enrichment, attendance/reporting/analytics under a privacy plan, richer media, reminders/messaging |
 
 “Ready in code” is separate from “live.” Rules, indexes, and Functions affect production only after an authorized deployment to `ota-management-platform-e4847`. Native client configuration does not perform that deployment.
 
@@ -516,8 +516,10 @@ The prod debug build deliberately exercises production Dart/native Firebase sele
 - Production Rules/indexes/Functions require explicit deployment authorization; repository presence is not deployment state.
 - The audit JSON is historical and must not be read as live-state evidence.
 - Flutter platform shells exist for other targets, but production Firebase/release work focuses on Android and iOS.
+- A September 1, 2026 `npm audit --omit=dev` of `functions/` reports nine moderate findings and no high/critical findings. They trace through the current `firebase-admin`/`firebase-functions` tree to the `uuid` buffer-bounds advisory. npm's automatic fix proposal crosses major versions and even proposes older direct packages, so it needs a separately reviewed dependency upgrade rather than an unreviewed forced fix. The emulator harness reports no production-dependency findings.
+- The same-day Flutter tool pass reports 39 packages with newer versions outside current constraints, including a later major `file_picker`; `flutter analyze` itself is clean. Treat counts and available versions as a dated snapshot and refresh them during release maintenance.
 
-Dependency advisories and Flutter/Android migration warnings should be evaluated against current tool output during the release pass instead of copied indefinitely as static claims. They are maintenance/release concerns, not unfinished product features.
+Dependency advisories and Flutter/Android migration warnings are maintenance/release concerns, not unfinished product features. Recheck current tool output before acting because registries and the Flutter toolchain continue to change.
 
 ## Project structure
 
@@ -599,7 +601,7 @@ npm --prefix tool/firebase_emulator_tests ci
 firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test"
 ```
 
-The `demo-*` project avoids live access. If Java is absent on Windows `PATH`, the Android Studio JBR can supply it. Audit/export/cleanup/migration/seed entrypoints are isolated from normal navigation; review them in [the codebase guide](docs/CODEBASE_GUIDE.md#development-only-firestore-tools) before use.
+The `demo-*` project avoids live access. If Java is absent on Windows `PATH`, the Android Studio JBR can supply it. Audit/export/cleanup/migration/seed entrypoints are isolated from normal navigation; review them in [the codebase guide](docs/CODEBASE_GUIDE.md#developer-tools-and-historical-artifacts) before use.
 
 Never infer permission to deploy, enable billing, seed, migrate, clean up, or modify live data from documentation.
 
