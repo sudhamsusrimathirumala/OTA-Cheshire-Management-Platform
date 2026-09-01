@@ -61,6 +61,33 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Apple display name prefills without a Firebase lookup', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileCreationScreen(
+          accountEmail: 'apple@example.com',
+          appleDisplayName: 'Ada Lovelace',
+          loadLocations: () async => const [cheshire],
+          createProfiles: (_) async {},
+          onProfilesCreated: () {},
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final firstName = tester.widget<TextFormField>(
+      find.widgetWithText(TextFormField, 'First name').first,
+    );
+    final lastName = tester.widget<TextFormField>(
+      find.widgetWithText(TextFormField, 'Last name').first,
+    );
+    expect(firstName.controller?.text, 'Ada');
+    expect(lastName.controller?.text, 'Lovelace');
+  });
+
   testWidgets('blank added students render safe review placeholders', (
     tester,
   ) async {

@@ -14,6 +14,7 @@ class ProfileCreationScreen extends StatefulWidget {
     this.loadLocations,
     this.onProfilesCreated,
     this.onSignOut,
+    this.appleDisplayName,
   });
 
   final String? accountEmail;
@@ -21,6 +22,7 @@ class ProfileCreationScreen extends StatefulWidget {
   final Future<List<AcademyLocation>> Function()? loadLocations;
   final VoidCallback? onProfilesCreated;
   final VoidCallback? onSignOut;
+  final String? appleDisplayName;
 
   @override
   State<ProfileCreationScreen> createState() => _ProfileCreationScreenState();
@@ -60,14 +62,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   }
 
   void _prefillAppleName() {
-    final user = firebaseSessionController.authUser;
-    if (user == null ||
-        !user.providerData.any(
-          (provider) => provider.providerId == 'apple.com',
-        )) {
-      return;
-    }
-    final displayName = user.displayName?.trim();
+    final displayName = widget.appleDisplayName?.trim();
     if (displayName == null || displayName.isEmpty) return;
     final parts = displayName.split(RegExp(r'\s+'));
     _firstName.text = parts.first;

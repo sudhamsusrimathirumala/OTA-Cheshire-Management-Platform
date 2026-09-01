@@ -18,9 +18,21 @@ class AuthGate extends StatelessWidget {
         stage: firebaseSessionController.stage,
         errorMessage: firebaseSessionController.errorMessage,
         justCreatedProfiles: firebaseSessionController.justCreatedProfiles,
+        appleDisplayName: _appleDisplayName(),
       );
     },
   );
+
+  String? _appleDisplayName() {
+    final user = firebaseSessionController.authUser;
+    if (user == null ||
+        !user.providerData.any(
+          (provider) => provider.providerId == 'apple.com',
+        )) {
+      return null;
+    }
+    return user.displayName;
+  }
 }
 
 @visibleForTesting
@@ -28,10 +40,13 @@ Widget authGateDestination({
   required SessionStage stage,
   String? errorMessage,
   bool justCreatedProfiles = false,
+  String? appleDisplayName,
 }) => switch (stage) {
   SessionStage.loading => const _LoadingScreen(),
   SessionStage.signedOut => const WelcomeScreen(),
-  SessionStage.needsProfiles => const ProfileCreationScreen(),
+  SessionStage.needsProfiles => ProfileCreationScreen(
+    appleDisplayName: appleDisplayName,
+  ),
   SessionStage.disabled => _SessionErrorScreen(
     message: errorMessage ?? 'This account or academy location is unavailable.',
   ),
