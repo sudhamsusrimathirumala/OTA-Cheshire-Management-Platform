@@ -1,4 +1,20 @@
 import com.flutter.gradle.tasks.FlutterTask
+import java.util.Properties
+
+val releaseKeystoreProperties = Properties()
+val releaseKeystorePropertiesFile = rootProject.file("key.properties")
+if (releaseKeystorePropertiesFile.exists()) {
+    releaseKeystorePropertiesFile.inputStream().use(releaseKeystoreProperties::load)
+}
+val releaseSigningKeys = listOf(
+    "storeFile",
+    "storePassword",
+    "keyAlias",
+    "keyPassword",
+)
+val releaseSigningConfigured = releaseSigningKeys.all {
+    !releaseKeystoreProperties.getProperty(it).isNullOrBlank()
+} && file(releaseKeystoreProperties.getProperty("storeFile", "")).isFile
 
 plugins {
     id("com.android.application")
@@ -45,11 +61,22 @@ android {
         }
     }
 
+    signingConfigs {
+        if (releaseSigningConfigured) {
+            create("release") {
+                storeFile = file(releaseKeystoreProperties.getProperty("storeFile"))
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningConfigured) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }
@@ -77,5 +104,20 @@ tasks.withType<FlutterTask>().configureEach {
         else -> throw GradleException(
             "Flutter task '$name' is not associated with the dev or prod flavor.",
         )
+    }
+}
+
+tasks.configureEach {
+    if (name.contains("ProdRelease", ignoreCase = true) &&
+        !releaseSigningConfigured
+    ) {
+        doFirst {
+            throw GradleException(
+                "Production release signing is not configured. Add " +
+                    "android/key.properties with storeFile, storePassword, " +
+                    "keyAlias, and keyPassword pointing to the external " +
+                    "production keystore.",
+            )
+        }
     }
 }

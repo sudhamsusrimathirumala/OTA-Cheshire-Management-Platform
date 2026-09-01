@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties and replace every placeholder.
+# Keep key.properties and the keystore outside version control.
+storeFile=../path/to/production-upload-keystore.jks
+storePassword=replace-with-keystore-password
+keyAlias=replace-with-key-alias
+keyPassword=replace-with-key-password
