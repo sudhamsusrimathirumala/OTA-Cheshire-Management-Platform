@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../routes.dart';
 import 'login_screen.dart' show authenticationDisplayMessage;
 import '../services/firebase/firebase_authentication_service.dart';
+import '../services/firebase/apple_authentication.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/debug_view_controller.dart';
 import '../theme/ota_colors.dart';
@@ -18,11 +20,15 @@ class SignupScreen extends StatefulWidget {
     super.key,
     this.emailSignUp,
     this.googleSignIn,
+    this.appleSignIn,
+    this.appleSupported,
     this.emailSignupSessionTransition,
   });
 
   final Future<Object?> Function(String email, String password)? emailSignUp;
   final Future<Object?> Function()? googleSignIn;
+  final Future<Object?> Function()? appleSignIn;
+  final bool? appleSupported;
   final Future<SessionStage> Function()? emailSignupSessionTransition;
 
   @override
@@ -240,6 +246,30 @@ class _SignupScreenState extends State<SignupScreen> {
                                     .signInWithGoogle(),
                           ),
                   ),
+                  if (widget.appleSupported ?? appleSignInSupported) ...[
+                    const SizedBox(height: 14),
+                    SignInWithAppleButton(
+                      onPressed: _loading
+                          ? null
+                          : () => _run(() {
+                              final injected = widget.appleSignIn;
+                              if (injected != null) return injected();
+                              final service = firebaseSessionController
+                                  .authentication
+                                  .appleAuthentication;
+                              if (service == null) {
+                                throw const AuthenticationException(
+                                  AuthenticationError.unknownFailure,
+                                  'Sign in with Apple is unavailable on this device.',
+                                );
+                              }
+                              return service.signInWithApple();
+                            }),
+                      height: 58,
+                      style: SignInWithAppleButtonStyle.whiteOutlined,
+                      borderRadius: const BorderRadius.all(Radius.circular(18)),
+                    ),
+                  ],
                   const SizedBox(height: 24),
                   OtaAuthSwitchLink(
                     prompt: 'Already have an account?',

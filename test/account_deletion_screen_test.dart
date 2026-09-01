@@ -168,6 +168,34 @@ void main() {
     expect(fixture.authentication.deleteCalls, 0);
   });
 
+  testWidgets('Apple verification immediately deletes', (tester) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.apple},
+    );
+    var completed = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AccountDeletionScreen(
+          service: fixture.service,
+          accountOverride: fixture.account,
+          completeSession: () async => completed++,
+        ),
+      ),
+    );
+
+    expect(find.text('Apple verification'), findsOneWidget);
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(
+      fixture.authentication.lastMethod,
+      AccountReauthenticationMethod.apple,
+    );
+    expect(fixture.authentication.deleteCalls, 1);
+    expect(completed, 1);
+  });
+
   testWidgets('raw deletion failures are not displayed', (tester) async {
     final fixture = _Fixture()..store.failPrivateDeletion = true;
     await _pumpDeletionScreen(tester, fixture);
@@ -278,7 +306,7 @@ class _WidgetAuthentication implements AccountDeletionAuthentication {
   Set<AccountReauthenticationMethod> methodsFor(User user) => methods;
 
   @override
-  Future<void> reauthenticate(
+  Future<AccountDeletionProviderProof?> reauthenticate(
     User user,
     AccountReauthenticationMethod method, {
     String? password,
@@ -298,12 +326,16 @@ class _WidgetAuthentication implements AccountDeletionAuthentication {
         'Google verification was cancelled. Nothing was deleted.',
       );
     }
+    return method == AccountReauthenticationMethod.apple
+        ? const AccountDeletionProviderProof.apple('authorization-code')
+        : null;
   }
 
   @override
   Future<void> revokeProviderToken(
     User user,
     AccountReauthenticationMethod method,
+    AccountDeletionProviderProof? proof,
   ) async {}
 
   @override

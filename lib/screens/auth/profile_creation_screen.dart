@@ -55,7 +55,23 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   @override
   void initState() {
     super.initState();
+    _prefillAppleName();
     _loadLocations();
+  }
+
+  void _prefillAppleName() {
+    final user = firebaseSessionController.authUser;
+    if (user == null ||
+        !user.providerData.any(
+          (provider) => provider.providerId == 'apple.com',
+        )) {
+      return;
+    }
+    final displayName = user.displayName?.trim();
+    if (displayName == null || displayName.isEmpty) return;
+    final parts = displayName.split(RegExp(r'\s+'));
+    _firstName.text = parts.first;
+    if (parts.length > 1) _lastName.text = parts.skip(1).join(' ');
   }
 
   Future<void> _loadLocations() async {

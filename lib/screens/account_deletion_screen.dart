@@ -45,6 +45,8 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
       _method = AccountReauthenticationMethod.password;
     } else if (methods.contains(AccountReauthenticationMethod.google)) {
       _method = AccountReauthenticationMethod.google;
+    } else if (methods.contains(AccountReauthenticationMethod.apple)) {
+      _method = AccountReauthenticationMethod.apple;
     }
   }
 
@@ -111,7 +113,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
         icon: Icons.no_accounts_outlined,
         title: 'Verification unavailable',
         message:
-            'This account does not have a supported password or Google '
+            'This account does not have a supported password, Google, or Apple '
             'sign-in method. Contact the academy.',
       );
     }
@@ -142,29 +144,46 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
         ),
         const SizedBox(height: 18),
         if (methods.length > 1) ...[
-          _MethodTile(
-            label: 'Current password',
-            icon: Icons.password_rounded,
-            selected: _method == AccountReauthenticationMethod.password,
-            onTap: _busy
-                ? null
-                : () => setState(() {
-                    _method = AccountReauthenticationMethod.password;
-                    _message = null;
-                  }),
-          ),
-          const SizedBox(height: 10),
-          _MethodTile(
-            label: 'Google account',
-            icon: Icons.account_circle_outlined,
-            selected: _method == AccountReauthenticationMethod.google,
-            onTap: _busy
-                ? null
-                : () => setState(() {
-                    _method = AccountReauthenticationMethod.google;
-                    _message = null;
-                  }),
-          ),
+          if (methods.contains(AccountReauthenticationMethod.password)) ...[
+            _MethodTile(
+              label: 'Current password',
+              icon: Icons.password_rounded,
+              selected: _method == AccountReauthenticationMethod.password,
+              onTap: _busy
+                  ? null
+                  : () => setState(() {
+                      _method = AccountReauthenticationMethod.password;
+                      _message = null;
+                    }),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (methods.contains(AccountReauthenticationMethod.google)) ...[
+            _MethodTile(
+              label: 'Google account',
+              icon: Icons.account_circle_outlined,
+              selected: _method == AccountReauthenticationMethod.google,
+              onTap: _busy
+                  ? null
+                  : () => setState(() {
+                      _method = AccountReauthenticationMethod.google;
+                      _message = null;
+                    }),
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (methods.contains(AccountReauthenticationMethod.apple))
+            _MethodTile(
+              label: 'Apple account',
+              icon: Icons.apple,
+              selected: _method == AccountReauthenticationMethod.apple,
+              onTap: _busy
+                  ? null
+                  : () => setState(() {
+                      _method = AccountReauthenticationMethod.apple;
+                      _message = null;
+                    }),
+            ),
           const SizedBox(height: 18),
         ],
         if (_method == AccountReauthenticationMethod.password)
@@ -184,6 +203,13 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
             title: 'Google verification',
             message:
                 'The linked Google account will be verified before deletion.',
+          ),
+        if (_method == AccountReauthenticationMethod.apple)
+          const _MessageCard(
+            icon: Icons.apple,
+            title: 'Apple verification',
+            message:
+                'The linked Apple account will be verified before deletion.',
           ),
         if (_message != null) ...[
           const SizedBox(height: 14),
