@@ -469,7 +469,7 @@ The repository uses complementary layers:
 - **Functions tests** cover recipient selection, ownership, compatibility mappings, delivery plans, dispatch claims, batching, invalid-token classification, and payloads.
 - **Build checks** distinguish dev debug/release, prod debug configuration validation, and externally signed prod release.
 
-[PR #3](https://github.com/sudhamsusrimathirumala/OTA-Cheshire-Management-Platform/pull/3) recorded 355 Flutter tests and 37 emulator tests at its July 31 head, plus responsive and dev APK checks. Later security commits added more tests, so those counts are historical—not a current-HEAD claim. This documentation-only overhaul does not rerun application suites.
+[PR #3](https://github.com/sudhamsusrimathirumala/OTA-Cheshire-Management-Platform/pull/3) recorded 355 Flutter tests and 37 emulator tests at its July 31 head, plus responsive and dev APK checks. Later security commits added more tests, so those counts are historical rather than a current-HEAD claim.
 
 Typical local checks for a code change are:
 
@@ -607,7 +607,7 @@ Never infer permission to deploy, enable billing, seed, migrate, clean up, or mo
 
 ## Current status
 
-As of the `fix/firestore-production-security` documentation baseline on September 1, 2026:
+As of the `fix/firestore-production-security` branch state on September 1, 2026:
 
 - the repository-side product, production-security redesign, Apple integration, environment separation, signing guard, reproducible inputs, and prod configuration validation are present;
 - the runtime has no membership approval flow;
@@ -616,4 +616,4 @@ As of the `fix/firestore-production-security` documentation baseline on Septembe
 - production release work depends on controlled deployment/signing/provider/device/store steps outside the repository, not an identified unfinished application-code phase; and
 - PR #4 is superseded historical work because its functionality is integrated here.
 
-This is an independent software engineering project for Olympic Taekwondo Academy, combining product design, Flutter UI, Firebase data modeling, security Rules, backend delivery, testing, and mobile release engineering.
+The platform combines product design, Flutter UI, Firebase data modeling, security Rules, backend delivery, testing, and mobile release engineering for Olympic Taekwondo Academy.
