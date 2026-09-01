@@ -2,7 +2,7 @@
 
 The Olympic Taekwondo Academy (OTA) Management Platform is a Flutter and Firebase mobile application for the academy's students, parents, and administrators. It brings schedules, student profiles, belt curriculum, announcements, events, resources, and academy administration into one role-aware system instead of leaving families and staff to assemble the same information from separate channels.
 
-The repository contains the application and its production-oriented security and release configuration. It is **not evidence that the production backend has been deployed or that store releases are live**. Repository engineering is prepared for final integration; production deployment, signing, Apple/APNs setup, physical-device validation, store-console work, and final academy content approval remain controlled external steps.
+The repository contains the application and its production-oriented security and release configuration. Repository engineering is prepared for final integration; production deployment, final signed builds, device validation, Apple/APNs setup, store submission/review, and final academy content approval remain controlled external steps.
 
 This README is the authoritative product, architecture, history, security, and readiness narrative. Developers looking for a current file-by-file implementation map should continue to [the codebase guide](docs/CODEBASE_GUIDE.md).
 
@@ -133,7 +133,7 @@ The product does not provide public administrator registration, a membership app
 
 ## Development journey
 
-The history below selects architectural milestones rather than every commit. Dates are repository commit dates.
+The history below highlights architectural milestones across the project's development. Dates are repository commit dates.
 
 | Period | Evolution | Evidence |
 | --- | --- | --- |
@@ -435,7 +435,7 @@ Debug builds validate either flavor without production signing secrets. A releas
 
 `android/key.properties.example` provides placeholders. The repository tracks wrapper scripts/JAR/properties so clean clones use declared Gradle 9.1.0. Versioning currently comes from `pubspec.yaml` (`1.0.0+1`).
 
-External Android work includes creating/distributing the upload keystore, Play App Signing, final SHA fingerprints/OAuth configuration, and Play internal testing.
+Google Play Console application setup and publishing permissions are complete, but the application is not yet published. Android publication still requires final branch integration, production Firebase deployment, a production-signed build, final production smoke testing, and the required Play submission and review steps.
 
 ## iOS build and release architecture
 
@@ -498,8 +498,9 @@ The prod debug build deliberately exercises production Dart/native Firebase sele
 | State | Items |
 | --- | --- |
 | **Complete in repository** | Member/admin flows; Auth integrations; family/profile model; current Rules/indexes; server-authorized delivery and push code; bounded deletion; dev/prod Android/iOS configuration; integrated Apple code; fail-closed Android signing; tracked lockfile/wrapper; test suites; prod-flavor CI; removed tracked IDE metadata |
+| **External setup complete** | Google Play Console application setup and publishing permissions |
 | **Ready in code, not proven deployed** | Production Rules/index definitions, Functions, production Firebase clients, push architecture, deletion security path, Apple capability declarations |
-| **External setup required** | Explicit Firebase deployment authorization; billing/Functions approval; upload keystore and Play App Signing; final fingerprints/OAuth; Apple Team/certs/profiles; Firebase Apple provider; APNs; Mac/Xcode archive; physical iPhone tests; TestFlight/Play internal tests; store-console work; final academy curriculum/content/link approval |
+| **External setup required** | Final branch integration; explicit production Firebase Rules/indexes/Functions deployment; final production-signed Android build and smoke test; Google Play submission/review; Apple Team/certificates/provisioning; Firebase Apple provider; APNs; Mac/Xcode archive; physical iPhone testing; TestFlight/App Store process; final academy curriculum/content/link approval |
 | **Future/optional** | Dependency/toolchain upgrades, write-capable bulk schedule actions, operational multi-location rollout, guardian display-name enrichment, attendance/reporting/analytics under a privacy plan, richer media, reminders/messaging |
 
 “Ready in code” is separate from “live.” Rules, indexes, and Functions affect production only after an authorized deployment to `ota-management-platform-e4847`. Native client configuration does not perform that deployment.
@@ -512,7 +513,7 @@ The prod debug build deliberately exercises production Dart/native Firebase sele
 - Curriculum is bundled and awaits final academy approval of official wording/media.
 - Admin bulk schedule actions are preview-only.
 - Apple and iOS push require external provider/APNs setup and physical-device tests.
-- Android signing material, Play App Signing, final fingerprints, and store testing are external.
+- Google Play Console setup and publishing permissions are complete. The final signed Android build, production smoke test, and Play submission/review still remain; the app is not yet published.
 - Production Rules/indexes/Functions require explicit deployment authorization; repository presence is not deployment state.
 - The audit JSON is historical and must not be read as live-state evidence.
 - Flutter platform shells exist for other targets, but production Firebase/release work focuses on Android and iOS.
@@ -613,7 +614,8 @@ As of the `fix/firestore-production-security` branch state on September 1, 2026:
 - the runtime has no membership approval flow;
 - targeted content uses server-authorized account deliveries rather than client-only authorization;
 - large-family deletion is bounded, sequential, and recoverable;
-- production release work depends on controlled deployment/signing/provider/device/store steps outside the repository, not an identified unfinished application-code phase; and
+- Google Play Console application setup and publishing permissions are complete, while publication still depends on final integration, backend deployment, a production-signed build, smoke testing, and Play review;
+- Apple provider, APNs, signing/provisioning, Mac/Xcode, physical-device, TestFlight, and App Store work remains in progress; and
 - PR #4 is superseded historical work because its functionality is integrated here.
 
 The platform combines product design, Flutter UI, Firebase data modeling, security Rules, backend delivery, testing, and mobile release engineering for Olympic Taekwondo Academy.
