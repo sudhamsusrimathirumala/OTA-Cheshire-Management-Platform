@@ -828,6 +828,59 @@ test('admin content writes accept app schemas and reject injected fields', async
   }));
 });
 
+test('admins may archive legacy content without editing its other fields', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const base = {
+      locationId: 'cheshire', createdAt: new Date(), updatedAt: new Date(),
+      legacyField: 'preserved',
+    };
+    for (const id of ['archive', 'edit', 'location', 'inject']) {
+      await setDoc(doc(db, 'announcements', `legacy-${id}`), {
+        ...base, title: 'Legacy announcement', status: 'published',
+      });
+      await setDoc(doc(db, 'events', `legacy-${id}`), {
+        ...base, title: 'Legacy event', eventType: 'closure',
+        isArchived: false,
+      });
+      await setDoc(doc(db, 'resources', `legacy-${id}`), {
+        ...base, title: 'Legacy resource', category: 'academyInfo',
+        isArchived: false,
+      });
+    }
+  });
+
+  const db = auth('admin');
+  await assertSucceeds(updateDoc(doc(db, 'announcements', 'legacy-archive'), {
+    status: 'archived', updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(db, 'events', 'legacy-archive'), {
+    isArchived: true, updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(db, 'resources', 'legacy-archive'), {
+    isArchived: true, updatedAt: serverTimestamp(),
+  }));
+
+  for (const collectionName of ['announcements', 'events', 'resources']) {
+    await assertFails(updateDoc(doc(db, collectionName, 'legacy-edit'), {
+      title: 'Unauthorized edit', updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(db, collectionName, 'legacy-location'), {
+      ...(collectionName === 'announcements'
+        ? {status: 'archived'}
+        : {isArchived: true}),
+      locationId: 'other', updatedAt: serverTimestamp(),
+    }));
+    await assertFails(updateDoc(doc(db, collectionName, 'legacy-inject'), {
+      ...(collectionName === 'announcements'
+        ? {status: 'archived'}
+        : {isArchived: true}),
+      injectedAdminField: true, updatedAt: serverTimestamp(),
+    }));
+  }
+});
+
 test('active matching account reads only published student content', async () => {
   await seedAccount({uid: 'member'});
   await seedContent();

@@ -665,6 +665,15 @@ service cloud.firestore {
           validAnnouncementData(request.resource.data);
     }
 
+    function validAnnouncementArchive() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'status', 'updatedAt'
+          ]) &&
+          resource.data.get('status', '') in ['draft', 'published'] &&
+          request.resource.data.status == 'archived' &&
+          request.resource.data.updatedAt is timestamp;
+    }
+
     function validClassSessionData(data) {
       return data.className is string && data.className.size() > 0 &&
           data.classTypeId is string && data.classTypeId.size() > 0 &&
@@ -757,6 +766,15 @@ service cloud.firestore {
           validEventData(request.resource.data);
     }
 
+    function validEventArchive() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isArchived', 'updatedAt'
+          ]) &&
+          resource.data.get('isArchived', false) == false &&
+          request.resource.data.isArchived == true &&
+          request.resource.data.updatedAt is timestamp;
+    }
+
     function validResourceData(data) {
       return data.title is string && data.title.size() > 0 &&
           data.description is string && data.resourceSection == 'general' &&
@@ -791,6 +809,15 @@ service cloud.firestore {
             'isPublished', 'isArchived', 'updatedAt'
           ]) &&
           validResourceData(request.resource.data);
+    }
+
+    function validResourceArchive() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'isArchived', 'updatedAt'
+          ]) &&
+          resource.data.get('isArchived', false) == false &&
+          request.resource.data.isArchived == true &&
+          request.resource.data.updatedAt is timestamp;
     }
 
     function publishedClassSession() {
@@ -934,7 +961,7 @@ service cloud.firestore {
           validAnnouncementCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          validAnnouncementUpdate();
+          (validAnnouncementUpdate() || validAnnouncementArchive());
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
@@ -947,7 +974,7 @@ service cloud.firestore {
           validEventCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          validEventUpdate();
+          (validEventUpdate() || validEventArchive());
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
@@ -960,7 +987,7 @@ service cloud.firestore {
           validResourceCreate(request.resource.data);
       allow update: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
-          validResourceUpdate();
+          (validResourceUpdate() || validResourceArchive());
       allow delete: if canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
