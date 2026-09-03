@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
-import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_announcements_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_events_screen.dart';
@@ -12,7 +11,6 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_sc
 import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/admin_location_controller.dart';
-import 'package:ota_cheshire_management_platform/widgets/admin/admin_bottom_nav_bar.dart';
 import 'package:ota_cheshire_management_platform/widgets/admin/admin_location_selector.dart';
 
 const _cheshire = AcademyLocation(
@@ -39,7 +37,7 @@ const _inactive = AcademyLocation(
 void main() {
   setUp(initializeMockAppDataServiceForTests);
 
-  testWidgets('Super Admin sees the location selector on Dashboard', (
+  testWidgets('Super Admin sees the location selector only on Admin Profile', (
     tester,
   ) async {
     final controller = _useSuperAdminController();
@@ -49,7 +47,9 @@ void main() {
     });
 
     await tester.pumpWidget(const MaterialApp(home: AdminDashboardScreen()));
+    expect(_locationDropdown(), findsNothing);
 
+    await tester.pumpWidget(const MaterialApp(home: AdminProfileScreen()));
     expect(_locationDropdown(), findsOneWidget);
   });
 
@@ -67,21 +67,12 @@ void main() {
       initializeMockAppDataServiceForTests();
     });
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: AdminPageShell(
-          selectedDestination: AdminNavDestination.dashboard,
-          title: 'Dashboard',
-          subtitle: 'Admin overview',
-          child: Text('Dashboard content'),
-        ),
-      ),
-    );
+    await tester.pumpWidget(const MaterialApp(home: AdminProfileScreen()));
 
     expect(_locationDropdown(), findsNothing);
   });
 
-  testWidgets('selection updates the controller and persists across pages', (
+  testWidgets('profile selection updates the controller and persists', (
     tester,
   ) async {
     final controller = _useSuperAdminController();
@@ -90,15 +81,7 @@ void main() {
       initializeMockAppDataServiceForTests();
     });
 
-    await tester.pumpWidget(
-      MaterialApp(
-        initialRoute: OtaRoutes.adminDashboard,
-        routes: {
-          OtaRoutes.adminDashboard: (_) => const AdminDashboardScreen(),
-          OtaRoutes.adminStudents: (_) => const AdminStudentsScreen(),
-        },
-      ),
-    );
+    await tester.pumpWidget(const MaterialApp(home: AdminProfileScreen()));
 
     await tester.tap(_locationDropdown());
     await tester.pumpAndSettle();
@@ -107,27 +90,29 @@ void main() {
 
     expect(controller.selectedLocationId, _chicago.id);
 
-    await tester.tap(find.text('Students'));
-    await tester.pumpAndSettle();
+    await tester.pumpWidget(const MaterialApp(home: AdminStudentsScreen()));
 
     expect(find.byType(AdminStudentsScreen), findsOneWidget);
-    expect(_locationDropdown(), findsOneWidget);
+    expect(_locationDropdown(), findsNothing);
     expect(controller.selectedLocationId, _chicago.id);
     expect(find.text('OTA Chicago'), findsWidgets);
   });
 
-  testWidgets('management pages show only the shared selector', (tester) async {
+  testWidgets('standard admin pages do not show the location selector', (
+    tester,
+  ) async {
     final controller = _useSuperAdminController();
     addTearDown(() {
       controller.dispose();
       initializeMockAppDataServiceForTests();
     });
     const pages = <Widget>[
+      AdminDashboardScreen(),
+      AdminStudentsScreen(),
       AdminScheduleScreen(),
       AdminAnnouncementsScreen(),
       AdminEventsScreen(),
       AdminGeneralResourcesScreen(),
-      AdminProfileScreen(),
     ];
 
     for (final page in pages) {
@@ -135,8 +120,8 @@ void main() {
       await tester.pump();
       expect(
         _locationDropdown(),
-        findsOneWidget,
-        reason: '${page.runtimeType} should have one location selector',
+        findsNothing,
+        reason: '${page.runtimeType} should not have a location selector',
       );
       await tester.pumpWidget(const SizedBox.shrink());
     }
