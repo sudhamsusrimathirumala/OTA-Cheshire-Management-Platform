@@ -5,6 +5,7 @@ import '../../models/academy_location.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/admin_location_controller.dart';
 import '../../theme/ota_colors.dart';
+import 'admin_location_selector.dart';
 
 void returnToAdminResourcesLanding(BuildContext context) {
   final navigator = Navigator.of(context);
@@ -163,6 +164,7 @@ class AdminPageShell extends StatelessWidget {
                         children: [
                           _AdminPageTitle(title: title, subtitle: subtitle),
                           const SizedBox(height: 18),
+                          const AdminLocationSelector(),
                           child,
                         ],
                       ),

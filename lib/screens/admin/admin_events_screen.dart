@@ -101,7 +101,6 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
-              const AdminLocationSelector(),
               _EventsToolbar(onCreateEvent: () => _openEventSheet()),
               const SizedBox(height: 14),
               _FilterRow(

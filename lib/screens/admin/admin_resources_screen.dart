@@ -109,7 +109,6 @@ class _AdminGeneralResourcesScreenState
                 label: const Text('Back to Events & Resources'),
               ),
               const SizedBox(height: 14),
-              const AdminLocationSelector(),
               _ResourcesToolbar(onCreateResource: () => _openResourceSheet()),
               const SizedBox(height: 14),
               _FilterRow(

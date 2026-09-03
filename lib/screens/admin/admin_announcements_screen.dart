@@ -88,7 +88,6 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const AdminLocationSelector(),
               _AnnouncementsToolbar(
                 onCreateAnnouncement: () => _openAnnouncementSheet(),
               ),

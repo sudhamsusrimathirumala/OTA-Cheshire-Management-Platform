@@ -5,6 +5,7 @@ import '../../services/debug_view_controller.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../../routes.dart';
 import '../../theme/ota_colors.dart';
+import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/profile/profile_edit_sheets.dart';
 import '../../widgets/profile/profile_section.dart';
 
@@ -56,6 +57,7 @@ class AdminProfileScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 24),
+                      const AdminLocationSelector(),
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(

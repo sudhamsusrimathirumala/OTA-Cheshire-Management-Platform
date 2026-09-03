@@ -46,7 +46,6 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const AdminLocationSelector(),
               _ScheduleToolbar(
                 onAddClass: () => _openClassSheet(),
                 onBulkAction: _openBulkActionSheet,
