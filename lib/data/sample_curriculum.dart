@@ -1,23 +1,7 @@
 import '../models/curriculum_requirement.dart';
 import 'sample_constants.dart';
 
-const curriculumBeltOrder = <String>[
-  'No Belt',
-  'White',
-  'White-Yellow',
-  'Yellow',
-  'Yellow-Green',
-  'Green',
-  'Green-Blue',
-  'Blue',
-  'Blue-Red',
-  'Red',
-  'Red-Yellow',
-  'Red-Green',
-  'Red-Blue',
-  'Red-Black',
-  'Black',
-];
+export 'belt_ranks.dart' show curriculumBeltOrder;
 
 final sampleCurriculum = <String, CurriculumRequirement>{
   'No Belt': _curriculum('No Belt'),

@@ -6,6 +6,7 @@ import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 import '../../widgets/admin/admin_location_selector.dart';
+import '../../widgets/admin/belt_multi_select_dropdown.dart';
 import '../../widgets/schedule_time_field.dart';
 import '../../services/location_time_service.dart';
 import '../../widgets/unsaved_changes_guard.dart';
@@ -457,9 +458,9 @@ class _ClassFormSheet extends StatefulWidget {
 
 class _ClassFormSheetState extends State<_ClassFormSheet> {
   late final TextEditingController _classNameController;
-  late final TextEditingController _beltsController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _eligibilityNoteController;
+  final _eligibleBelts = <String>{};
   late int _weekday;
   int? _startMinutes;
   int? _endMinutes;
@@ -479,9 +480,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     );
     _startMinutes = session?.startMinutes;
     _endMinutes = session?.endMinutes;
-    _beltsController = TextEditingController(
-      text: session?.eligibleBelts.join(', ') ?? '',
-    );
+    _eligibleBelts.addAll(session?.eligibleBelts ?? const <String>[]);
     _descriptionController = TextEditingController(
       text: session?.description ?? '',
     );
@@ -495,7 +494,6 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
   @override
   void dispose() {
     _classNameController.dispose();
-    _beltsController.dispose();
     _descriptionController.dispose();
     _eligibilityNoteController.dispose();
     super.dispose();
@@ -591,10 +589,15 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                 ),
               ),
               const SizedBox(height: 10),
-              _AdminTextField(
-                controller: _beltsController,
+              BeltMultiSelectDropdown(
+                selectedBelts: _eligibleBelts,
+                onChanged: (belts) => setState(() {
+                  _eligibleBelts
+                    ..clear()
+                    ..addAll(belts);
+                }),
                 label: 'Eligible belts',
-                helperText: 'Comma-separated belt ranks.',
+                helperText: 'Leave empty to allow all belt ranks.',
               ),
               const SizedBox(height: 10),
               _AdminTextField(
@@ -686,7 +689,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       weekday: _weekday,
       startMinutes: startMinutes,
       endMinutes: endMinutes,
-      eligibleBelts: _parseCommaSeparated(_beltsController.text),
+      eligibleBelts: orderedBeltRanks(_eligibleBelts),
       description: _descriptionController.text.trim(),
       eligibilityNote: _eligibilityNoteController.text.trim().isEmpty
           ? null
@@ -702,7 +705,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
 
   String get _formFingerprint => [
     _classNameController.text,
-    _beltsController.text,
+    orderedBeltRanks(_eligibleBelts).join(','),
     _descriptionController.text,
     _eligibilityNoteController.text,
     _weekday,
@@ -1434,13 +1437,11 @@ class _AdminTextField extends StatelessWidget {
   const _AdminTextField({
     required this.controller,
     required this.label,
-    this.helperText,
     this.maxLines = 1,
   });
 
   final TextEditingController controller;
   final String label;
-  final String? helperText;
   final int maxLines;
 
   @override
@@ -1448,7 +1449,7 @@ class _AdminTextField extends StatelessWidget {
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      decoration: _fieldDecoration(label, helperText: helperText),
+      decoration: _fieldDecoration(label),
     );
   }
 }
@@ -1558,14 +1559,6 @@ TextStyle? _rowTitleStyle(BuildContext context) {
     color: OtaColors.ink,
     fontWeight: FontWeight.w900,
   );
-}
-
-List<String> _parseCommaSeparated(String value) {
-  return value
-      .split(',')
-      .map((part) => part.trim())
-      .where((part) => part.isNotEmpty)
-      .toList(growable: false);
 }
 
 String _classTypeIdForClassName(String className) {

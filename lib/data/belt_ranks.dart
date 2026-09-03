@@ -1,0 +1,17 @@
+const curriculumBeltOrder = <String>[
+  'No Belt',
+  'White',
+  'White-Yellow',
+  'Yellow',
+  'Yellow-Green',
+  'Green',
+  'Green-Blue',
+  'Blue',
+  'Blue-Red',
+  'Red',
+  'Red-Yellow',
+  'Red-Green',
+  'Red-Blue',
+  'Red-Black',
+  'Black',
+];

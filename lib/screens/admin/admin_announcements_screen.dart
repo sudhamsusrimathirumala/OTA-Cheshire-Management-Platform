@@ -10,6 +10,7 @@ import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
 import '../../widgets/admin/admin_location_selector.dart';
+import '../../widgets/admin/belt_multi_select_dropdown.dart';
 import '../../widgets/unsaved_changes_guard.dart';
 
 enum _AnnouncementFilter { all, draft, published, archived, important }
@@ -786,6 +787,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               ),
               const SizedBox(height: 14),
               DropdownButtonFormField<_Audience>(
+                key: const ValueKey('announcement-audience-dropdown'),
                 initialValue: _audience,
                 decoration: _fieldDecoration('Audience'),
                 items: [
@@ -883,37 +885,15 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   Widget _buildBeltTargeting() {
-    final belts = _beltOptions();
-    if (belts.isEmpty) {
-      return const _AudienceHint(message: 'No belt levels are available yet.');
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField<String>(
-          initialValue: null,
-          decoration: _fieldDecoration('Add belt rank'),
-          hint: const Text('Select a belt rank'),
-          items: [
-            for (final belt in belts)
-              DropdownMenuItem<String>(value: belt, child: Text(belt)),
-          ],
-          onChanged: (belt) {
-            if (belt != null) {
-              setState(() {
-                _targetBelts.add(belt);
-              });
-            }
-          },
-        ),
-        const SizedBox(height: 8),
-        _SelectedTargetList(
-          emptyMessage: 'No belt ranks selected.',
-          selectedLabels: _sortedValues(_targetBelts),
-          onRemove: (label) => setState(() => _targetBelts.remove(label)),
-        ),
-      ],
+    return BeltMultiSelectDropdown(
+      selectedBelts: _targetBelts,
+      onChanged: (belts) => setState(() {
+        _targetBelts
+          ..clear()
+          ..addAll(belts);
+      }),
+      label: 'Target belts',
+      helperText: 'Select one or more belt ranks.',
     );
   }
 
@@ -1030,24 +1010,6 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     );
   }
 
-  List<String> _beltOptions() {
-    final belts = <String>{
-      for (final student in appDataService.adminStudentProfiles)
-        if (student.belt.trim().isNotEmpty) student.belt.trim(),
-      ..._targetBelts,
-    };
-    final ordered = <String>[];
-
-    for (final belt in appDataService.curriculumBeltOrder) {
-      if (belts.remove(belt)) {
-        ordered.add(belt);
-      }
-    }
-
-    final remaining = belts.toList()..sort();
-    return [...ordered, ...remaining];
-  }
-
   List<_TargetOption> _classTypeOptions() {
     final classTypes = {
       for (final classGroup in _announcementClassGroups)
@@ -1115,7 +1077,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     }
 
     final targetBelts = _audience == _Audience.belt
-        ? _sortedValues(_targetBelts)
+        ? orderedBeltRanks(_targetBelts)
         : <String>[];
     final targetClassTypeIds = _audience == _Audience.classType
         ? _sortedValues(_targetClassTypeIds)
@@ -1180,7 +1142,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     _priority.name,
     _audience.name,
     _requiresAction,
-    _sortedValues(_targetBelts).join(','),
+    orderedBeltRanks(_targetBelts).join(','),
     _sortedValues(_targetClassTypeIds).join(','),
     _sortedValues(_targetStudentProfileIds).join(','),
   ].join('\u0000');
