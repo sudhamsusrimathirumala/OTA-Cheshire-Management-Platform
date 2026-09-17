@@ -59,6 +59,8 @@ void main() {
       250,
       scrollable: find.byType(Scrollable).last,
     );
+    await tester.drag(find.byType(ListView), const Offset(0, -100));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('belt-option-Black')));
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
@@ -66,6 +68,61 @@ void main() {
     expect(selected, {'White', 'Black'});
     expect(find.text('White, Black'), findsOneWidget);
   });
+
+  testWidgets(
+    'belt dropdown fits long selections on a narrow large-text view',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 568);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(
+              size: Size(320, 568),
+              textScaler: TextScaler.linear(2),
+            ),
+            child: Scaffold(
+              body: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: BeltMultiSelectDropdown(
+                  selectedBelts: curriculumBeltOrder.toSet(),
+                  onChanged: (_) {},
+                  label: 'Target belts',
+                  helperText: 'Select one or more belt ranks.',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final decorator = tester.widget<InputDecorator>(
+        find.descendant(
+          of: find.byType(BeltMultiSelectDropdown),
+          matching: find.byType(InputDecorator),
+        ),
+      );
+      expect(
+        decorator.decoration.floatingLabelBehavior,
+        FloatingLabelBehavior.always,
+      );
+      _expectNoFlutterErrors(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey('belt-multi-select-Target belts')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Select all'), findsOneWidget);
+      expect(find.text('Clear'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
+      _expectNoFlutterErrors(tester);
+    },
+  );
 
   testWidgets('class form uses the shared belt multi-select dropdown', (
     tester,
@@ -77,6 +134,11 @@ void main() {
     expect(find.byType(BeltMultiSelectDropdown), findsOneWidget);
     expect(find.text('Eligible belts'), findsOneWidget);
     expect(find.text('Comma-separated belt ranks.'), findsNothing);
+    expect(
+      find.text('Select each belt rank eligible for this class.'),
+      findsOneWidget,
+    );
+    expect(find.text('Leave empty to allow all belt ranks.'), findsNothing);
   });
 
   testWidgets('announcement belt targeting uses the shared multi-select', (
@@ -98,4 +160,13 @@ void main() {
     expect(find.byType(BeltMultiSelectDropdown), findsOneWidget);
     expect(find.text('Target belts'), findsOneWidget);
   });
+}
+
+void _expectNoFlutterErrors(WidgetTester tester) {
+  final errors = <Object>[];
+  Object? error;
+  while ((error = tester.takeException()) != null) {
+    errors.add(error!);
+  }
+  expect(errors, isEmpty);
 }

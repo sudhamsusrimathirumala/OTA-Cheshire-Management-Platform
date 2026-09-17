@@ -597,7 +597,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                     ..addAll(belts);
                 }),
                 label: 'Eligible belts',
-                helperText: 'Leave empty to allow all belt ranks.',
+                helperText: 'Select each belt rank eligible for this class.',
               ),
               const SizedBox(height: 10),
               _AdminTextField(

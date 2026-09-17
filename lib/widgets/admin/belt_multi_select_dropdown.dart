@@ -30,6 +30,7 @@ class BeltMultiSelectDropdown extends StatelessWidget {
         isEmpty: selected.isEmpty,
         decoration: InputDecoration(
           labelText: label,
+          floatingLabelBehavior: FloatingLabelBehavior.always,
           helperText: helperText,
           border: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(4)),
@@ -42,6 +43,9 @@ class BeltMultiSelectDropdown extends StatelessWidget {
         ),
         child: Text(
           selected.isEmpty ? emptyText : selected.join(', '),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          softWrap: true,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: selected.isEmpty ? OtaColors.mutedText : OtaColors.ink,
             fontWeight: FontWeight.w600,
@@ -71,24 +75,32 @@ class BeltMultiSelectDropdown extends StatelessWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 16, 10, 8),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            'Select $label',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800),
-                          ),
+                        Text(
+                          'Select $label',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.w800),
                         ),
-                        TextButton(
-                          onPressed: () => setModalState(
-                            () => draft.addAll(curriculumBeltOrder),
+                        const SizedBox(height: 4),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            children: [
+                              TextButton(
+                                onPressed: () => setModalState(
+                                  () => draft.addAll(curriculumBeltOrder),
+                                ),
+                                child: const Text('Select all'),
+                              ),
+                              TextButton(
+                                onPressed: () => setModalState(draft.clear),
+                                child: const Text('Clear'),
+                              ),
+                            ],
                           ),
-                          child: const Text('Select all'),
-                        ),
-                        TextButton(
-                          onPressed: () => setModalState(draft.clear),
-                          child: const Text('Clear'),
                         ),
                       ],
                     ),

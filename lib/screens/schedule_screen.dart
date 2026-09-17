@@ -612,7 +612,11 @@ class _DateNavigationHeader extends StatelessWidget {
           child: FilledButton.tonalIcon(
             onPressed: onDateTap,
             icon: const Icon(Icons.calendar_today_rounded, size: 18),
-            label: Text(_formatFullDate(selectedDate)),
+            label: Text(
+              _formatFullDate(selectedDate),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             style: FilledButton.styleFrom(
               foregroundColor: OtaColors.ink,
               backgroundColor: OtaColors.white,
@@ -715,6 +719,8 @@ class _NextEligibleBanner extends StatelessWidget {
           Expanded(
             child: Text(
               'Next recommended class: ${nextClass!.className} • ${nextClass!.startLabel}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: OtaColors.white,
                 fontWeight: FontWeight.w800,
@@ -1180,6 +1186,7 @@ class _ClassBlock extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       child: Material(
+        key: ValueKey('schedule-class-${session.id}'),
         color: backgroundColor,
         borderRadius: BorderRadius.circular(18),
         elevation: isEligible && !isPast ? 3 : 0,
@@ -1189,12 +1196,62 @@ class _ClassBlock extends StatelessWidget {
           onTap: onTap,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final isCompact = constraints.maxHeight < 54;
+              final titleStyle = Theme.of(context).textTheme.labelMedium
+                  ?.copyWith(
+                    color: textColor,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  );
+              final detailStyle = Theme.of(context).textTheme.labelSmall
+                  ?.copyWith(
+                    color: textColor.withValues(alpha: 0.78),
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  );
+              final statusStyle = detailStyle?.copyWith(
+                color: isPreferred ? OtaColors.maroon : OtaColors.navy,
+                fontWeight: FontWeight.w900,
+              );
+              final textScaler = MediaQuery.textScalerOf(context);
+              final titleHeight = _singleLineTextHeight(
+                context,
+                titleStyle,
+                textScaler,
+              );
+              final detailHeight = _singleLineTextHeight(
+                context,
+                detailStyle,
+                textScaler,
+              );
+              final horizontalPadding = constraints.maxWidth < 90 ? 4.0 : 10.0;
+              final verticalPadding = constraints.maxHeight < 32 ? 2.0 : 6.0;
+              final contentHeight =
+                  constraints.maxHeight - (verticalPadding * 2);
+              final canFitIcon =
+                  (isEligible || isPreferred) &&
+                  constraints.maxWidth >= 96 &&
+                  contentHeight >= 15;
+              final titleRowHeight = canFitIcon && titleHeight < 15
+                  ? 15.0
+                  : titleHeight;
+              final showTitle =
+                  titleStyle != null && contentHeight >= titleRowHeight + 2;
+              final showIcon = showTitle && canFitIcon;
+              final showTime =
+                  showTitle &&
+                  detailStyle != null &&
+                  contentHeight >= titleRowHeight + 4 + detailHeight + 2;
+              final showStatus =
+                  showTime &&
+                  (isNext || isPreferred) &&
+                  statusStyle != null &&
+                  contentHeight >=
+                      titleRowHeight + 4 + detailHeight + 3 + detailHeight + 2;
 
               return Container(
                 padding: EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: isCompact ? 6 : 8,
+                  horizontal: horizontalPadding,
+                  vertical: verticalPadding,
                 ),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
@@ -1205,80 +1262,56 @@ class _ClassBlock extends StatelessWidget {
                     width: isEligible ? 1.4 : 1,
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        if (isEligible || isPreferred) ...[
-                          Icon(
-                            isPreferred
-                                ? Icons.favorite_rounded
-                                : Icons.star_rounded,
-                            size: 15,
-                            color: isPreferred
-                                ? OtaColors.maroon
-                                : const Color(0xFFD9A441),
-                          ),
-                          const SizedBox(width: 4),
-                        ],
-                        Expanded(
-                          child: Text(
-                            session.className,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: textColor,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1,
+                child: showTitle
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              if (showIcon) ...[
+                                Icon(
+                                  isPreferred
+                                      ? Icons.favorite_rounded
+                                      : Icons.star_rounded,
+                                  size: 15,
+                                  color: isPreferred
+                                      ? OtaColors.maroon
+                                      : const Color(0xFFD9A441),
                                 ),
+                                const SizedBox(width: 4),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  session.className,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: titleStyle,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
-                    if (!isCompact) ...[
-                      const SizedBox(height: 5),
-                      Text(
-                        session.timeRangeLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: textColor.withValues(alpha: 0.78),
-                          fontWeight: FontWeight.w800,
-                          height: 1,
-                        ),
-                      ),
-                    ],
-                    if (isNext && !isCompact) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        'Next recommended',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: OtaColors.navy,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                        ),
-                      ),
-                    ],
-                    if (isPreferred && !isCompact && !isNext) ...[
-                      const SizedBox(height: 3),
-                      Text(
-                        'Preferred class',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: OtaColors.maroon,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                          if (showTime) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              session.timeRangeLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: detailStyle,
+                            ),
+                          ],
+                          if (showStatus) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              isNext ? 'Next recommended' : 'Preferred class',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: statusStyle,
+                            ),
+                          ],
+                        ],
+                      )
+                    : null,
               );
             },
           ),
@@ -1286,6 +1319,21 @@ class _ClassBlock extends StatelessWidget {
       ),
     );
   }
+}
+
+double _singleLineTextHeight(
+  BuildContext context,
+  TextStyle? style,
+  TextScaler textScaler,
+) {
+  if (style == null) return double.infinity;
+  final painter = TextPainter(
+    text: TextSpan(text: 'Ag', style: style),
+    maxLines: 1,
+    textDirection: Directionality.of(context),
+    textScaler: textScaler,
+  )..layout();
+  return painter.height.ceilToDouble();
 }
 
 class _CurrentTimeIndicator extends StatelessWidget {
