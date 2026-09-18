@@ -433,7 +433,7 @@ Android uses one `environment` flavor dimension. `dev` is labeled **OTA Dev** wi
 
 Debug builds validate either flavor without production signing secrets. A release reads ignored `android/key.properties`; all four values (`storeFile`, `storePassword`, `keyAlias`, `keyPassword`) and the keystore file must exist. A `ProdRelease` task throws when incomplete and never falls back to the debug certificate.
 
-`android/key.properties.example` provides placeholders. The repository tracks wrapper scripts/JAR/properties so clean clones use declared Gradle 9.1.0. Versioning currently comes from `pubspec.yaml` (`1.0.0+1`).
+`android/key.properties.example` provides placeholders. The repository tracks wrapper scripts/JAR/properties so clean clones use declared Gradle 9.1.0. Versioning currently comes from `pubspec.yaml` (`1.0.0+2`, displayed as version `1.0.0`).
 
 Google Play Console application setup and publishing permissions are complete, but the application is not yet published. Android publication still requires final branch integration, production Firebase deployment, a production-signed build, final production smoke testing, and the required Play submission and review steps.
 
