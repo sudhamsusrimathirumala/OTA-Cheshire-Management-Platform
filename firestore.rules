@@ -6,7 +6,7 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function guestIdentity() {
+    function guestClaim() {
       return signedIn() && request.auth.token.get('otaGuest', false) == true;
     }
 
@@ -30,12 +30,20 @@ service cloud.firestore {
       return get(userPath(request.auth.uid)).data;
     }
 
+    function guestRole() {
+      return hasUser() && currentUser().role == 'guest';
+    }
+
+    function guestIdentity() {
+      return guestClaim() || guestRole();
+    }
+
     function activeUser() {
-      return hasUser() && currentUser().isActive == true;
+      return !guestIdentity() && hasUser() && currentUser().isActive == true;
     }
 
     function memberDeletingOwnAccount(uid) {
-      return signedIn() &&
+      return signedIn() && !guestIdentity() &&
           request.auth.uid == uid &&
           hasUser() &&
           currentUser().role in ['student', 'parent'];
@@ -872,18 +880,21 @@ service cloud.firestore {
           !exists(userPath(uid)) &&
           validInitialUser(uid, request.resource.data);
       allow read: if signedIn() &&
-          (request.auth.uid == uid ||
-           superAdmin() ||
-           (locationAdmin() &&
-            resource.data.get('locationId', '') == currentUser().locationId));
-      allow update: if signedIn() &&
-          ((!guestIdentity() && request.auth.uid == uid &&
+          ((request.auth.uid == uid &&
+            (!guestClaim() || resource.data.role == 'guest')) ||
+           (!guestIdentity() &&
+            (superAdmin() ||
+             (locationAdmin() &&
+              resource.data.get('locationId', '') == currentUser().locationId))));
+      allow update: if signedIn() && !guestIdentity() &&
+          ((request.auth.uid == uid &&
             (validParentFamilyUpdate() || validOwnContactUpdate() ||
              validOwnAccountUpdate() || validAccountDeletionStart() ||
              validAccountDeletionProgressUpdate())) ||
            validAdminAccountActivation());
-      allow delete: if (superAdmin() && request.auth.uid != uid) ||
-          validOwnAccountDeletion(uid);
+      allow delete: if !guestIdentity() &&
+          ((superAdmin() && request.auth.uid != uid) ||
+           validOwnAccountDeletion(uid));
 
       match /notificationReads/{announcementId} {
         allow read: if activePushDeviceOwner(uid);
@@ -945,7 +956,7 @@ service cloud.firestore {
       allow read: if signedIn() && !guestIdentity() &&
           (resource.data.isActive == true ||
            canReadReferencedLocation(locationId));
-      allow create, update, delete: if superAdmin();
+      allow create, update, delete: if !guestIdentity() && superAdmin();
     }
 
     match /classSessions/{documentId} {

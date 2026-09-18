@@ -17,12 +17,57 @@ const projectId = valueFor("--project");
 const confirmedProjectId = valueFor("--confirm-project");
 const apply = args.has("--apply");
 const adoptDisabledAuth = args.has("--adopt-disabled-auth");
+const rotatePassword = args.has("--rotate-password");
 const email = process.env.OTA_GUEST_EMAIL?.trim().toLowerCase();
 const password = process.env.OTA_GUEST_PASSWORD;
+
+class SafeProvisioningError extends Error {}
 
 function fail(message) {
   console.error(`Guest provisioning stopped: ${message}`);
   process.exitCode = 1;
+}
+
+function safeErrorMessage(error) {
+  if (error instanceof SafeProvisioningError) return error.message;
+  const code = typeof error?.code === "string" &&
+      /^[a-z0-9_/-]+$/i.test(error.code) ? error.code : null;
+  return code ? `Firebase operation failed (${code}).` :
+    "An unexpected provisioning operation failed.";
+}
+
+function validateExistingIdentity({
+  created,
+  existingDocument,
+  existingRole,
+  authDisabled,
+  hasGuestClaim,
+  hasPasswordProvider,
+  adoptDisabled,
+  rotate,
+}) {
+  if (created) return;
+  if (existingDocument && existingRole !== "guest") {
+    throw new SafeProvisioningError(
+      "The existing identity belongs to a non-guest OTA account.",
+    );
+  }
+  if (!hasPasswordProvider) {
+    throw new SafeProvisioningError(
+      "The existing identity is not an email/password reviewer account.",
+    );
+  }
+  const incompleteGuest = !existingDocument || !hasGuestClaim;
+  if (incompleteGuest && (!adoptDisabled || !authDisabled)) {
+    throw new SafeProvisioningError(
+      "The email belongs to an incomplete reviewer identity. Refusing to adopt it.",
+    );
+  }
+  if (!rotate) {
+    throw new SafeProvisioningError(
+      "An existing reviewer identity requires --rotate-password before it can be enabled.",
+    );
+  }
 }
 
 async function main() {
@@ -70,22 +115,25 @@ async function main() {
   }
   const userRef = firestore.collection("users").doc(user.uid);
   const existing = await userRef.get();
-  if (existing.exists && existing.get("role") !== "guest") {
-    throw new Error("The existing UID belongs to a non-guest OTA account.");
-  }
-  if (!created && !existing.exists && user.customClaims?.otaGuest !== true) {
-    if (!adoptDisabledAuth || user.disabled !== true) {
-      throw new Error(
-        "The email already belongs to an unprovisioned Auth identity. Refusing to adopt it.",
-      );
-    }
-  }
+  validateExistingIdentity({
+    created,
+    existingDocument: existing.exists,
+    existingRole: existing.exists ? existing.get("role") : null,
+    authDisabled: user.disabled === true,
+    hasGuestClaim: user.customClaims?.otaGuest === true,
+    hasPasswordProvider: user.providerData.some(
+      (provider) => provider.providerId === "password",
+    ),
+    adoptDisabled: adoptDisabledAuth,
+    rotate: rotatePassword,
+  });
 
   await auth.updateUser(user.uid, {disabled: true});
   await auth.setCustomUserClaims(user.uid, {
     ...(user.customClaims ?? {}),
     otaGuest: true,
   });
+  const existingCreatedAt = existing.exists ? existing.get("createdAt") : null;
   await userRef.set({
     firstName: "OTA",
     lastName: "Reviewer",
@@ -93,15 +141,20 @@ async function main() {
     role: "guest",
     isActive: true,
     linkedStudentProfileIds: [],
-    ...(existing.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
+    createdAt: existingCreatedAt ?? FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
-  await auth.updateUser(user.uid, {disabled: false});
+  });
+  await auth.updateUser(user.uid, {
+    disabled: false,
+    ...(!created ? {password} : {}),
+  });
 
   console.log("Guest reviewer identity provisioned successfully.");
   console.log("The email remains unverified and no credentials were printed.");
 }
 
-main().catch((error) => {
-  fail(error instanceof Error ? error.message : "unknown provisioning failure");
-});
+if (require.main === module) {
+  main().catch((error) => fail(safeErrorMessage(error)));
+}
+
+module.exports = {safeErrorMessage, validateExistingIdentity};

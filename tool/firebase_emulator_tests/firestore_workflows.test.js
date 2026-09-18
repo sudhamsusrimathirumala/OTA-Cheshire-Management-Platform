@@ -128,6 +128,69 @@ async function seedContent() {
   });
 }
 
+async function seedGuestMismatch(uid, role) {
+  const memberProfileIds = ['parent', 'student'].includes(role)
+    ? [`${uid}-profile`]
+    : [];
+  await seedAccount({
+    uid,
+    role,
+    profileIds: memberProfileIds,
+    selectedProfileId: memberProfileIds[0],
+  });
+  await seedAccount({uid: 'real-member'});
+  await seedContent();
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    const privateData = {createdAt: new Date()};
+    await setDoc(
+      doc(db, 'users', uid, 'notificationReads', 'private'),
+      {readAt: new Date()},
+    );
+    await setDoc(
+      doc(db, 'users', uid, 'pushDevices', 'private'),
+      {...privateData, fcmToken: 'private-token'},
+    );
+    await setDoc(
+      doc(db, 'users', uid, 'announcementDeliveries', 'private'),
+      privateData,
+    );
+  });
+}
+
+async function assertGuestClaimCannotUseRole(uid, role) {
+  await seedGuestMismatch(uid, role);
+  const db = auth(uid, `${uid}@example.com`, {otaGuest: true});
+
+  await assertFails(getDoc(doc(db, 'users', uid)));
+  await assertFails(getDoc(doc(db, 'users', 'real-member')));
+  await assertFails(getDocs(collection(db, 'users')));
+  await assertFails(getDoc(doc(db, 'locations', 'cheshire')));
+  await assertFails(getDoc(doc(db, 'classSessions', 'active-class')));
+  await assertFails(getDoc(doc(db, 'announcements', 'published')));
+  await assertFails(getDoc(doc(db, 'events', 'published')));
+  await assertFails(getDoc(doc(db, 'resources', 'published')));
+  for (const profileId of [`${uid}-profile`, 'real-member-profile']) {
+    await assertFails(getDoc(doc(db, 'studentProfiles', profileId)));
+  }
+  await assertFails(updateDoc(doc(db, 'users', uid), {
+    firstName: 'Changed', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(deleteDoc(doc(db, 'users', 'real-member')));
+  await assertFails(updateDoc(doc(db, 'locations', 'cheshire'), {
+    name: 'Changed by guest claim',
+  }));
+  for (const collectionName of [
+    'notificationReads',
+    'pushDevices',
+    'announcementDeliveries',
+  ]) {
+    await assertFails(deleteDoc(
+      doc(db, 'users', uid, collectionName, 'private'),
+    ));
+  }
+}
+
 test('authenticated user reads active locations before account setup', async () => {
   const db = auth('new-user');
   await assertSucceeds(getDoc(doc(db, 'locations', 'cheshire')));
@@ -187,11 +250,48 @@ test('guest claim can read only its own guest account record', async () => {
 });
 
 test('guest claim cannot use public onboarding when its user record is absent', async () => {
+  await seedContent();
   const db = auth('unconfigured-reviewer', 'reviewer@example.com', {otaGuest: true});
+  await assertFails(getDoc(doc(db, 'locations', 'cheshire')));
+  await assertFails(getDoc(doc(db, 'classSessions', 'active-class')));
   await assertFails(createProfiles(db, {
     uid: 'unconfigured-reviewer', email: 'reviewer@example.com',
     profileIds: ['guest-profile'],
   }));
+});
+
+test('guest claim overrides an inconsistent admin role', async () => {
+  await assertGuestClaimCannotUseRole('guest-admin', 'admin');
+});
+
+test('guest claim overrides an inconsistent superAdmin role', async () => {
+  await assertGuestClaimCannotUseRole('guest-super-admin', 'superAdmin');
+});
+
+test('guest claim overrides an inconsistent parent role', async () => {
+  await assertGuestClaimCannotUseRole('guest-parent', 'parent');
+});
+
+test('guest claim overrides an inconsistent student role', async () => {
+  await assertGuestClaimCannotUseRole('guest-student', 'student');
+});
+
+test('role-only guest identity remains restricted without the claim', async () => {
+  await seedGuestMismatch('role-only-guest', 'guest');
+  const db = auth('role-only-guest');
+
+  await assertSucceeds(getDoc(doc(db, 'users', 'role-only-guest')));
+  await assertFails(getDoc(doc(db, 'users', 'real-member')));
+  await assertFails(getDocs(collection(db, 'users')));
+  await assertFails(getDoc(doc(db, 'locations', 'cheshire')));
+  await assertFails(getDoc(doc(db, 'classSessions', 'active-class')));
+  await assertFails(updateDoc(doc(db, 'users', 'role-only-guest'), {
+    firstName: 'Changed', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(
+    doc(db, 'users', 'role-only-guest', 'notificationReads', 'new'),
+    {readAt: serverTimestamp()},
+  ));
 });
 
 test('student atomically creates active records at one location', async () => {
