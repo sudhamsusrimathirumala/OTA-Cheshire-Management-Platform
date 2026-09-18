@@ -70,6 +70,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('guest banner view chooser is a selectable navigation action', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: const Scaffold(body: GuestModeBanner()),
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => const GuestDashboardScreen(),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('Switch reviewer view'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View chooser'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(GuestDashboardScreen), findsOneWidget);
+    expect(find.text('Choose an experience'), findsOneWidget);
+  });
+
   test('guest admin writer is the in-memory service', () {
     expect(adminWriteService, same(guestDemoAppDataService));
   });

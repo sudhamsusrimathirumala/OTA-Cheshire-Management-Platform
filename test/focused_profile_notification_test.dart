@@ -123,6 +123,7 @@ void main() {
           updatePreferredClass: (profile, selected) async {
             changes.add(selected?.bulkGroupId);
           },
+          updateManagedProfile: (_) async {},
         ),
       ),
     );

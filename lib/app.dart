@@ -50,7 +50,6 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ? firebaseSessionController.stage
         : SessionStage.signedOut;
     if (_usesFirebase) {
-      guestSessionSignOut = firebaseSessionController.signOut;
       firebaseSessionController.addListener(_handleSessionChanged);
       WidgetsBinding.instance.addObserver(this);
       WidgetsBinding.instance.addPostFrameCallback(
@@ -119,23 +118,32 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ),
       ),
       home: Firebase.apps.isNotEmpty ? const AuthGate() : const WelcomeScreen(),
-      builder: (context, child) => AnimatedBuilder(
-        animation: Listenable.merge([
-          firebaseSessionController,
-          guestExperienceController,
-        ]),
-        builder: (context, _) {
-          if (firebaseSessionController.stage != SessionStage.guest) {
-            return child ?? const SizedBox.shrink();
-          }
-          return Column(
-            children: [
-              const GuestModeBanner(),
-              Expanded(child: child ?? const SizedBox.shrink()),
-            ],
-          );
-        },
-      ),
+      builder: (context, child) {
+        if (!_usesFirebase) return child ?? const SizedBox.shrink();
+        return AnimatedBuilder(
+          animation: Listenable.merge([
+            firebaseSessionController,
+            guestExperienceController,
+          ]),
+          builder: (context, _) {
+            if (firebaseSessionController.stage != SessionStage.guest) {
+              return child ?? const SizedBox.shrink();
+            }
+            return Column(
+              children: [
+                const GuestModeBanner(),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: child ?? const SizedBox.shrink(),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
       onGenerateRoute: _buildAuthorizedRoute,
     );
   }

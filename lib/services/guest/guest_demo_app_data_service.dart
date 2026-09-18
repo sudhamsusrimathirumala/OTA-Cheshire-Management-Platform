@@ -11,6 +11,7 @@ import '../../models/notification_item.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import '../app_data_service.dart';
+import '../announcement_audience.dart';
 import '../firebase/firebase_admin_write_service.dart';
 import '../firebase/profile_service.dart';
 import '../location_time_service.dart';
@@ -325,17 +326,15 @@ class GuestDemoAppDataService extends ChangeNotifier
   }
 
   bool _visibleToCurrentView(AcademyAnnouncement item, StudentProfile profile) {
-    return switch (item.audienceType) {
-      'everyone' => true,
-      'parents' => _controller.mode == GuestViewMode.parent,
-      'students' => _controller.mode == GuestViewMode.student,
-      'belt' => item.targetBelts.contains(profile.belt),
-      'classType' => profile.preferredClassGroupIds.any(
-        item.targetClassTypeIds.contains,
-      ),
-      'specificUsers' => item.targetUserIds.contains(currentUserAccount.id),
-      _ => item.targetStudentProfileIds.contains(profile.id),
-    };
+    return announcementMatchesAccount(
+      audienceType: item.audienceType,
+      targetBelts: item.targetBelts,
+      targetClassTypeIds: item.targetClassTypeIds,
+      targetStudentProfileIds: item.targetStudentProfileIds,
+      targetUserIds: item.targetUserIds,
+      account: currentUserAccount,
+      profiles: [profile],
+    );
   }
 
   @override

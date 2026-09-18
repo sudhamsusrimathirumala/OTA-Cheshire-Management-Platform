@@ -76,4 +76,34 @@ void main() {
     );
     expect(service.selectedStudentProfile.id, 'demo-casey');
   });
+
+  test('student targeting follows the selected fictional student', () async {
+    controller.selectMode(GuestViewMode.admin);
+    await service.saveAnnouncement(
+      const AnnouncementWriteData(
+        title: 'Riley-only demo notice',
+        summary: 'Targeted to one fictional student.',
+        body: 'This remains session-local.',
+        announcementType: 'general',
+        priority: 'general',
+        status: 'published',
+        locationId: guestDemoLocationId,
+        requiresAction: false,
+        audienceType: 'students',
+        targetStudentProfileIds: ['demo-riley'],
+      ),
+    );
+
+    controller.selectMode(GuestViewMode.parent);
+    expect(
+      service.notifications.map((item) => item.title),
+      isNot(contains('Riley-only demo notice')),
+    );
+
+    await service.selectProfile('demo-riley');
+    expect(
+      service.notifications.map((item) => item.title),
+      contains('Riley-only demo notice'),
+    );
+  });
 }

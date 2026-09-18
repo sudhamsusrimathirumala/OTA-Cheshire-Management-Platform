@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../routes.dart';
+import '../../services/firebase/firebase_session_controller.dart';
 import '../../services/guest/guest_experience_controller.dart';
 import '../../theme/ota_colors.dart';
+
+enum _GuestMenuAction { admin, student, parent, chooser }
 
 class GuestDashboardScreen extends StatelessWidget {
   const GuestDashboardScreen({super.key});
@@ -93,13 +96,10 @@ class GuestDashboardScreen extends StatelessWidget {
 
   Future<void> _signOut(BuildContext context) async {
     final navigator = Navigator.of(context);
-    final session = guestSessionSignOut;
-    if (session != null) await session();
+    await firebaseSessionController.signOut();
     if (navigator.mounted) navigator.popUntil((route) => route.isFirst);
   }
 }
-
-Future<void> Function()? guestSessionSignOut;
 
 class GuestModeBanner extends StatelessWidget {
   const GuestModeBanner({super.key});
@@ -124,16 +124,24 @@ class GuestModeBanner extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
-            PopupMenuButton<GuestViewMode?>(
+            PopupMenuButton<_GuestMenuAction>(
               tooltip: 'Switch reviewer view',
-              onSelected: (mode) {
-                if (mode == null) {
+              onSelected: (action) {
+                if (action == _GuestMenuAction.chooser) {
                   Navigator.of(context).pushNamedAndRemoveUntil(
                     OtaRoutes.guestDashboard,
                     (_) => false,
                   );
                   return;
                 }
+                final mode = switch (action) {
+                  _GuestMenuAction.admin => GuestViewMode.admin,
+                  _GuestMenuAction.student => GuestViewMode.student,
+                  _GuestMenuAction.parent => GuestViewMode.parent,
+                  _GuestMenuAction.chooser => throw StateError(
+                    'The chooser action is handled above.',
+                  ),
+                };
                 guestExperienceController.selectMode(mode);
                 Navigator.of(context).pushNamedAndRemoveUntil(
                   mode == GuestViewMode.admin
@@ -144,19 +152,22 @@ class GuestModeBanner extends StatelessWidget {
               },
               itemBuilder: (_) => const [
                 PopupMenuItem(
-                  value: GuestViewMode.admin,
+                  value: _GuestMenuAction.admin,
                   child: Text('Admin View'),
                 ),
                 PopupMenuItem(
-                  value: GuestViewMode.student,
+                  value: _GuestMenuAction.student,
                   child: Text('Student View'),
                 ),
                 PopupMenuItem(
-                  value: GuestViewMode.parent,
+                  value: _GuestMenuAction.parent,
                   child: Text('Parent View'),
                 ),
                 PopupMenuDivider(),
-                PopupMenuItem(value: null, child: Text('View chooser')),
+                PopupMenuItem(
+                  value: _GuestMenuAction.chooser,
+                  child: Text('View chooser'),
+                ),
               ],
               icon: const Icon(Icons.swap_horiz_rounded),
             ),
