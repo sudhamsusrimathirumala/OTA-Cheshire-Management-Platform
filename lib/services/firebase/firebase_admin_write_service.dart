@@ -7,13 +7,29 @@ import '../../models/class_session.dart';
 import '../../data/sample_curriculum.dart';
 import '../firestore/firestore_collections.dart';
 
-class FirebaseAdminWriteService {
+abstract interface class AdminWriteService {
+  Future<void> saveAnnouncement(AnnouncementWriteData data);
+  Future<void> archiveAnnouncement(String announcementId);
+  Future<void> deleteAnnouncement(String announcementId);
+  Future<void> saveEvent(EventWriteData data);
+  Future<void> archiveEvent(String eventId);
+  Future<void> deleteEvent(String eventId);
+  Future<void> saveClassSession(ClassSessionWriteData data);
+  Future<void> deleteClassSession(String classSessionId);
+  Future<void> saveResource(ResourceWriteData data);
+  Future<void> archiveResource(String resourceId);
+  Future<void> deleteResource(String resourceId);
+  Future<void> updateStudentProgress(AdminStudentProgressWriteData data);
+}
+
+class FirebaseAdminWriteService implements AdminWriteService {
   FirebaseAdminWriteService({this.firestore});
 
   final FirebaseFirestore? firestore;
 
   FirebaseFirestore get _database => firestore ?? FirebaseFirestore.instance;
 
+  @override
   Future<void> saveAnnouncement(AnnouncementWriteData data) async {
     final collection = _database.collection(FirestoreCollections.announcements);
     final document = data.id == null
@@ -26,6 +42,7 @@ class FirebaseAdminWriteService {
     );
   }
 
+  @override
   Future<void> archiveAnnouncement(String announcementId) async {
     await _database
         .collection(FirestoreCollections.announcements)
@@ -36,6 +53,7 @@ class FirebaseAdminWriteService {
         }, SetOptions(merge: true));
   }
 
+  @override
   Future<void> deleteAnnouncement(String announcementId) async {
     await _database
         .collection(FirestoreCollections.announcements)
@@ -43,6 +61,7 @@ class FirebaseAdminWriteService {
         .delete();
   }
 
+  @override
   Future<void> saveEvent(EventWriteData data) async {
     final collection = _database.collection(FirestoreCollections.events);
     final document = data.id == null
@@ -55,6 +74,7 @@ class FirebaseAdminWriteService {
     );
   }
 
+  @override
   Future<void> archiveEvent(String eventId) async {
     await _database.collection(FirestoreCollections.events).doc(eventId).set({
       'isArchived': true,
@@ -62,6 +82,7 @@ class FirebaseAdminWriteService {
     }, SetOptions(merge: true));
   }
 
+  @override
   Future<void> deleteEvent(String eventId) async {
     await _database
         .collection(FirestoreCollections.events)
@@ -69,6 +90,7 @@ class FirebaseAdminWriteService {
         .delete();
   }
 
+  @override
   Future<void> saveClassSession(ClassSessionWriteData data) async {
     final collection = _database.collection(FirestoreCollections.classSessions);
     final document = data.id == null
@@ -81,6 +103,7 @@ class FirebaseAdminWriteService {
     );
   }
 
+  @override
   Future<void> deleteClassSession(String classSessionId) async {
     await _database
         .collection(FirestoreCollections.classSessions)
@@ -88,6 +111,7 @@ class FirebaseAdminWriteService {
         .delete();
   }
 
+  @override
   Future<void> saveResource(ResourceWriteData data) async {
     final collection = _database.collection(FirestoreCollections.resources);
     final document = data.id == null
@@ -100,6 +124,7 @@ class FirebaseAdminWriteService {
     );
   }
 
+  @override
   Future<void> archiveResource(String resourceId) async {
     await _database
         .collection(FirestoreCollections.resources)
@@ -110,6 +135,7 @@ class FirebaseAdminWriteService {
         }, SetOptions(merge: true));
   }
 
+  @override
   Future<void> deleteResource(String resourceId) async {
     await _database
         .collection(FirestoreCollections.resources)
@@ -117,6 +143,7 @@ class FirebaseAdminWriteService {
         .delete();
   }
 
+  @override
   Future<void> updateStudentProgress(AdminStudentProgressWriteData data) async {
     final fields = adminStudentProgressWriteFields(data);
     await _database

@@ -49,7 +49,7 @@ class AdminEventsScreen extends StatefulWidget {
 }
 
 class _AdminEventsScreenState extends State<AdminEventsScreen> {
-  final _writeService = FirebaseAdminWriteService();
+  AdminWriteService get _writeService => adminWriteService;
   var _selectedFilter = _EventFilter.published;
 
   List<AcademyEvent> _filteredEvents(List<AcademyEvent> events) {
@@ -288,7 +288,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         return AlertDialog(
           title: const Text('Permanently delete event?'),
           content: Text(
-            'This will permanently delete "${event.title}" from Firestore. This cannot be undone.',
+            isGuestDemoActive
+                ? 'This removes "${event.title}" from the current demo session.'
+                : 'This will permanently delete "${event.title}" from Firestore. This cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -718,7 +720,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             children: [
               _SheetHeader(
                 title: isEditing ? 'Edit Event' : 'Create Event',
-                subtitle: 'Drafts and published events write to Firestore.',
+                subtitle: isGuestDemoActive
+                    ? 'Demo drafts and publications stay on this device.'
+                    : 'Drafts and published events write to Firestore.',
               ),
               const SizedBox(height: 14),
               _AdminTextField(controller: _titleController, label: 'Title'),

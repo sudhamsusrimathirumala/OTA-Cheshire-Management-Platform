@@ -22,10 +22,12 @@ import 'screens/signup_screen.dart';
 import 'screens/student_dashboard_screen.dart';
 import 'screens/welcome_screen.dart';
 import 'screens/auth/auth_gate.dart';
+import 'screens/guest/guest_dashboard_screen.dart';
 import 'services/firebase/firebase_session_controller.dart';
 import 'services/firebase/route_authorization.dart';
 import 'services/app_data_service_provider.dart';
 import 'services/debug_view_controller.dart';
+import 'services/guest/guest_experience_controller.dart';
 import 'services/push_runtime.dart';
 import 'theme/ota_colors.dart';
 
@@ -48,6 +50,7 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ? firebaseSessionController.stage
         : SessionStage.signedOut;
     if (_usesFirebase) {
+      guestSessionSignOut = firebaseSessionController.signOut;
       firebaseSessionController.addListener(_handleSessionChanged);
       WidgetsBinding.instance.addObserver(this);
       WidgetsBinding.instance.addPostFrameCallback(
@@ -64,6 +67,10 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
 
   void _handleSessionChanged() {
     final current = firebaseSessionController.stage;
+    final enteringGuest =
+        current == SessionStage.guest && _previousStage != SessionStage.guest;
+    setGuestDemoActive(current == SessionStage.guest, reset: enteringGuest);
+    if (current == SessionStage.signedOut) guestExperienceController.reset();
     final pushService = pushNotificationService;
     if (pushService != null) {
       pushService.handleSession(firebaseSessionController);
@@ -112,6 +119,23 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ),
       ),
       home: Firebase.apps.isNotEmpty ? const AuthGate() : const WelcomeScreen(),
+      builder: (context, child) => AnimatedBuilder(
+        animation: Listenable.merge([
+          firebaseSessionController,
+          guestExperienceController,
+        ]),
+        builder: (context, _) {
+          if (firebaseSessionController.stage != SessionStage.guest) {
+            return child ?? const SizedBox.shrink();
+          }
+          return Column(
+            children: [
+              const GuestModeBanner(),
+              Expanded(child: child ?? const SizedBox.shrink()),
+            ],
+          );
+        },
+      ),
       onGenerateRoute: _buildAuthorizedRoute,
     );
   }
@@ -121,18 +145,52 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
   final WidgetBuilder? builder = switch (settings.name) {
     OtaRoutes.gate => (_) => const AuthGate(),
     OtaRoutes.welcome => (_) => const WelcomeScreen(),
-    OtaRoutes.dashboard => (_) => const StudentDashboardScreen(),
-    OtaRoutes.schedule => (_) => const ScheduleScreen(),
+    OtaRoutes.dashboard => (_) => StudentDashboardScreen(
+      selectProfile: isGuestDemoActive
+          ? guestDemoAppDataService.selectProfile
+          : null,
+    ),
+    OtaRoutes.schedule => (_) => ScheduleScreen(
+      updatePreferredClass: isGuestDemoActive
+          ? guestDemoAppDataService.updatePreferredClass
+          : null,
+    ),
     OtaRoutes.events => (_) => const EventsScreen(),
     OtaRoutes.resources => (_) => const ResourcesScreen(),
     OtaRoutes.generalResources => (_) => const GeneralResourcesScreen(),
     OtaRoutes.curriculum => (_) => const CurriculumScreen(),
     OtaRoutes.notifications => (_) => const NotificationsScreen(),
-    OtaRoutes.profile => (_) => const ProfileScreen(),
-    OtaRoutes.manageProfiles => (_) => const ManageProfilesScreen(),
+    OtaRoutes.profile => (_) => ProfileScreen(
+      managementAvailableOverride: isGuestDemoActive ? true : null,
+      accountDeletionAvailableOverride: isGuestDemoActive ? false : null,
+    ),
+    OtaRoutes.manageProfiles => (_) => ManageProfilesScreen(
+      selectProfile: isGuestDemoActive
+          ? guestDemoAppDataService.selectProfile
+          : null,
+      updateAccountContact: isGuestDemoActive
+          ? guestDemoAppDataService.updateAccountContact
+          : null,
+      createChild: isGuestDemoActive
+          ? guestDemoAppDataService.createChild
+          : null,
+      updateManagedProfile: isGuestDemoActive
+          ? guestDemoAppDataService.updateManagedProfile
+          : null,
+      updatePreferredClass: isGuestDemoActive
+          ? guestDemoAppDataService.updatePreferredClass
+          : null,
+      createSelfProfile: isGuestDemoActive
+          ? guestDemoAppDataService.createParentSelfProfile
+          : null,
+      removeLinkedProfile: isGuestDemoActive
+          ? guestDemoAppDataService.removeLinkedProfile
+          : null,
+    ),
     OtaRoutes.accountDeletion => (_) => const AccountDeletionScreen(),
     OtaRoutes.login => (_) => const LoginScreen(),
     OtaRoutes.signup => (_) => const SignupScreen(),
+    OtaRoutes.guestDashboard => (_) => const GuestDashboardScreen(),
     OtaRoutes.adminDashboard => (_) => const AdminDashboardScreen(),
     OtaRoutes.adminStudents => (_) => const AdminStudentsScreen(),
     OtaRoutes.adminEvents => (_) => const AdminEventsScreen(),
@@ -161,6 +219,7 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
         ? firebaseSessionController.stage
         : SessionStage.signedOut,
     debugMode: debugViewController.mode,
+    guestMode: guestExperienceController.mode,
   );
   final authorizedBuilder = authorized ? builder : (_) => const AuthGate();
 

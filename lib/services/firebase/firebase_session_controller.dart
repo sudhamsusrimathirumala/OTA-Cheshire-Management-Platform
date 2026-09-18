@@ -19,6 +19,7 @@ enum SessionStage {
   signedOut,
   needsProfiles,
   member,
+  guest,
   disabled,
   adminDisabled,
   admin,
@@ -64,6 +65,7 @@ class FirebaseSessionController extends ChangeNotifier {
   String? _profilesLinkedFingerprint;
   String? _profileRecoveryFingerprint;
   bool _profileCreationInProgress = false;
+  bool _authenticatedGuestClaim = false;
   bool _disposed = false;
 
   bool get hasActiveAcademyAccess => stage == SessionStage.member;
@@ -92,16 +94,19 @@ class FirebaseSessionController extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    final runCleanup = shouldRunSignOutCleanup(stage);
     justCreatedProfiles = false;
     ++_sessionGeneration;
     ++_profilesGeneration;
     ++_locationGeneration;
     stage = SessionStage.loading;
     notifyListeners();
-    try {
-      await signOutCleanup?.call();
-    } catch (_) {
-      // Best-effort device cleanup must not block authentication sign-out.
+    if (runCleanup) {
+      try {
+        await signOutCleanup?.call();
+      } catch (_) {
+        // Best-effort device cleanup must not block authentication sign-out.
+      }
     }
     await authentication.signOut();
     await _replaceAuthUser(null);
@@ -188,10 +193,20 @@ class FirebaseSessionController extends ChangeNotifier {
     selectedLocationName = null;
     errorMessage = null;
     if (user == null) {
+      _authenticatedGuestClaim = false;
       stage = SessionStage.signedOut;
       notifyListeners();
       return;
     }
+    try {
+      final claims = await authentication.authenticationClaims
+          ?.currentUserClaims();
+      _authenticatedGuestClaim = claims?['otaGuest'] == true;
+    } catch (_) {
+      _setError('Unable to verify this account authorization.');
+      return;
+    }
+    if (!_isCurrentSession(generation, user.uid)) return;
     stage = SessionStage.loading;
     notifyListeners();
     _userSubscription = _database
@@ -218,6 +233,10 @@ class FirebaseSessionController extends ChangeNotifier {
   ) {
     final data = snapshot.data();
     if (data == null) {
+      if (_authenticatedGuestClaim) {
+        _setError('This reviewer account is not configured correctly.');
+        return;
+      }
       if (shouldHoldProfileSetupDuringCreation(
         creationInProgress: _profileCreationInProgress,
         current: stage,
@@ -252,6 +271,26 @@ class FirebaseSessionController extends ChangeNotifier {
     }
 
     final loadedAccount = account!;
+    final guestIdentity = guestIdentityStatusFor(
+      account: loadedAccount,
+      hasGuestClaim: _authenticatedGuestClaim,
+    );
+    if (guestIdentity == GuestIdentityStatus.mismatch) {
+      _setError('This account authorization is inconsistent.');
+      return;
+    }
+    if (guestIdentity == GuestIdentityStatus.guest) {
+      stage = loadedAccount.isActive
+          ? SessionStage.guest
+          : SessionStage.disabled;
+      errorMessage = loadedAccount.isActive
+          ? null
+          : 'This reviewer account is unavailable.';
+      unawaited(_cancelProfilesSubscription());
+      unawaited(_cancelLocationSubscription());
+      notifyListeners();
+      return;
+    }
     if (loadedAccount.role == UserAccountRole.admin ||
         loadedAccount.role == UserAccountRole.superAdmin) {
       final evaluatedStage = adminAccessStageFor(account: loadedAccount);
@@ -775,6 +814,9 @@ bool shouldHoldProfileSetupDuringCreation({
 }) => creationInProgress && current == SessionStage.needsProfiles;
 
 @visibleForTesting
+bool shouldRunSignOutCleanup(SessionStage stage) => stage != SessionStage.guest;
+
+@visibleForTesting
 SessionStage sessionStageDuringAccessRefresh({
   required SessionStage current,
   required SessionStage established,
@@ -810,6 +852,20 @@ bool hasActiveAcademyAccessFor({
       account.selectedStudentProfileId == selectedProfile.id &&
       account.linkedStudentProfileIds.contains(selectedProfile.id) &&
       locationActive;
+}
+
+enum GuestIdentityStatus { notGuest, guest, mismatch }
+
+@visibleForTesting
+GuestIdentityStatus guestIdentityStatusFor({
+  required UserAccount account,
+  required bool hasGuestClaim,
+}) {
+  final hasGuestRole = account.role == UserAccountRole.guest;
+  if (hasGuestRole != hasGuestClaim) return GuestIdentityStatus.mismatch;
+  return hasGuestRole
+      ? GuestIdentityStatus.guest
+      : GuestIdentityStatus.notGuest;
 }
 
 @visibleForTesting

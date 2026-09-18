@@ -12,6 +12,8 @@ typedef AccountContactUpdater =
     Future<void> Function(AccountContactInput input);
 typedef ChildProfileCreator =
     Future<String> Function(StudentProfileInput input);
+typedef StudentProfileUpdater =
+    Future<void> Function(StudentProfileEditInput input);
 
 class AccountEditScreen extends StatelessWidget {
   const AccountEditScreen({
@@ -44,8 +46,12 @@ class StudentProfileEditScreen extends StatelessWidget {
     required this.guardianEmailRequired,
     this.schedule,
     this.updatePreferredClass,
+    this.updateManagedProfile,
     super.key,
-  }) : assert(service != null || updatePreferredClass != null);
+  }) : assert(
+         service != null ||
+             (updatePreferredClass != null && updateManagedProfile != null),
+       );
 
   final StudentProfile student;
   final FirestoreProfileService? service;
@@ -53,6 +59,7 @@ class StudentProfileEditScreen extends StatelessWidget {
   final Map<int, List<ClassSession>>? schedule;
   final Future<void> Function(StudentProfile, ClassSession?)?
   updatePreferredClass;
+  final StudentProfileUpdater? updateManagedProfile;
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -64,6 +71,7 @@ class StudentProfileEditScreen extends StatelessWidget {
       guardianEmailRequired: guardianEmailRequired,
       schedule: schedule ?? appDataService.schedule,
       updatePreferredClass: updatePreferredClass,
+      updateManagedProfile: updateManagedProfile,
     ),
   );
 }
@@ -119,13 +127,18 @@ class AddParentStudentProfileScreen extends StatelessWidget {
 Future<bool> showAccountEditSheet(
   BuildContext context, {
   required UserAccount account,
-  required FirestoreProfileService service,
+  FirestoreProfileService? service,
+  AccountContactUpdater? updateAccountContact,
 }) async =>
     await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AccountEditSheet(account: account, service: service),
+      builder: (_) => _AccountEditSheet(
+        account: account,
+        service: service,
+        updateAccountContact: updateAccountContact,
+      ),
     ) ??
     false;
 
@@ -260,6 +273,7 @@ class _StudentEditSheet extends StatefulWidget {
     required this.guardianEmailRequired,
     required this.schedule,
     this.updatePreferredClass,
+    this.updateManagedProfile,
   });
 
   final StudentProfile student;
@@ -268,6 +282,7 @@ class _StudentEditSheet extends StatefulWidget {
   final Map<int, List<ClassSession>> schedule;
   final Future<void> Function(StudentProfile, ClassSession?)?
   updatePreferredClass;
+  final StudentProfileUpdater? updateManagedProfile;
 
   @override
   State<_StudentEditSheet> createState() => _StudentEditSheetState();
@@ -332,18 +347,18 @@ class _StudentEditSheetState extends State<_StudentEditSheet> {
       _error = null;
     });
     try {
-      await widget.service!.updateManagedProfile(
-        StudentProfileEditInput(
-          profileId: widget.student.id,
-          firstName: _firstName.text,
-          lastName: _lastName.text,
-          dateOfBirth: _dateOfBirth,
-          beltRank: _belt,
-          guardianEmail: _guardianEmail.text,
-          stickerCurrent: int.parse(_current.text),
-          stickerRequired: int.parse(_required.text),
-        ),
+      final input = StudentProfileEditInput(
+        profileId: widget.student.id,
+        firstName: _firstName.text,
+        lastName: _lastName.text,
+        dateOfBirth: _dateOfBirth,
+        beltRank: _belt,
+        guardianEmail: _guardianEmail.text,
+        stickerCurrent: int.parse(_current.text),
+        stickerRequired: int.parse(_required.text),
       );
+      await (widget.updateManagedProfile?.call(input) ??
+          widget.service!.updateManagedProfile(input));
       if (mounted) Navigator.pop(context, true);
     } on ProfileServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);

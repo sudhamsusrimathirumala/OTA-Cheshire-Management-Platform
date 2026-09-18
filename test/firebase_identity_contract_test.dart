@@ -35,9 +35,32 @@ void main() {
 
     test('all canonical roles parse', () {
       expect(
-        ['student', 'parent', 'admin', 'superAdmin'].map(parseUserAccountRole),
+        [
+          'student',
+          'parent',
+          'admin',
+          'superAdmin',
+          'guest',
+        ].map(parseUserAccountRole),
         UserAccountRole.values,
       );
+    });
+
+    test('guest accounts do not require a production location or profiles', () {
+      final account = userAccountFromFirestoreData('reviewer-uid', {
+        'firstName': 'OTA',
+        'lastName': 'Reviewer',
+        'email': 'reviewer@example.invalid',
+        'role': 'guest',
+        'isActive': true,
+        'linkedStudentProfileIds': <String>[],
+        'createdAt': Timestamp.fromDate(now),
+        'updatedAt': Timestamp.fromDate(now),
+      });
+
+      expect(account.role, UserAccountRole.guest);
+      expect(account.locationId, isEmpty);
+      expect(account.linkedStudentProfileIds, isEmpty);
     });
 
     test('invalid roles and malformed active access are rejected', () {

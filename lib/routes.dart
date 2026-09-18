@@ -13,6 +13,7 @@ abstract final class OtaRoutes {
   static const accountDeletion = '/profile/delete-account';
   static const login = '/login';
   static const signup = '/signup';
+  static const guestDashboard = '/guest';
   static const adminDashboard = '/admin/dashboard';
   static const adminStudents = '/admin/students';
   static const adminEvents = '/admin/events';

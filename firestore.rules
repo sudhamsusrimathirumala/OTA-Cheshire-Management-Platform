@@ -6,6 +6,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function guestIdentity() {
+      return signedIn() && request.auth.token.get('otaGuest', false) == true;
+    }
+
     function userPath(uid) {
       return /databases/$(database)/documents/users/$(uid);
     }
@@ -841,7 +845,9 @@ service cloud.firestore {
 
     function activePushDeviceOwner(uid) {
       return signedIn() && request.auth.uid == uid &&
-          exists(userPath(uid)) && get(userPath(uid)).data.isActive == true;
+          !guestIdentity() && exists(userPath(uid)) &&
+          get(userPath(uid)).data.isActive == true &&
+          get(userPath(uid)).data.role in ['parent', 'student'];
     }
 
     function validPushDevice(data) {
@@ -861,6 +867,7 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow create: if signedIn() &&
+          !guestIdentity() &&
           request.auth.uid == uid &&
           !exists(userPath(uid)) &&
           validInitialUser(uid, request.resource.data);
@@ -870,7 +877,7 @@ service cloud.firestore {
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));
       allow update: if signedIn() &&
-          ((request.auth.uid == uid &&
+          ((!guestIdentity() && request.auth.uid == uid &&
             (validParentFamilyUpdate() || validOwnContactUpdate() ||
              validOwnAccountUpdate() || validAccountDeletionStart() ||
              validAccountDeletionProgressUpdate())) ||
@@ -916,79 +923,96 @@ service cloud.firestore {
     }
 
     match /studentProfiles/{profileId} {
-      allow create: if signedIn() &&
+      allow create: if signedIn() && !guestIdentity() &&
           (validParentManagedProfileCreate(profileId, request.resource.data) ||
            validInitialProfile(profileId, request.resource.data));
-      allow read: if signedIn() &&
+      allow read: if signedIn() && !guestIdentity() &&
           (userManagesProfile(profileId, resource.data) ||
            deletionProfileReadable(profileId) ||
            superAdmin() ||
            (locationAdmin() &&
             resource.data.get('locationId', '') == currentUser().locationId));
-      allow update: if signedIn() &&
+      allow update: if signedIn() && !guestIdentity() &&
           (validManagedProfileUpdate(profileId) ||
            validPreferredClassUpdate(profileId) ||
            validParentLinkedProfileDeactivation(profileId) ||
            validAdminProfileUpdate());
-      allow delete: if superAdmin() || validLinkedProfileDeletion(profileId);
+      allow delete: if !guestIdentity() &&
+          (superAdmin() || validLinkedProfileDeletion(profileId));
     }
 
     match /locations/{locationId} {
-      allow read: if signedIn() &&
+      allow read: if signedIn() && !guestIdentity() &&
           (resource.data.isActive == true ||
            canReadReferencedLocation(locationId));
       allow create, update, delete: if superAdmin();
     }
 
     match /classSessions/{documentId} {
-      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+      allow read: if !guestIdentity() &&
+          canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedClassSession());
-      allow create: if canAdminLocation(request.resource.data.locationId) &&
+      allow create: if !guestIdentity() &&
+          canAdminLocation(request.resource.data.locationId) &&
           activeLocation(request.resource.data.locationId) &&
           validClassSessionCreate(request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
+      allow update: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
           validClassSessionUpdate();
-      allow delete: if canAdminLocation(resource.data.locationId) &&
+      allow delete: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
 
     match /announcements/{documentId} {
-      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+      allow read: if !guestIdentity() &&
+          canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedAnnouncement());
-      allow create: if canAdminLocation(request.resource.data.locationId) &&
+      allow create: if !guestIdentity() &&
+          canAdminLocation(request.resource.data.locationId) &&
           activeLocation(request.resource.data.locationId) &&
           validAnnouncementCreate(request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
+      allow update: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
           (validAnnouncementUpdate() || validAnnouncementArchive());
-      allow delete: if canAdminLocation(resource.data.locationId) &&
+      allow delete: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
 
     match /events/{documentId} {
-      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+      allow read: if !guestIdentity() &&
+          canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedEvent());
-      allow create: if canAdminLocation(request.resource.data.locationId) &&
+      allow create: if !guestIdentity() &&
+          canAdminLocation(request.resource.data.locationId) &&
           activeLocation(request.resource.data.locationId) &&
           validEventCreate(request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
+      allow update: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
           (validEventUpdate() || validEventArchive());
-      allow delete: if canAdminLocation(resource.data.locationId) &&
+      allow delete: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
 
     match /resources/{documentId} {
-      allow read: if canAccessAcademyLocation(resource.data.locationId) &&
+      allow read: if !guestIdentity() &&
+          canAccessAcademyLocation(resource.data.locationId) &&
           (canAdminLocation(resource.data.locationId) || publishedResource());
-      allow create: if canAdminLocation(request.resource.data.locationId) &&
+      allow create: if !guestIdentity() &&
+          canAdminLocation(request.resource.data.locationId) &&
           activeLocation(request.resource.data.locationId) &&
           validResourceCreate(request.resource.data);
-      allow update: if canAdminLocation(resource.data.locationId) &&
+      allow update: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId) &&
           (validResourceUpdate() || validResourceArchive());
-      allow delete: if canAdminLocation(resource.data.locationId) &&
+      allow delete: if !guestIdentity() &&
+          canAdminLocation(resource.data.locationId) &&
           activeLocation(resource.data.locationId);
     }
 

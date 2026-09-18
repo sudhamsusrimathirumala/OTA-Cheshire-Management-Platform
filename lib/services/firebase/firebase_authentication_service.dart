@@ -55,6 +55,17 @@ abstract interface class AppleAuthenticationService {
   Future<void> revokeAppleToken(String authorizationCode);
 }
 
+abstract interface class AuthenticationClaimsService {
+  Future<Map<String, Object?>> currentUserClaims();
+}
+
+extension AuthenticationClaimsServiceAccess on AuthenticationService {
+  AuthenticationClaimsService? get authenticationClaims =>
+      this is AuthenticationClaimsService
+      ? this as AuthenticationClaimsService
+      : null;
+}
+
 extension AppleAuthenticationServiceAccess on AuthenticationService {
   AppleAuthenticationService? get appleAuthentication =>
       this is AppleAuthenticationService
@@ -63,7 +74,10 @@ extension AppleAuthenticationServiceAccess on AuthenticationService {
 }
 
 class FirebaseAuthenticationService
-    implements AuthenticationService, AppleAuthenticationService {
+    implements
+        AuthenticationService,
+        AppleAuthenticationService,
+        AuthenticationClaimsService {
   FirebaseAuthenticationService({
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
@@ -83,6 +97,16 @@ class FirebaseAuthenticationService
 
   @override
   Stream<User?> authStateChanges() => _auth.userChanges();
+
+  @override
+  Future<Map<String, Object?>> currentUserClaims() async {
+    final user = _auth.currentUser;
+    if (user == null) return const <String, Object?>{};
+    final result = await user.getIdTokenResult();
+    return Map<String, Object?>.unmodifiable(
+      result.claims ?? const <String, Object?>{},
+    );
+  }
 
   @override
   Future<UserCredential> signUpWithEmail(String email, String password) async {

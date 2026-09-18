@@ -53,7 +53,7 @@ class AdminGeneralResourcesScreen extends StatefulWidget {
 
 class _AdminGeneralResourcesScreenState
     extends State<AdminGeneralResourcesScreen> {
-  final _writeService = FirebaseAdminWriteService();
+  AdminWriteService get _writeService => adminWriteService;
   var _selectedFilter = _ResourceFilter.published;
 
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
@@ -245,7 +245,9 @@ class _AdminGeneralResourcesScreenState
         return AlertDialog(
           title: const Text('Permanently delete resource?'),
           content: Text(
-            'This will permanently delete "${resource.title}" from Firestore. This cannot be undone.',
+            isGuestDemoActive
+                ? 'This removes "${resource.title}" from the current demo session.'
+                : 'This will permanently delete "${resource.title}" from Firestore. This cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -587,7 +589,9 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             children: [
               _SheetHeader(
                 title: isEditing ? 'Edit Resource' : 'Create Resource',
-                subtitle: 'Drafts and published resources write to Firestore.',
+                subtitle: isGuestDemoActive
+                    ? 'Demo drafts and publications stay on this device.'
+                    : 'Drafts and published resources write to Firestore.',
               ),
               const SizedBox(height: 14),
               _AdminTextField(controller: _titleController, label: 'Title'),

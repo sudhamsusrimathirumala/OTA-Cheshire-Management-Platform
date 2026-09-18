@@ -13,6 +13,7 @@ import 'package:ota_cheshire_management_platform/services/debug_view_controller.
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/route_authorization.dart';
+import 'package:ota_cheshire_management_platform/services/guest/guest_experience_controller.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 
 void main() {
@@ -68,6 +69,59 @@ void main() {
         isFalse,
       );
     });
+
+    test(
+      'guest routes follow presentation mode without granting real roles',
+      () {
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.guestDashboard,
+            stage: SessionStage.guest,
+          ),
+          isTrue,
+        );
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.adminDashboard,
+            stage: SessionStage.guest,
+            guestMode: GuestViewMode.admin,
+          ),
+          isTrue,
+        );
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.dashboard,
+            stage: SessionStage.guest,
+            guestMode: GuestViewMode.admin,
+          ),
+          isFalse,
+        );
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.dashboard,
+            stage: SessionStage.guest,
+            guestMode: GuestViewMode.parent,
+          ),
+          isTrue,
+        );
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.adminDashboard,
+            stage: SessionStage.guest,
+            guestMode: GuestViewMode.student,
+          ),
+          isFalse,
+        );
+        expect(
+          isRouteAuthorized(
+            routeName: OtaRoutes.accountDeletion,
+            stage: SessionStage.guest,
+            guestMode: GuestViewMode.parent,
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('losing active access invalidates protected stacks', () {
       expect(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../student_dashboard_screen.dart';
+import '../guest/guest_dashboard_screen.dart';
 import '../welcome_screen.dart';
 import 'account_ready_screen.dart';
 import 'profile_creation_screen.dart';
@@ -57,6 +58,7 @@ Widget authGateDestination({
     justCreatedProfiles
         ? const AccountReadyScreen()
         : const StudentDashboardScreen(),
+  SessionStage.guest => const GuestDashboardScreen(),
   SessionStage.admin => const AdminDashboardScreen(),
   SessionStage.error => _SessionErrorScreen(
     message: errorMessage ?? 'Your account could not be loaded.',

@@ -134,6 +134,66 @@ test('authenticated user reads active locations before account setup', async () 
   await assertFails(getDoc(doc(db, 'locations', 'inactive')));
 });
 
+test('guest claim can read only its own guest account record', async () => {
+  await env.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await setDoc(doc(db, 'users', 'reviewer'), {
+      firstName: 'OTA', lastName: 'Reviewer', email: 'reviewer@example.com',
+      role: 'guest', isActive: true, linkedStudentProfileIds: [],
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await setDoc(doc(db, 'users', 'real-member'), {
+      firstName: 'Real', lastName: 'Member', email: 'real@example.com',
+      role: 'parent', isActive: true, locationId: 'cheshire',
+      linkedStudentProfileIds: ['real-profile'],
+      selectedStudentProfileId: 'real-profile',
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+    await setDoc(doc(db, 'studentProfiles', 'real-profile'), {
+      firstName: 'Real', lastName: 'Student', locationId: 'cheshire',
+      isActive: true,
+    });
+  });
+  await seedContent();
+  const db = auth('reviewer', 'reviewer@example.com', {otaGuest: true});
+
+  await assertSucceeds(getDoc(doc(db, 'users', 'reviewer')));
+  await assertFails(getDoc(doc(db, 'users', 'real-member')));
+  await assertFails(getDocs(collection(db, 'users')));
+  await assertFails(getDoc(doc(db, 'studentProfiles', 'real-profile')));
+  await assertFails(getDoc(doc(db, 'locations', 'cheshire')));
+  await assertFails(getDoc(doc(db, 'classSessions', 'active-class')));
+  await assertFails(getDoc(doc(db, 'announcements', 'published')));
+  await assertFails(getDoc(doc(db, 'events', 'published')));
+  await assertFails(getDoc(doc(db, 'resources', 'published')));
+  await assertFails(updateDoc(doc(db, 'users', 'reviewer'), {
+    firstName: 'Changed', updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(
+    doc(db, 'users', 'reviewer', 'notificationReads', 'published'),
+    {readAt: serverTimestamp()},
+  ));
+  await assertFails(getDoc(
+    doc(db, 'users', 'reviewer', 'announcementDeliveries', 'published'),
+  ));
+  await assertFails(setDoc(
+    doc(db, 'users', 'reviewer', 'pushDevices', 'installation'),
+    {
+      fcmToken: 'guest-token', platform: 'android', appEnvironment: 'prod',
+      enabled: true, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      lastSeenAt: serverTimestamp(),
+    },
+  ));
+});
+
+test('guest claim cannot use public onboarding when its user record is absent', async () => {
+  const db = auth('unconfigured-reviewer', 'reviewer@example.com', {otaGuest: true});
+  await assertFails(createProfiles(db, {
+    uid: 'unconfigured-reviewer', email: 'reviewer@example.com',
+    profileIds: ['guest-profile'],
+  }));
+});
+
 test('student atomically creates active records at one location', async () => {
   const db = auth('student', 'Student@Example.com');
   await assertSucceeds(createProfiles(db, {

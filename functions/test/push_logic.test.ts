@@ -47,6 +47,7 @@ test("disabled, admin, unlinked, and wrong-location accounts are excluded", () =
   const accounts = [
     {id: "disabled", role: "parent", isActive: false, locationId: "cheshire", linkedStudentProfileIds: ["profile"]},
     {id: "admin", role: "admin", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["profile"]},
+    {id: "guest", role: "guest", isActive: true, locationId: "cheshire", linkedStudentProfileIds: ["profile"]},
     {id: "unlinked", role: "parent", isActive: true, locationId: "cheshire", linkedStudentProfileIds: []},
     {id: "elsewhere", role: "parent", isActive: true, locationId: "other", linkedStudentProfileIds: ["profile"]},
   ];

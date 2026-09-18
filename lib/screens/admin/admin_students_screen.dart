@@ -451,7 +451,7 @@ class _StudentDetailSheetState extends State<_StudentDetailSheet> {
       _error = null;
     });
     try {
-      await FirebaseAdminWriteService().updateStudentProgress(
+      await adminWriteService.updateStudentProgress(
         AdminStudentProgressWriteData(
           profileId: widget.student.profile.id,
           beltRank: belt,

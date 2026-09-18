@@ -418,6 +418,13 @@ class AdminHeaderPresentation {
 AdminHeaderPresentation adminHeaderPresentation(
   AdminLocationController controller,
 ) {
+  if (controller.isGuestDemo) {
+    return const AdminHeaderPresentation(
+      title: 'Northstar Martial Arts Demo',
+      subtitle: 'Fictional reviewer administration',
+      badge: 'Session-local data',
+    );
+  }
   if (controller.isDebugAdmin) {
     return const AdminHeaderPresentation(
       title: 'OTA Cheshire',

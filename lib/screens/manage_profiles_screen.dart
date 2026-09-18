@@ -17,12 +17,22 @@ class ManageProfilesScreen extends StatelessWidget {
     this.selectProfile,
     this.updateAccountContact,
     this.createChild,
+    this.updateManagedProfile,
+    this.updatePreferredClass,
+    this.createSelfProfile,
+    this.removeLinkedProfile,
     super.key,
   });
 
   final Future<void> Function(String profileId)? selectProfile;
   final AccountContactUpdater? updateAccountContact;
   final ChildProfileCreator? createChild;
+  final StudentProfileUpdater? updateManagedProfile;
+  final Future<void> Function(StudentProfile, ClassSession?)?
+  updatePreferredClass;
+  final Future<String> Function(ParentSelfProfileInput input)?
+  createSelfProfile;
+  final Future<void> Function(String profileId)? removeLinkedProfile;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
@@ -166,8 +176,12 @@ class ManageProfilesScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => StudentProfileEditScreen(
           student: profile,
-          service: firebaseSessionController.profileService,
+          service: updateManagedProfile == null
+              ? firebaseSessionController.profileService
+              : null,
           guardianEmailRequired: profile.linkedUserId == null,
+          updateManagedProfile: updateManagedProfile,
+          updatePreferredClass: updatePreferredClass,
         ),
       ),
     );
@@ -201,7 +215,10 @@ class ManageProfilesScreen extends StatelessWidget {
       MaterialPageRoute(
         builder: (_) => AddParentStudentProfileScreen(
           account: account,
-          service: firebaseSessionController.profileService,
+          service: createSelfProfile == null
+              ? firebaseSessionController.profileService
+              : null,
+          createProfile: createSelfProfile,
         ),
       ),
     );
@@ -266,9 +283,14 @@ class ManageProfilesScreen extends StatelessWidget {
     if (!context.mounted) return;
     _showLoading(context);
     try {
-      await firebaseSessionController.profileService.removeLinkedProfile(
-        profile.id,
-      );
+      final remove = removeLinkedProfile;
+      if (remove != null) {
+        await remove(profile.id);
+      } else {
+        await firebaseSessionController.profileService.removeLinkedProfile(
+          profile.id,
+        );
+      }
       if (!context.mounted) return;
       Navigator.of(context).pop();
       _success(

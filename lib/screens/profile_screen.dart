@@ -9,6 +9,7 @@ import '../routes.dart';
 import '../services/app_data_service_provider.dart';
 import '../services/debug_view_controller.dart';
 import '../services/location_time_service.dart';
+import '../services/guest/guest_demo_app_data_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/push_runtime.dart';
@@ -66,12 +67,14 @@ class ProfileScreen extends StatelessWidget {
                                   managementAvailableOverride,
                             ),
                             if ((accountDeletionAvailableOverride ??
-                                    Firebase.apps.isNotEmpty) &&
+                                    (Firebase.apps.isNotEmpty &&
+                                        !isGuestDemoActive)) &&
                                 !debugViewController.isActive) ...[
                               const SizedBox(height: 22),
                               const _AccountDeletionSection(),
                             ],
                             if (kDebugMode &&
+                                !isGuestDemoActive &&
                                 pushNotificationService != null) ...[
                               const SizedBox(height: 22),
                               const _PushDiagnosticsSection(),
@@ -87,7 +90,8 @@ class ProfileScreen extends StatelessWidget {
           ),
           bottomNavigationBar:
               Firebase.apps.isEmpty ||
-                  firebaseSessionController.stage == SessionStage.member
+                  firebaseSessionController.stage == SessionStage.member ||
+                  firebaseSessionController.stage == SessionStage.guest
               ? const OtaBottomNavBar(
                   selectedDestination: OtaBottomNavDestination.profile,
                 )
@@ -376,8 +380,9 @@ class _SettingsActionsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasFirebase = Firebase.apps.isNotEmpty;
-    final managementAvailable = managementAvailableOverride ?? hasFirebase;
-    final profileCount = hasFirebase
+    final managementAvailable =
+        managementAvailableOverride ?? (hasFirebase || isGuestDemoActive);
+    final profileCount = hasFirebase && !isGuestDemoActive
         ? firebaseSessionController.profiles.length
         : appDataService.linkedStudentProfiles.length;
     return ProfileSection(
@@ -394,7 +399,7 @@ class _SettingsActionsSection extends StatelessWidget {
           icon: Icons.switch_account_rounded,
           label: 'Switch Profile',
           value: profileCount > 1 ? '$profileCount profiles' : '1 profile',
-          onTap: hasFirebase && profileCount > 1
+          onTap: (hasFirebase || isGuestDemoActive) && profileCount > 1
               ? () => _showProfileSwitcher(context)
               : null,
         ),
@@ -435,6 +440,9 @@ class _SettingsActionsSection extends StatelessWidget {
   }
 
   Future<void> _showProfileSwitcher(BuildContext context) async {
+    final profiles = isGuestDemoActive
+        ? appDataService.linkedStudentProfiles
+        : firebaseSessionController.profiles;
     final id = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -442,7 +450,7 @@ class _SettingsActionsSection extends StatelessWidget {
           shrinkWrap: true,
           children: [
             const ListTile(title: Text('Switch student')),
-            for (final profile in firebaseSessionController.profiles)
+            for (final profile in profiles)
               ListTile(
                 leading: Icon(
                   profile.id == student.id
@@ -467,7 +475,11 @@ class _SettingsActionsSection extends StatelessWidget {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
     try {
-      await firebaseSessionController.selectProfile(id);
+      if (isGuestDemoActive) {
+        await guestDemoAppDataService.selectProfile(id);
+      } else {
+        await firebaseSessionController.selectProfile(id);
+      }
       if (!context.mounted) return;
       Navigator.of(context).pop();
       Navigator.of(
@@ -513,6 +525,7 @@ String _beltLabel(String belt) => '$belt Belt';
 
 String _locationLabel(StudentProfile student) {
   if (student.locationId.isEmpty) return 'Not assigned';
+  if (student.locationId == guestDemoLocationId) return guestDemoLocationName;
   if (Firebase.apps.isNotEmpty &&
       firebaseSessionController.selectedProfile?.id == student.id) {
     return firebaseSessionController.selectedLocationName ??

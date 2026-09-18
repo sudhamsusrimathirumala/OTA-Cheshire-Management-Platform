@@ -26,7 +26,7 @@ class AdminAnnouncementsScreen extends StatefulWidget {
 }
 
 class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
-  final _writeService = FirebaseAdminWriteService();
+  AdminWriteService get _writeService => adminWriteService;
   var _selectedFilter = _AnnouncementFilter.all;
 
   List<_AdminAnnouncement> get _announcements {
@@ -85,7 +85,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         return AdminPageShell(
           selectedDestination: AdminNavDestination.announcements,
           title: 'Announcements',
-          subtitle: 'Create announcements and notifications for families.',
+          subtitle: isGuestDemoActive
+              ? 'Simulate announcements for the fictional demo family.'
+              : 'Create announcements and notifications for families.',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -291,7 +293,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         return AlertDialog(
           title: const Text('Permanently delete announcement?'),
           content: Text(
-            'This will permanently delete "${announcement.title}" from Firestore. This cannot be undone.',
+            isGuestDemoActive
+                ? 'This removes "${announcement.title}" from the current demo session.'
+                : 'This will permanently delete "${announcement.title}" from Firestore. This cannot be undone.',
           ),
           actions: [
             TextButton(
@@ -714,8 +718,9 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             children: [
               _SheetHeader(
                 title: isEditing ? 'Edit Announcement' : 'Create Announcement',
-                subtitle:
-                    'Drafts and published announcements write to Firestore.',
+                subtitle: isGuestDemoActive
+                    ? 'Demo drafts and publications stay on this device.'
+                    : 'Drafts and published announcements write to Firestore.',
               ),
               const SizedBox(height: 14),
               _AdminTextField(controller: _titleController, label: 'Title'),

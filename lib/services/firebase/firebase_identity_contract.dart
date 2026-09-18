@@ -24,6 +24,7 @@ UserAccountRole parseUserAccountRole(Object? value) {
     'parent' => UserAccountRole.parent,
     'admin' => UserAccountRole.admin,
     'superAdmin' => UserAccountRole.superAdmin,
+    'guest' => UserAccountRole.guest,
     _ => throw FormatException('Unsupported user role: $value'),
   };
 }
@@ -37,7 +38,9 @@ UserAccount userAccountFromFirestoreData(
   }
   final role = parseUserAccountRole(data['role']);
   final locationId = _optionalString(data['locationId']) ?? '';
-  if (role != UserAccountRole.superAdmin && locationId.isEmpty) {
+  if (role != UserAccountRole.superAdmin &&
+      role != UserAccountRole.guest &&
+      locationId.isEmpty) {
     throw const FormatException('locationId is required.');
   }
   return UserAccount(

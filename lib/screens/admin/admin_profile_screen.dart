@@ -113,23 +113,25 @@ class AdminProfileScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 22),
-                      ProfileSection(
-                        title: 'Restricted Action',
-                        children: [
-                          ProfileActionRow(
-                            icon: Icons.delete_forever_rounded,
-                            label: 'Delete Account',
-                            isDestructive: true,
-                            showDivider: false,
-                            onTap: debugViewController.isActive
-                                ? null
-                                : () => Navigator.of(
-                                    context,
-                                  ).pushNamed(OtaRoutes.accountDeletion),
-                          ),
-                        ],
-                      ),
+                      if (!isGuestDemoActive) ...[
+                        const SizedBox(height: 22),
+                        ProfileSection(
+                          title: 'Restricted Action',
+                          children: [
+                            ProfileActionRow(
+                              icon: Icons.delete_forever_rounded,
+                              label: 'Delete Account',
+                              isDestructive: true,
+                              showDivider: false,
+                              onTap: debugViewController.isActive
+                                  ? null
+                                  : () => Navigator.of(
+                                      context,
+                                    ).pushNamed(OtaRoutes.accountDeletion),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 22),
                       ProfileSection(
                         title: 'Account',
@@ -160,8 +162,14 @@ class AdminProfileScreen extends StatelessWidget {
                                     final changed = await showAccountEditSheet(
                                       context,
                                       account: account,
-                                      service: firebaseSessionController
-                                          .profileService,
+                                      service: isGuestDemoActive
+                                          ? null
+                                          : firebaseSessionController
+                                                .profileService,
+                                      updateAccountContact: isGuestDemoActive
+                                          ? guestDemoAppDataService
+                                                .updateAccountContact
+                                          : null,
                                     );
                                     if (changed && context.mounted) {
                                       ScaffoldMessenger.of(

@@ -1,4 +1,4 @@
-enum UserAccountRole { student, parent, admin, superAdmin }
+enum UserAccountRole { student, parent, admin, superAdmin, guest }
 
 class StudentProfileDefaults {
   const StudentProfileDefaults({
@@ -57,6 +57,7 @@ class UserAccount {
       UserAccountRole.student => 'Student',
       UserAccountRole.admin => 'Admin',
       UserAccountRole.superAdmin => 'Super Admin',
+      UserAccountRole.guest => 'Guest Reviewer',
     };
   }
 }

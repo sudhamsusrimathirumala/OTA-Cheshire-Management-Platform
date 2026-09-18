@@ -49,7 +49,7 @@ OTA is a community academy with several kinds of people interacting with the sam
 
 The application targets Android and iOS. Flutter supplies a shared UI and application layer; Firebase Authentication supplies login identity; Cloud Firestore stores academy and account data; Cloud Functions calculate authorized announcement recipients and send publication notifications; and Firebase Cloud Messaging (FCM), with APNs on iOS, carries push notifications.
 
-The current product supports four roles—Super Admin, Admin, Parent, and Student—and does **not** use an account-approval workflow. Public signup creates an active Parent or Student account immediately. Access is then constrained by authentication, active state, exact profile ownership, academy location, selected profile, role, and strict Firestore document rules.
+The current product supports Super Admin, Admin, Parent, Student, and a tightly isolated Guest Reviewer role. It does **not** use an account-approval workflow. Public signup creates an active Parent or Student account immediately; Guest Reviewer identities are provisioned only by an authorized operator. Access is then constrained by authentication, active state, exact profile ownership, academy location, selected profile, role, Auth claims, and strict Firestore document rules.
 
 ## Background and motivation
 
@@ -93,6 +93,7 @@ Authentication identifies a Firebase user. The `users/{uid}` document determines
 | **Parent** | Active academy content for the family account's location and private per-account state | Owns child profiles whose sole `guardianUserIds` entry is the parent UID; may also own one self profile | Member experience plus profile switching, child creation/editing/removal, and optional parent self-profile creation |
 | **Admin** | Users, profiles, schedule, announcements, events, and resources for one assigned active location | Does not use a selected student profile for administration | Location dashboard; class-session CRUD; announcement publishing/targeting; event/resource CRUD; student belt/sticker progress updates |
 | **Super Admin** | Controlled cross-location access to active locations | Selects an active location for writes while retaining broader administrative visibility | Admin capabilities across locations and controlled privileged-account/location scope |
+| **Guest Reviewer** | Its own minimal account record only; no real academy, family, content, notification, or device data | Has no production location or profiles; Admin/Student/Parent switching changes presentation only | Uses the real application layouts with bundled fictional data and session-local simulated edits |
 
 A Parent account and a student profile are deliberately different concepts. The account is the login, contact, role, location, and private notification boundary. A student profile is a person who trains: it contains birth date, belt/sticker progress, class preference, and ownership relationships. This separation lets one parent manage several training identities without sharing passwords or creating a Firebase login for each child.
 
@@ -103,6 +104,8 @@ A Parent account and a student profile are deliberately different concepts. The 
 The welcome screen leads to login or signup. The application supports email/password, Google, and—on supported Apple platforms—Sign in with Apple. Password reset is sent through Firebase. Signup enforces an eight-character application minimum; the Firebase Console must separately enforce the matching policy.
 
 After Firebase Authentication succeeds, `AuthGate` resolves the OTA account state. A new user with no `users/{uid}` document completes profile creation. Public onboarding permits Student or Parent roles, requires the account holder to be at least 16, selects an active location, and creates the account plus all initial profiles in one Firestore batch. There is no email-verification or academy-approval gate in the current flow.
+
+A reviewer signs in through the same email/password form, but the `guest` Firestore role and `otaGuest` Auth custom claim must both be present. Either one without the other fails closed. A guest never enters onboarding, member, or administrator authorization stages. The guest dashboard switches among Admin, Student, and Parent presentation modes while bundled fictional records and in-memory write services keep every simulated change off Firebase. See `docs/GUEST_REVIEWER_RUNBOOK.md` for the apply-gated provisioning and rotation process.
 
 Students create one self profile. Parents can create a self profile and up to ten additional students, or create one through ten children without a self profile. If the parent delays creating a self profile, account-holder form values can be kept in `studentProfileDefaults` and reused later.
 
@@ -201,8 +204,8 @@ The Flutter UI never grants access by itself. It presents data already constrain
 - Native Android tasks and iOS configurations pin the matching Dart target.
 - `ApplicationStartupGate` initializes environment, time zones, Firebase, background messaging, push navigation, session observation, and the live data service.
 - Screens/widgets implement member/admin workflows through a centralized route table.
-- `FirebaseSessionController` translates Auth and account/profile/location snapshots into signed-out, onboarding, member, admin, disabled, and error stages.
-- `AppDataService` exposes schedules, announcements, events, resources, profiles, and curriculum. `FirebaseAppDataService` supplies authenticated live data; `MockAppDataService` is for tests/development harnesses, not error fallback.
+- `FirebaseSessionController` translates Auth and account/profile/location snapshots into signed-out, onboarding, member, admin, guest, disabled, and error stages.
+- `AppDataService` exposes schedules, announcements, events, resources, profiles, and curriculum. `FirebaseAppDataService` supplies authenticated live data; `GuestDemoAppDataService` supplies the isolated reviewer dataset and local edits; `MockAppDataService` remains for tests/development harnesses, not error fallback.
 - Write concerns are separated across authentication, profile/family, admin content/progress, read state, push registration, and account deletion.
 - Local data supplies the production curriculum and isolated test/development samples.
 
@@ -298,6 +301,7 @@ Firestore Rules are the client authorization boundary. The current model combine
 8. **Schema integrity:** belts and `nextRank` agree; sticker counts are nonnegative; preferred IDs are bounded/safe; current content types/statuses/categories and timestamps are validated.
 9. **Private subcollections:** accounts cannot read each other's read state, device registrations, or targeted deliveries. Clients cannot write deliveries or access dispatches.
 10. **Deletion-only permissions:** private deletes and profile/user mutations open only for the authenticated member's bounded deletion sequence.
+11. **Reviewer isolation:** the `otaGuest` Auth claim blocks public onboarding and every real academy collection, location, private subcollection, and push-device path; only the matching guest account document is readable.
 
 ### Why “Rules are not filters” matters
 

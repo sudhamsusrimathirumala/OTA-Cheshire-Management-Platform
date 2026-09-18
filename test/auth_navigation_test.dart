@@ -11,6 +11,7 @@ import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_s
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/signup_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/guest/guest_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/debug_view_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
@@ -344,6 +345,7 @@ void main() {
       SessionStage.signedOut: WelcomeScreen,
       SessionStage.needsProfiles: ProfileCreationScreen,
       SessionStage.member: StudentDashboardScreen,
+      SessionStage.guest: GuestDashboardScreen,
       SessionStage.admin: AdminDashboardScreen,
     };
 

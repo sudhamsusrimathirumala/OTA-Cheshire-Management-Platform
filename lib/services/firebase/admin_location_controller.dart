@@ -11,7 +11,13 @@ import '../location_time_service.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
 
-enum AdminLocationAccess { none, locationAdmin, superAdmin, debugAdmin }
+enum AdminLocationAccess {
+  none,
+  locationAdmin,
+  superAdmin,
+  debugAdmin,
+  guestDemo,
+}
 
 class AdminLocationController extends ChangeNotifier {
   AdminLocationController({
@@ -40,6 +46,7 @@ class AdminLocationController extends ChangeNotifier {
   String? _assignedLocationId;
   String? _selectedLocationId;
   DebugViewMode _debugMode = DebugViewMode.none;
+  bool _guestDemoActive = false;
   int _generation = 0;
   bool _started = false;
   AdminLocationAccess _listeningAccess = AdminLocationAccess.none;
@@ -53,7 +60,16 @@ class AdminLocationController extends ChangeNotifier {
     addressLine1: 'Development data',
   );
 
+  static const guestDemoLocation = AcademyLocation(
+    id: 'review-demo-academy',
+    name: 'Northstar Martial Arts Demo',
+    timeZoneId: LocationTimeService.otaCheshireTimeZoneId,
+    isActive: true,
+    addressLine1: 'Fictional reviewer data',
+  );
+
   AdminLocationAccess get access {
+    if (_guestDemoActive) return AdminLocationAccess.guestDemo;
     if (kDebugMode && _debugMode == DebugViewMode.admin) {
       return AdminLocationAccess.debugAdmin;
     }
@@ -68,6 +84,7 @@ class AdminLocationController extends ChangeNotifier {
   bool get isSuperAdmin => access == AdminLocationAccess.superAdmin;
   bool get isLocationAdmin => access == AdminLocationAccess.locationAdmin;
   bool get isDebugAdmin => access == AdminLocationAccess.debugAdmin;
+  bool get isGuestDemo => access == AdminLocationAccess.guestDemo;
   List<AcademyLocation> get locations => List.unmodifiable(_locations);
   List<AcademyLocation> get activeLocations =>
       List.unmodifiable(_locations.where((location) => location.isActive));
@@ -76,8 +93,11 @@ class AdminLocationController extends ChangeNotifier {
   };
   String? get selectedLocationId => isSuperAdmin ? _selectedLocationId : null;
   AcademyLocation? get selectedLocation => _locationById(selectedLocationId);
-  AcademyLocation? get assignedLocation =>
-      isDebugAdmin ? debugLocation : _locationById(_assignedLocationId);
+  AcademyLocation? get assignedLocation => isGuestDemo
+      ? guestDemoLocation
+      : isDebugAdmin
+      ? debugLocation
+      : _locationById(_assignedLocationId);
   String get writeLocationId {
     if (isSuperAdmin) return selectedLocationId ?? '';
     return assignedLocation?.id ?? _assignedLocationId ?? '';
@@ -98,6 +118,20 @@ class AdminLocationController extends ChangeNotifier {
       _cancelSubscriptions();
       _assignedLocationId = debugLocation.id;
       _locations = const [debugLocation];
+      _selectedLocationId = null;
+      notifyListeners();
+      return;
+    }
+    _handleSessionChanged();
+  }
+
+  void setGuestDemoActive(bool active) {
+    if (_guestDemoActive == active) return;
+    _guestDemoActive = active;
+    if (active) {
+      _cancelSubscriptions();
+      _assignedLocationId = guestDemoLocation.id;
+      _locations = const [guestDemoLocation];
       _selectedLocationId = null;
       notifyListeners();
       return;
@@ -127,6 +161,7 @@ class AdminLocationController extends ChangeNotifier {
   }
 
   void _handleSessionChanged() {
+    if (_guestDemoActive) return;
     if (kDebugMode && _debugMode != DebugViewMode.none) return;
     final session = _session;
     if (session == null) return;

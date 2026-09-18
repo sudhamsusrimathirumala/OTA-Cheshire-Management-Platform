@@ -24,6 +24,11 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users', 'owner'), account(true));
     await setDoc(doc(db, 'users', 'other'), account(true));
     await setDoc(doc(db, 'users', 'disabled'), account(false));
+    await setDoc(doc(db, 'users', 'guest'), {
+      firstName: 'OTA', lastName: 'Reviewer', email: 'guest@example.com',
+      role: 'guest', isActive: true, linkedStudentProfileIds: [],
+      createdAt: new Date(), updatedAt: new Date(),
+    });
   });
 });
 
@@ -40,6 +45,12 @@ function account(isActive) {
 
 function auth(uid) {
   return env.authenticatedContext(uid, {email: `${uid}@example.com`}).firestore();
+}
+
+function guestAuth() {
+  return env.authenticatedContext('guest', {
+    email: 'guest@example.com', otaGuest: true,
+  }).firestore();
 }
 
 function registration(overrides = {}) {
@@ -65,6 +76,12 @@ test('cross-user device registration is denied', async () => {
 test('disabled account cannot register a device', async () => {
   const reference = doc(auth('disabled'), 'users', 'disabled', 'pushDevices', 'install-1');
   await assertFails(setDoc(reference, registration()));
+});
+
+test('guest reviewer cannot register or read push devices', async () => {
+  const reference = doc(guestAuth(), 'users', 'guest', 'pushDevices', 'install-1');
+  await assertFails(setDoc(reference, registration({appEnvironment: 'prod'})));
+  await assertFails(getDoc(reference));
 });
 
 test('device registration rejects extra fields and invalid platform values', async () => {

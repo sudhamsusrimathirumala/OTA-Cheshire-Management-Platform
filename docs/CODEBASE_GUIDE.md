@@ -212,7 +212,7 @@ Almost every signed-in screen uses this interface, including Dashboard, Schedule
 
 **How it connects to the rest of the app**
 
-Screens ask for `AppDataService`; `AppDataServiceProvider` supplies either `FirebaseAppDataService` for the real app or `MockAppDataService` for controlled tests and previews.
+Screens ask for `AppDataService`; `AppDataServiceProvider` supplies `FirebaseAppDataService` for real accounts, `GuestDemoAppDataService` for an authenticated reviewer, or `MockAppDataService` for controlled tests and previews.
 
 **When you would change this file**
 
@@ -227,6 +227,12 @@ Places the current `AppDataService` above the screens in Flutter's widget tree. 
 #### `lib/services/mock_app_data_service.dart`
 
 Keeps predictable sample records in memory for isolated screen development and tests. It uses files in `lib/data/`. The signed-in production app must never show this data as a fallback when Firebase fails, because users could mistake samples for real academy information.
+
+#### `lib/services/guest/guest_demo_app_data_service.dart`
+
+Provides one explicitly fictional, versioned reviewer dataset. It implements the normal read contract and the administrator write interface entirely in memory, so the real screens can demonstrate editing without importing or invoking a Firebase writer. Admin changes immediately appear in Student and Parent presentation modes and reset on sign-out or a new guest session.
+
+This service is selected only after the session controller verifies both the `guest` account role and `otaGuest` Auth claim. Firestore Rules independently deny that identity every production collection and private subcollection except its own minimal account record.
 
 ### Shared business and runtime helpers
 
@@ -291,7 +297,7 @@ This is the app's understanding of who is signed in and what that person is read
 - watches Firebase Auth for sign-in and sign-out;
 - listens to `users/{uid}` for the OTA account;
 - loads and checks linked student profiles;
-- chooses a `SessionStage`, such as signed out, creating a profile, ready as a member, ready as an administrator, unavailable, or error;
+- chooses a `SessionStage`, such as signed out, creating a profile, ready as a member, ready as an administrator, isolated reviewer, unavailable, or error;
 - refreshes and signs out cleanly; and
 - tells `AuthGate` and `OTAApp` whenever the stage changes.
 
@@ -317,7 +323,7 @@ Change it when adding a session stage, changing account-readiness rules, alterin
 
 #### `lib/services/firebase/route_authorization.dart`
 
-Decides which groups of screens a signed-in Student, Parent, Admin, or Super Admin may navigate to. This keeps the UI flow sensible. Firestore Rules separately protect the underlying data, even if someone bypasses Flutter navigation.
+Decides which groups of screens a signed-in Student, Parent, Admin, Super Admin, or Guest Reviewer may navigate to. A guest may enter existing screen layouts only for its selected presentation mode, never account deletion or a real member/admin authorization stage. Firestore Rules separately protect the underlying data even if someone bypasses Flutter navigation.
 
 #### `lib/services/firebase/admin_location_controller.dart`
 
@@ -876,6 +882,8 @@ The Node harness under `tool/firebase_emulator_tests/` has its own `package.json
 ### Functions tests
 
 `functions/test/push_logic.test.ts` verifies pure delivery logic. It complements, but does not replace, emulator tests for access control or an end-to-end device check for Firebase/APNs/FCM configuration.
+
+Guest regression coverage additionally verifies role/claim pairing, guest-only routing, shared fictional data, local reset behavior, production collection denial, onboarding denial, push-device denial, and Functions recipient exclusion.
 
 ### Choosing validation
 

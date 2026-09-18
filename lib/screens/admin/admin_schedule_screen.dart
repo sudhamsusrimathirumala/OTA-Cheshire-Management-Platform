@@ -19,7 +19,7 @@ class AdminScheduleScreen extends StatefulWidget {
 }
 
 class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
-  final _writeService = FirebaseAdminWriteService();
+  AdminWriteService get _writeService => adminWriteService;
   var _selectedWeekday = DateTime.now().weekday;
 
   @override
@@ -150,7 +150,9 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
         return AlertDialog(
           title: const Text('Delete class?'),
           content: Text(
-            'This will permanently delete ${session.className} from the schedule.',
+            isGuestDemoActive
+                ? 'This removes ${session.className} from the current demo session.'
+                : 'This will permanently delete ${session.className} from the schedule.',
           ),
           actions: [
             TextButton(
@@ -519,7 +521,9 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
             children: [
               _SheetHeader(
                 title: isEditing ? 'Edit Class' : 'Add Class',
-                subtitle: 'Class sessions save to the Firestore schedule.',
+                subtitle: isGuestDemoActive
+                    ? 'Demo class changes stay on this device.'
+                    : 'Class sessions save to the Firestore schedule.',
               ),
               const SizedBox(height: 14),
               _AdminTextField(

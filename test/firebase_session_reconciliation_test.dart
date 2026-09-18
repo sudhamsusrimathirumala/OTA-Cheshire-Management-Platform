@@ -1,9 +1,53 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
+import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/linked_profile_reconciler.dart';
 
 void main() {
+  test('guest role and Auth claim must match exactly', () {
+    final guest = UserAccount(
+      id: 'guest',
+      firstName: 'OTA',
+      lastName: 'Reviewer',
+      email: 'reviewer@example.invalid',
+      role: UserAccountRole.guest,
+      linkedStudentProfileIds: const [],
+    );
+    final member = UserAccount(
+      id: 'member',
+      firstName: 'Demo',
+      lastName: 'Member',
+      email: 'member@example.invalid',
+      role: UserAccountRole.parent,
+      locationId: 'academy',
+      linkedStudentProfileIds: const ['student'],
+    );
+
+    expect(
+      guestIdentityStatusFor(account: guest, hasGuestClaim: true),
+      GuestIdentityStatus.guest,
+    );
+    expect(
+      guestIdentityStatusFor(account: guest, hasGuestClaim: false),
+      GuestIdentityStatus.mismatch,
+    );
+    expect(
+      guestIdentityStatusFor(account: member, hasGuestClaim: true),
+      GuestIdentityStatus.mismatch,
+    );
+    expect(
+      guestIdentityStatusFor(account: member, hasGuestClaim: false),
+      GuestIdentityStatus.notGuest,
+    );
+  });
+
+  test('guest sign-out skips Firebase device cleanup', () {
+    expect(shouldRunSignOutCleanup(SessionStage.guest), isFalse);
+    expect(shouldRunSignOutCleanup(SessionStage.member), isTrue);
+    expect(shouldRunSignOutCleanup(SessionStage.admin), isTrue);
+  });
+
   test(
     'cache partial snapshot preserves an established member session',
     () async {

@@ -310,6 +310,37 @@ void main() {
     },
   );
 
+  test(
+    'guest reviewer never requests permission or registers a device',
+    () async {
+      debugViewController.clear();
+      final tokens = _FakeTokenProvider('guest-token');
+      final registrations = _FakeRegistrationStore();
+      final service = PushNotificationService(
+        tokenProvider: tokens,
+        registrationStore: registrations,
+        installationIds: _FakeInstallationIdStore(),
+      );
+      final authentication = _FakeAuthenticationService(_FakeUser());
+      final session = FirebaseSessionController(authentication: authentication)
+        ..stage = SessionStage.guest
+        ..authUser = authentication.currentUser
+        ..account = const UserAccount(
+          id: 'reviewer',
+          firstName: 'OTA',
+          lastName: 'Reviewer',
+          email: 'reviewer@example.invalid',
+          role: UserAccountRole.guest,
+          linkedStudentProfileIds: [],
+        );
+
+      await service.handleSession(session);
+
+      expect(tokens.permissionRequests, 0);
+      expect(registrations.writes, isEmpty);
+    },
+  );
+
   test('denied permission creates no registration', () async {
     final tokens = _FakeTokenProvider('token', permissionGranted: false);
     final registrations = _FakeRegistrationStore();
