@@ -19,6 +19,7 @@ val releaseSigningConfigured = releaseSigningKeys.all {
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -105,6 +106,14 @@ tasks.withType<FlutterTask>().configureEach {
             "Flutter task '$name' is not associated with the dev or prod flavor.",
         )
     }
+}
+
+// AGP 9 can otherwise consider this merge up-to-date after Flutter replaces
+// libapp.so, which leaves an older Dart entry point inside the packaged app.
+// Re-running this inexpensive merge keeps release APKs and AABs tied to the
+// native library produced by compileFlutterBuildProdRelease in the same build.
+tasks.matching { it.name == "mergeProdReleaseJniLibFolders" }.configureEach {
+    outputs.upToDateWhen { false }
 }
 
 tasks.configureEach {

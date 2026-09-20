@@ -39,8 +39,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('The app could not start.'), findsOneWidget);
-    expect(find.text('Startup step: firebase'), findsOneWidget);
-    expect(find.text('Code: startup-failed'), findsOneWidget);
+    expect(find.text('Reference: firebase / startup-failed'), findsOneWidget);
     expect(find.textContaining('unsafe backend details'), findsNothing);
   });
 
@@ -61,7 +60,31 @@ void main() {
     await tester.pump();
 
     expect(find.text('The app could not start.'), findsOneWidget);
-    expect(find.text('Startup step: pushNotifications'), findsOneWidget);
-    expect(find.text('Code: timeout'), findsOneWidget);
+    expect(find.text('Reference: pushNotifications / timeout'), findsOneWidget);
+  });
+
+  testWidgets('failed startup can be retried without restarting the process', (
+    tester,
+  ) async {
+    var attempts = 0;
+    await tester.pumpWidget(
+      ApplicationStartupGate(
+        initialize: (_) async {
+          attempts += 1;
+          if (attempts == 1) throw StateError('first attempt failed');
+        },
+        application: const MaterialApp(home: Text('Application ready')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('The app could not start.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Try again'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Try again'));
+    await tester.pumpAndSettle();
+
+    expect(attempts, 2);
+    expect(find.text('Application ready'), findsOneWidget);
   });
 }

@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -13,6 +13,7 @@ import 'services/location_time_service.dart';
 import 'services/push_navigation_coordinator.dart';
 import 'services/push_notification_service.dart';
 import 'services/push_runtime.dart';
+import 'services/startup_diagnostics.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -23,15 +24,37 @@ Future<void> bootstrapApplication({
   required AppEnvironment environment,
   required FirebaseOptions firebaseOptions,
 }) async {
+  startupDiagnostics.checkpoint('dart_bootstrap_entered');
   WidgetsFlutterBinding.ensureInitialized();
+  startupDiagnostics.installUncaughtErrorHandlers();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    startupDiagnostics.checkpoint('dart_first_frame_rendered');
+  });
+  Future<void>? initialization;
+  Future<void> initialize(ValueChanged<ApplicationStartupStep> reportStep) {
+    final running = initialization;
+    if (running != null) return running;
+    late Future<void> started;
+    started =
+        _initializeApplication(
+          environment: environment,
+          firebaseOptions: firebaseOptions,
+          reportStep: reportStep,
+        ).catchError((Object error, StackTrace stack) {
+          if (identical(initialization, started)) initialization = null;
+          Error.throwWithStackTrace(error, stack);
+        });
+    initialization = started;
+    return started;
+  }
+
+  startupDiagnostics.checkpoint('run_app');
   runApp(
     ApplicationStartupGate(
-      initialize: (reportStep) => _initializeApplication(
-        environment: environment,
-        firebaseOptions: firebaseOptions,
-        reportStep: reportStep,
-      ),
+      initialize: initialize,
       application: const OTAApp(),
+      onFailure: ({required step, required code}) =>
+          startupDiagnostics.recordStartupFailure(step: step.name, code: code),
     ),
   );
 }
@@ -45,7 +68,26 @@ Future<void> _initializeApplication({
   AppEnvironmentConfig.initialize(environment);
   LocationTimeService.initialize();
   reportStep(ApplicationStartupStep.firebase);
-  await Firebase.initializeApp(options: firebaseOptions);
+  startupDiagnostics.checkpoint('firebase_initialize_start');
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(options: firebaseOptions);
+  }
+  startupDiagnostics.checkpoint('firebase_initialize_complete');
+  unawaited(
+    startupDiagnostics.attachCrashReporter(
+      reporter: FirebaseStartupCrashReporter(FirebaseCrashlytics.instance),
+      environment: environment,
+    ),
+  );
+  unawaited(
+    startupDiagnostics.recordDevelopmentNonfatalVerification(
+      environment: environment,
+      enabled: const bool.fromEnvironment(
+        'OTA_CRASHLYTICS_NONFATAL_TEST',
+        defaultValue: false,
+      ),
+    ),
+  );
   FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   final pushService = PushNotificationService();
   pushNotificationService = pushService;
@@ -53,12 +95,44 @@ Future<void> _initializeApplication({
     navigatorKey: otaNavigatorKey,
     service: pushService,
   );
-  reportStep(ApplicationStartupStep.pushNotifications);
-  await pushNavigationCoordinator!.initialize();
   reportStep(ApplicationStartupStep.session);
   firebaseSessionController.signOutCleanup = pushService.unregisterForSignOut;
   firebaseSessionController.start();
   initializeFirebaseAppDataService();
+  startupDiagnostics.checkpoint('session_initialize_complete');
+  unawaited(
+    _initializeNotifications(
+      coordinator: pushNavigationCoordinator!,
+      reportStep: reportStep,
+    ),
+  );
+}
+
+Future<void> _initializeNotifications({
+  required PushNavigationCoordinator coordinator,
+  required ValueChanged<ApplicationStartupStep> reportStep,
+}) async {
+  reportStep(ApplicationStartupStep.pushNotifications);
+  startupDiagnostics.checkpoint('notifications_initialize_start');
+  try {
+    await coordinator.initialize().timeout(const Duration(seconds: 15));
+    startupDiagnostics.checkpoint('notifications_initialize_complete');
+  } on TimeoutException {
+    await startupDiagnostics.recordStartupFailure(
+      step: ApplicationStartupStep.pushNotifications.name,
+      code: 'timeout',
+    );
+  } on FirebaseException catch (error) {
+    await startupDiagnostics.recordStartupFailure(
+      step: ApplicationStartupStep.pushNotifications.name,
+      code: _safeCode(error.code),
+    );
+  } catch (_) {
+    await startupDiagnostics.recordStartupFailure(
+      step: ApplicationStartupStep.pushNotifications.name,
+      code: 'initialization-failed',
+    );
+  }
 }
 
 enum ApplicationStartupStep {
@@ -73,6 +147,7 @@ class ApplicationStartupGate extends StatefulWidget {
   const ApplicationStartupGate({
     required this.initialize,
     required this.application,
+    this.onFailure,
     this.timeout = const Duration(seconds: 30),
     super.key,
   });
@@ -80,6 +155,11 @@ class ApplicationStartupGate extends StatefulWidget {
   final Future<void> Function(ValueChanged<ApplicationStartupStep> reportStep)
   initialize;
   final Widget application;
+  final Future<void> Function({
+    required ApplicationStartupStep step,
+    required String code,
+  })?
+  onFailure;
   final Duration timeout;
 
   @override
@@ -90,6 +170,7 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
   ApplicationStartupStep _step = ApplicationStartupStep.preparing;
   String? _failureCode;
   bool _ready = false;
+  bool _initializing = false;
 
   @override
   void initState() {
@@ -98,10 +179,18 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
   }
 
   Future<void> _initialize() async {
+    if (_initializing) return;
+    setState(() {
+      _initializing = true;
+      _failureCode = null;
+    });
     try {
       await widget.initialize(_reportStep).timeout(widget.timeout);
       if (!mounted) return;
-      setState(() => _ready = true);
+      setState(() {
+        _ready = true;
+        _initializing = false;
+      });
     } on TimeoutException {
       _fail('timeout');
     } on FirebaseException catch (error) {
@@ -112,17 +201,18 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
   }
 
   void _reportStep(ApplicationStartupStep step) {
-    if (kDebugMode) debugPrint('OTA startup: ${step.name}');
+    startupDiagnostics.checkpoint(step.name);
     if (!mounted) return;
     setState(() => _step = step);
   }
 
   void _fail(String code) {
-    if (kDebugMode) {
-      debugPrint('OTA startup failed: ${_step.name} ($code)');
-    }
+    unawaited(widget.onFailure?.call(step: _step, code: code));
     if (!mounted) return;
-    setState(() => _failureCode = code);
+    setState(() {
+      _failureCode = code;
+      _initializing = false;
+    });
   }
 
   @override
@@ -157,15 +247,24 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Please close and reopen the app. If this continues, '
-                          'contact the academy.',
+                          'Check your connection and try again. If this '
+                          'continues, contact the academy.',
                           textAlign: TextAlign.center,
                         ),
-                        if (kDebugMode) ...[
-                          const SizedBox(height: 18),
-                          Text('Startup step: ${_step.name}'),
-                          Text('Code: $_failureCode'),
-                        ],
+                        const SizedBox(height: 18),
+                        FilledButton(
+                          onPressed: _initializing ? null : _initialize,
+                          child: const Text('Try again'),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Reference: ${_step.name} / $_failureCode',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
+                        ),
                       ],
                     ),
             ),
