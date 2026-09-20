@@ -178,6 +178,29 @@ class GuestModeBanner extends StatelessWidget {
   );
 }
 
+class GuestModeShell extends StatelessWidget {
+  const GuestModeShell({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: guestExperienceController,
+    builder: (context, _) => Column(
+      children: [
+        const GuestModeBanner(),
+        Expanded(
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: child,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 String _modeLabel(GuestViewMode mode) => switch (mode) {
   GuestViewMode.admin => 'Admin View',
   GuestViewMode.student => 'Student View',

@@ -73,8 +73,7 @@ bool protectedAccessWasLost(SessionStage previous, SessionStage current) {
   if (current == SessionStage.loading) return false;
   return (previous == SessionStage.member && current != SessionStage.member) ||
       (previous == SessionStage.admin && current != SessionStage.admin) ||
-      (previous == SessionStage.guest && current != SessionStage.guest) ||
-      current == SessionStage.signedOut;
+      (previous == SessionStage.guest && current != SessionStage.guest);
 }
 
 SessionStage rememberedStageForRouteProtection(

@@ -58,7 +58,7 @@ Widget authGateDestination({
     justCreatedProfiles
         ? const AccountReadyScreen()
         : const StudentDashboardScreen(),
-  SessionStage.guest => const GuestDashboardScreen(),
+  SessionStage.guest => const GuestModeShell(child: GuestDashboardScreen()),
   SessionStage.admin => const AdminDashboardScreen(),
   SessionStage.error => _SessionErrorScreen(
     message: errorMessage ?? 'Your account could not be loaded.',

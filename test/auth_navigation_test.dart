@@ -81,6 +81,41 @@ void main() {
     expect(find.byType(LoginScreen), findsNothing);
   });
 
+  testWidgets(
+    'autofill-style credential updates stay on login until submission',
+    (tester) async {
+      var signInCalls = 0;
+      await tester.pumpWidget(
+        app(
+          route: OtaRoutes.login,
+          screen: LoginScreen(
+            emailSignIn: (email, password) async {
+              signInCalls++;
+              return null;
+            },
+          ),
+        ),
+      );
+
+      await tester.enterText(
+        find.byType(TextFormField).at(0),
+        'saved.user@example.com',
+      );
+      await tester.enterText(
+        find.byType(TextFormField).at(1),
+        'saved-password',
+      );
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(find.text('saved.user@example.com'), findsOneWidget);
+      expect(signInCalls, 0);
+      expect(find.text('AUTH GATE'), findsNothing);
+    },
+  );
+
   testWidgets('Google success from login and signup resets to the gate', (
     tester,
   ) async {
@@ -345,7 +380,7 @@ void main() {
       SessionStage.signedOut: WelcomeScreen,
       SessionStage.needsProfiles: ProfileCreationScreen,
       SessionStage.member: StudentDashboardScreen,
-      SessionStage.guest: GuestDashboardScreen,
+      SessionStage.guest: GuestModeShell,
       SessionStage.admin: AdminDashboardScreen,
     };
 

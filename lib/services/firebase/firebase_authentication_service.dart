@@ -149,17 +149,7 @@ class FirebaseAuthenticationService
         GoogleAuthProvider.credential(idToken: idToken),
       );
     } on GoogleSignInException catch (error) {
-      if (error.code == GoogleSignInExceptionCode.canceled ||
-          error.code == GoogleSignInExceptionCode.interrupted) {
-        throw const AuthenticationException(
-          AuthenticationError.googleCancelled,
-          'Google Sign-In was cancelled.',
-        );
-      }
-      throw const AuthenticationException(
-        AuthenticationError.unknownFailure,
-        'Google Sign-In could not be completed.',
-      );
+      throw mapGoogleSignInException(error);
     } on FirebaseAuthException catch (error) {
       throw mapFirebaseAuthException(error);
     } on AuthenticationException {
@@ -238,6 +228,39 @@ class FirebaseAuthenticationService
       // restore OTA access after Firebase sign-out succeeds.
     }
   }
+}
+
+AuthenticationException mapGoogleSignInException(GoogleSignInException error) {
+  final diagnosticCode =
+      'google-${error.code.name.replaceAllMapped(RegExp(r'[A-Z]'), (match) => '-${match.group(0)!.toLowerCase()}')}';
+  return switch (error.code) {
+    GoogleSignInExceptionCode.canceled ||
+    GoogleSignInExceptionCode.interrupted => const AuthenticationException(
+      AuthenticationError.googleCancelled,
+      'Google Sign-In was cancelled.',
+      diagnosticCode: 'google-cancelled',
+    ),
+    GoogleSignInExceptionCode.clientConfigurationError ||
+    GoogleSignInExceptionCode.providerConfigurationError =>
+      AuthenticationException(
+        AuthenticationError.appConfiguration,
+        'Google Sign-In is not configured correctly. Contact the academy. '
+        'Reference: google-configuration.',
+        diagnosticCode: diagnosticCode,
+      ),
+    GoogleSignInExceptionCode.uiUnavailable => AuthenticationException(
+      AuthenticationError.unknownFailure,
+      'Google Sign-In is temporarily unavailable on this device. '
+      'Reference: google-ui-unavailable.',
+      diagnosticCode: diagnosticCode,
+    ),
+    _ => AuthenticationException(
+      AuthenticationError.unknownFailure,
+      'Google Sign-In could not be completed. '
+      'Reference: google-sign-in-failed.',
+      diagnosticCode: diagnosticCode,
+    ),
+  };
 }
 
 AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {

@@ -153,6 +153,10 @@ void main() {
         isTrue,
       );
       expect(
+        protectedAccessWasLost(SessionStage.signedOut, SessionStage.signedOut),
+        isFalse,
+      );
+      expect(
         rememberedStageForRouteProtection(
           SessionStage.member,
           SessionStage.loading,

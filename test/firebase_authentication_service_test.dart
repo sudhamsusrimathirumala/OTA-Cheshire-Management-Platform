@@ -1,9 +1,39 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
 
 void main() {
+  test('Google configuration failures use a safe actionable reference', () {
+    for (final code in [
+      GoogleSignInExceptionCode.clientConfigurationError,
+      GoogleSignInExceptionCode.providerConfigurationError,
+    ]) {
+      final error = mapGoogleSignInException(
+        GoogleSignInException(
+          code: code,
+          description: 'developer error containing backend details',
+        ),
+      );
+
+      expect(error.error, AuthenticationError.appConfiguration);
+      expect(error.message, contains('Reference: google-configuration'));
+      expect(error.message, isNot(contains('backend details')));
+      expect(error.diagnosticCode, startsWith('google-'));
+      expect(error.diagnosticMessage, isNull);
+    }
+  });
+
+  test('Google cancellation stays distinct from configuration failures', () {
+    final error = mapGoogleSignInException(
+      const GoogleSignInException(code: GoogleSignInExceptionCode.canceled),
+    );
+
+    expect(error.error, AuthenticationError.googleCancelled);
+    expect(error.message, 'Google Sign-In was cancelled.');
+  });
+
   test('credential failures use a neutral message', () {
     for (final code in [
       'invalid-credential',

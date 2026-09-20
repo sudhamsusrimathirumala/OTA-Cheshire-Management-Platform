@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'app_data_service.dart';
 import '../models/user_account.dart';
 import 'debug_view_controller.dart';
@@ -11,18 +13,27 @@ import 'mock_app_data_service.dart';
 
 const bool useFirebase = true;
 
-late AppDataService appDataService;
+late AppDataService _standardAppDataService;
 late FirebaseAppDataService _firebaseAppDataService;
 late GuestDemoAppDataService guestDemoAppDataService;
 late AdminLocationController adminLocationController;
 bool _guestDemoActive = false;
+SessionStage Function()? _sessionStageReader;
 
-bool get isGuestDemoActive => _guestDemoActive;
+bool get isGuestDemoActive =>
+    _guestDemoActive || _sessionStageReader?.call() == SessionStage.guest;
+
+AppDataService get appDataService =>
+    isGuestDemoActive ? guestDemoAppDataService : _standardAppDataService;
+
+@visibleForTesting
+set appDataService(AppDataService value) => _standardAppDataService = value;
 
 AdminWriteService get adminWriteService =>
-    _guestDemoActive ? guestDemoAppDataService : FirebaseAdminWriteService();
+    isGuestDemoActive ? guestDemoAppDataService : FirebaseAdminWriteService();
 
 void initializeFirebaseAppDataService() {
+  _sessionStageReader = () => firebaseSessionController.stage;
   adminLocationController = AdminLocationController(
     session: firebaseSessionController,
   )..start();
@@ -30,19 +41,19 @@ void initializeFirebaseAppDataService() {
     adminLocations: adminLocationController,
   );
   guestDemoAppDataService = GuestDemoAppDataService();
-  appDataService = _firebaseAppDataService;
+  _standardAppDataService = _firebaseAppDataService;
 }
 
 void setGuestDemoActive(bool active, {bool reset = false}) {
   if (active && reset) guestDemoAppDataService.reset();
   _guestDemoActive = active;
-  appDataService = active ? guestDemoAppDataService : _firebaseAppDataService;
   adminLocationController.setGuestDemoActive(active);
 }
 
 void initializeMockAppDataServiceForTests() {
   assert(() {
-    appDataService = MockAppDataService();
+    _sessionStageReader = null;
+    _standardAppDataService = MockAppDataService();
     _guestDemoActive = false;
     adminLocationController = AdminLocationController.forTesting(
       role: UserAccountRole.admin,
@@ -56,9 +67,10 @@ void initializeMockAppDataServiceForTests() {
 
 void initializeGuestDemoAppDataServiceForTests() {
   assert(() {
+    _sessionStageReader = () => SessionStage.guest;
     guestExperienceController.reset();
     guestDemoAppDataService = GuestDemoAppDataService();
-    appDataService = guestDemoAppDataService;
+    _standardAppDataService = guestDemoAppDataService;
     adminLocationController = AdminLocationController.forTesting(
       role: UserAccountRole.guest,
       locations: const [AdminLocationController.guestDemoLocation],

@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "675595858362-5o8b99kh0vbj5qbkv27vd41ftsqipb9j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.otacheshire.app",
+            "certificate_hash": "a0fcc20fb57edcc3d00dd7a5cdf83f7e45edbcef"
+          }
+        },
+        {
+          "client_id": "675595858362-d89rtrmlfqkg4iejsidm9m02nplke5fq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.otacheshire.app",
+            "certificate_hash": "f9ddacfa1621d5039471273b4b255c5b274c9b4a"
+          }
+        },
+        {
           "client_id": "675595858362-jsj94jd5h3e5oakus77ld17gim5lgghc.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

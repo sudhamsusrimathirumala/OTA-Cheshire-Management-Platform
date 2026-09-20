@@ -50,6 +50,8 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ? firebaseSessionController.stage
         : SessionStage.signedOut;
     if (_usesFirebase) {
+      final startsInGuestMode = _previousStage == SessionStage.guest;
+      setGuestDemoActive(startsInGuestMode, reset: startsInGuestMode);
       firebaseSessionController.addListener(_handleSessionChanged);
       WidgetsBinding.instance.addObserver(this);
       WidgetsBinding.instance.addPostFrameCallback(
@@ -118,32 +120,6 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
         ),
       ),
       home: Firebase.apps.isNotEmpty ? const AuthGate() : const WelcomeScreen(),
-      builder: (context, child) {
-        if (!_usesFirebase) return child ?? const SizedBox.shrink();
-        return AnimatedBuilder(
-          animation: Listenable.merge([
-            firebaseSessionController,
-            guestExperienceController,
-          ]),
-          builder: (context, _) {
-            if (firebaseSessionController.stage != SessionStage.guest) {
-              return child ?? const SizedBox.shrink();
-            }
-            return Column(
-              children: [
-                const GuestModeBanner(),
-                Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: true,
-                    child: child ?? const SizedBox.shrink(),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
       onGenerateRoute: _buildAuthorizedRoute,
     );
   }
@@ -221,11 +197,12 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
       settings.name == OtaRoutes.signup) {
     debugViewController.clear();
   }
+  final stage = Firebase.apps.isNotEmpty
+      ? firebaseSessionController.stage
+      : SessionStage.signedOut;
   final authorized = isRouteAuthorized(
     routeName: settings.name,
-    stage: Firebase.apps.isNotEmpty
-        ? firebaseSessionController.stage
-        : SessionStage.signedOut,
+    stage: stage,
     debugMode: debugViewController.mode,
     guestMode: guestExperienceController.mode,
   );
@@ -233,8 +210,15 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
 
   return PageRouteBuilder<void>(
     settings: settings,
-    pageBuilder: (context, animation, secondaryAnimation) =>
-        authorizedBuilder(context),
+    pageBuilder: (context, animation, secondaryAnimation) {
+      final page = authorizedBuilder(context);
+      if (authorized &&
+          stage == SessionStage.guest &&
+          settings.name != OtaRoutes.gate) {
+        return GuestModeShell(child: page);
+      }
+      return page;
+    },
     transitionDuration: Duration.zero,
     reverseTransitionDuration: Duration.zero,
   );
