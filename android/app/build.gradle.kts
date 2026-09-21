@@ -97,14 +97,25 @@ dependencies {
 }
 
 // A command-line -t value must never be able to cross Firebase environments.
-// Each generated Flutter compilation task is pinned to its native flavor.
-tasks.withType<FlutterTask>().configureEach {
-    targetPath = when {
-        name.contains("Dev", ignoreCase = true) -> "lib/main_dev.dart"
-        name.contains("Prod", ignoreCase = true) -> "lib/main_prod.dart"
-        else -> throw GradleException(
-            "Flutter task '$name' is not associated with the dev or prod flavor.",
-        )
+// Flutter configures targetPath after task registration, so pin each generated
+// compilation task only after the project has finished evaluating.
+afterEvaluate {
+    tasks.withType<FlutterTask>().configureEach {
+        val expectedTargetPath = when {
+            name.contains("Dev", ignoreCase = true) -> "lib/main_dev.dart"
+            name.contains("Prod", ignoreCase = true) -> "lib/main_prod.dart"
+            else -> throw GradleException(
+                "Flutter task '$name' is not associated with the dev or prod flavor.",
+            )
+        }
+        targetPath = expectedTargetPath
+        doFirst {
+            if (targetPath != expectedTargetPath) {
+                throw GradleException(
+                    "Flutter task '$name' must compile $expectedTargetPath, not $targetPath.",
+                )
+            }
+        }
     }
 }
 

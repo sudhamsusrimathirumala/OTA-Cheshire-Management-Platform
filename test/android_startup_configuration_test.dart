@@ -22,6 +22,8 @@ void main() {
     expect(appGradle, contains('applicationId = "com.otacheshire.app"'));
     expect(appGradle, contains('"lib/main_dev.dart"'));
     expect(appGradle, contains('"lib/main_prod.dart"'));
+    expect(appGradle, contains('afterEvaluate'));
+    expect(appGradle, contains('targetPath != expectedTargetPath'));
     expect(appGradle, contains('mergeProdReleaseJniLibFolders'));
     expect(appGradle, contains('outputs.upToDateWhen { false }'));
     expect(activity, contains('activity_on_create'));
