@@ -198,6 +198,8 @@ class FirebaseSessionController extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    stage = SessionStage.loading;
+    notifyListeners();
     try {
       final claims = await authentication.authenticationClaims
           ?.currentUserClaims();
@@ -207,8 +209,6 @@ class FirebaseSessionController extends ChangeNotifier {
       return;
     }
     if (!_isCurrentSession(generation, user.uid)) return;
-    stage = SessionStage.loading;
-    notifyListeners();
     _userSubscription = _database
         .collection(FirestoreCollections.users)
         .doc(user.uid)

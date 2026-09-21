@@ -4,8 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/auth_gate.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
@@ -411,6 +413,92 @@ void main() {
     expect(controller.account, isNull);
     controller.dispose();
   });
+
+  test(
+    'account replacement enters loading before the prior admin identity clears',
+    () async {
+      final authentication = _DelayedClaimsAuthenticationService();
+      final controller =
+          FirebaseSessionController(authentication: authentication)
+            ..authUser = _TestUser('admin-user')
+            ..account = const UserAccount(
+              id: 'admin-user',
+              firstName: 'Academy',
+              lastName: 'Admin',
+              email: 'admin@example.invalid',
+              role: UserAccountRole.admin,
+              locationId: 'academy',
+              linkedStudentProfileIds: [],
+            )
+            ..stage = SessionStage.admin
+            ..start();
+
+      authentication.emit(_TestUser('replacement-user'));
+      await pumpEventQueue(times: 3);
+
+      expect(controller.account, isNull);
+      expect(controller.stage, SessionStage.loading);
+
+      controller.dispose();
+      authentication.completeClaims();
+      await authentication.close();
+    },
+  );
+
+  test('Admin Profile does not read Firebase identity during transition', () {
+    var localIdentityWasRead = false;
+
+    final account = adminProfileAccountForSession(
+      stage: SessionStage.loading,
+      firebaseAccount: null,
+      requiresFirebaseIdentity: true,
+      localAccount: () {
+        localIdentityWasRead = true;
+        throw StateError('The strict identity getter must not be read.');
+      },
+    );
+
+    expect(account, isNull);
+    expect(localIdentityWasRead, isFalse);
+  });
+}
+
+class _TestUser implements User {
+  _TestUser(this._uid);
+
+  final String _uid;
+
+  @override
+  String get uid => _uid;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DelayedClaimsAuthenticationService
+    implements AuthenticationService, AuthenticationClaimsService {
+  final _authStates = StreamController<User?>();
+  final _claims = Completer<Map<String, Object?>>();
+
+  void emit(User? user) => _authStates.add(user);
+
+  void completeClaims() {
+    if (!_claims.isCompleted) _claims.complete(const {});
+  }
+
+  Future<void> close() => _authStates.close();
+
+  @override
+  Stream<User?> authStateChanges() => _authStates.stream;
+
+  @override
+  Future<Map<String, Object?>> currentUserClaims() => _claims.future;
+
+  @override
+  User? get currentUser => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _SignOutAuthenticationService implements AuthenticationService {

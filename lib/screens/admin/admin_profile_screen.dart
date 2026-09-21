@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../models/user_account.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/debug_view_controller.dart';
+import '../../services/firebase/firebase_app_data_service.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../../routes.dart';
 import '../../theme/ota_colors.dart';
@@ -14,10 +16,25 @@ class AdminProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final service = appDataService;
+    final requiresFirebaseIdentity =
+        service is FirebaseAppDataService && !debugViewController.isActive;
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: requiresFirebaseIdentity
+          ? Listenable.merge([service, firebaseSessionController])
+          : service,
       builder: (context, _) {
-        final account = appDataService.currentUserAccount;
+        final account = adminProfileAccountForSession(
+          stage: requiresFirebaseIdentity
+              ? firebaseSessionController.stage
+              : SessionStage.admin,
+          firebaseAccount: requiresFirebaseIdentity
+              ? firebaseSessionController.account
+              : null,
+          requiresFirebaseIdentity: requiresFirebaseIdentity,
+          localAccount: () => service.currentUserAccount,
+        );
+        if (account == null) return const _AdminProfileSessionTransition();
 
         return Scaffold(
           backgroundColor: const Color(0xFFFFF8F4),
@@ -216,4 +233,37 @@ class AdminProfileScreen extends StatelessWidget {
       },
     );
   }
+}
+
+@visibleForTesting
+UserAccount? adminProfileAccountForSession({
+  required SessionStage stage,
+  required UserAccount? firebaseAccount,
+  required bool requiresFirebaseIdentity,
+  required UserAccount Function() localAccount,
+}) {
+  if (!requiresFirebaseIdentity) return localAccount();
+  if (stage != SessionStage.admin || firebaseAccount == null) return null;
+  return firebaseAccount;
+}
+
+class _AdminProfileSessionTransition extends StatelessWidget {
+  const _AdminProfileSessionTransition();
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(
+    backgroundColor: Color(0xFFFFF8F4),
+    body: SafeArea(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Updating your session...'),
+          ],
+        ),
+      ),
+    ),
+  );
 }
