@@ -66,6 +66,37 @@ void main() {
       expect(reporter.errors.single.fatal, isFalse);
     },
   );
+
+  test(
+    'failed reporter attachment is not treated as active reporting',
+    () async {
+      final diagnostics = StartupDiagnostics();
+
+      await diagnostics.attachCrashReporter(
+        reporter: _FailingReporter(),
+        environment: AppEnvironment.prod,
+      );
+
+      expect(diagnostics.hasReporter, isFalse);
+    },
+  );
+}
+
+class _FailingReporter implements StartupCrashReporter {
+  @override
+  Future<void> log(String message) => throw StateError('unavailable');
+
+  @override
+  Future<void> recordError(
+    Object error,
+    StackTrace stack, {
+    required bool fatal,
+    String? reason,
+  }) => throw StateError('unavailable');
+
+  @override
+  Future<void> setCustomKey(String key, Object value) =>
+      throw StateError('unavailable');
 }
 
 class _RecordingReporter implements StartupCrashReporter {

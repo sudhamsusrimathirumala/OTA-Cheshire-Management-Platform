@@ -7,6 +7,6 @@ Future<void> main() {
   startupDiagnostics.checkpoint('dart_main_prod');
   return bootstrapApplication(
     environment: AppEnvironment.prod,
-    firebaseOptions: ProductionFirebaseOptions.currentPlatform,
+    firebaseOptionsProvider: () => ProductionFirebaseOptions.currentPlatform,
   );
 }
