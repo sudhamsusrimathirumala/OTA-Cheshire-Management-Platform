@@ -8,8 +8,9 @@ data, building a release, or changing Play Console declarations.
 
 ## Current milestone
 
-Run and record full validation, then assemble the final evidence-based release
-decision, Data safety worksheet, and privacy-policy wording.
+Validation and code changes are complete. Assemble and deliver the final
+evidence-based release decision, Data safety worksheet, privacy-policy wording,
+and remaining operational release gates.
 
 ## Completed
 
@@ -125,6 +126,9 @@ decision, Data safety worksheet, and privacy-policy wording.
   with another account. Added the external deletion-request path for all member
   accounts, including accounts without a supported in-app reauthentication
   provider, while preserving authentication and authorization checks.
+- Updated the older general curriculum widget fixture to use an explicit adult
+  profile so its player expectations remain valid. Dedicated tests separately
+  prove that an under-16 profile never constructs the player.
 
 ## Files modified
 
@@ -140,6 +144,7 @@ decision, Data safety worksheet, and privacy-policy wording.
 - `test/account_deletion_screen_test.dart`
 - `test/registration_eligibility_test.dart`
 - `test/signup_session_transition_test.dart`
+- `test/widget_test.dart`
 - `tool/firebase_emulator_tests/client_workflows.js`
 - `tool/firebase_emulator_tests/firestore_workflows.test.js`
 
@@ -149,6 +154,22 @@ decision, Data safety worksheet, and privacy-policy wording.
 - Focused Firestore emulator `firestore_workflows.test.js`: PASS, 37/37.
 - `flutter test --no-pub test/curriculum_admin_test.dart test/privacy_policy_compliance_test.dart`: PASS, 24/24.
 - `flutter test --no-pub test/account_deletion_screen_test.dart test/account_deletion_service_test.dart test/privacy_policy_compliance_test.dart`: PASS, 47/47 before adding the final unsupported-provider regression case.
+- Final account-deletion focused rerun: PASS, 48/48.
+- `flutter analyze`: PASS, no issues found.
+- Final focused compliance suite across registration, authentication,
+  curriculum, privacy, deletion, Android startup, Crashlytics diagnostics, push,
+  and identity contracts: PASS, 148/148.
+- The first focused-suite command named a nonexistent
+  `test/push_notification_service_test.dart`; 122 loaded tests passed, but the
+  command exited nonzero. The corrected repository filenames were used in the
+  final 148/148 run.
+- The first full Flutter run found one outdated test fixture: the general
+  curriculum fixture had no DOB (therefore correctly failed closed as under
+  16) while expecting a player. After assigning that fixture an explicit adult
+  DOB, the failed test passed 1/1 and the complete Flutter suite passed 450/450.
+- Full Firestore emulator suite, using local demo project
+  `demo-ota-compliance`: PASS, 58/58. The expected `PERMISSION_DENIED` emulator
+  logs are assertions for rejected unauthorized operations.
 - An initial emulator attempt did not run because Java was absent from `PATH`;
   retrying with Android Studio JBR started the emulator.
 - The first retry did not run tests because this new worktree lacked local npm
@@ -203,7 +224,6 @@ All edits must remain narrowly scoped and documented for integration.
 
 ## Exact next action
 
-Run `flutter analyze`, the complete focused compliance test set, full
-`flutter test --no-pub`, full Firestore emulator tests with Android Studio JBR,
-then run `git diff --check`, update this handoff with actual totals, and create a
-local checkpoint commit containing only this task's files.
+Run final `flutter analyze`, `git diff --check`, and `git status --short`; create
+a local checkpoint commit for the test-fixture and handoff updates; then deliver
+the final report. Do not push, merge, build, deploy, or change Play Console.
