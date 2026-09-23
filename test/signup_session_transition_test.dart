@@ -10,6 +10,7 @@ import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/signup_screen.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 void main() {
   test('session adoption waits until the account snapshot resolves', () async {
@@ -207,11 +208,17 @@ void main() {
     tester,
   ) async {
     var googleCalls = 0;
+    var appleCalls = 0;
     await tester.pumpWidget(
       _app(
         SignupScreen(
           googleSignIn: () async {
             googleCalls++;
+            return Object();
+          },
+          appleSupported: true,
+          appleSignIn: () async {
+            appleCalls++;
             return Object();
           },
         ),
@@ -227,6 +234,13 @@ void main() {
     await tester.pump();
 
     expect(googleCalls, 0);
+    expect(find.textContaining('Students under 16'), findsOneWidget);
+
+    await tester.ensureVisible(find.byType(SignInWithAppleButton));
+    await tester.tap(find.byType(SignInWithAppleButton));
+    await tester.pump();
+
+    expect(appleCalls, 0);
     expect(find.textContaining('Students under 16'), findsOneWidget);
   });
 

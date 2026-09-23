@@ -71,6 +71,7 @@ async function seedAccount({
   selectedProfileId = profileIds[0],
   profileActive = true,
   profileLocationId = locationId,
+  profileDateOfBirth = new Date('2010-01-02T00:00:00Z'),
   selfManaged = role === 'student',
 }) {
   await env.withSecurityRulesDisabled(async (context) => {
@@ -88,7 +89,7 @@ async function seedAccount({
     for (const profileId of profileIds) {
       await setDoc(doc(db, 'studentProfiles', profileId), {
         firstName: 'Student', lastName: profileId,
-        dateOfBirth: new Date('2010-01-02T00:00:00Z'), beltRank: 'White',
+        dateOfBirth: profileDateOfBirth, beltRank: 'White',
         locationId: profileLocationId,
         ...(selfManaged ? {linkedUserId: uid} : {guardianEmail: `${uid}@example.com`}),
         guardianUserIds: selfManaged ? [] : [uid], preferredClassGroupIds: [],
@@ -369,6 +370,23 @@ test('under-16 applicant cannot bypass the gate by choosing parent', async () =>
     profileIds: ['managed-child'],
     applicantDateOfBirth: under16,
   }));
+});
+
+test('location admin may update an under-16 student training record', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  await seedAccount({
+    uid: 'younger-student-parent',
+    profileDateOfBirth: new Date('2018-01-02T00:00:00Z'),
+  });
+  const db = auth('admin');
+  await assertSucceeds(updateDoc(
+    doc(db, 'studentProfiles', 'younger-student-parent-profile'),
+    {
+      beltRank: 'Yellow',
+      stickerProgress: {current: 0, required: 0, nextRank: 'Yellow-Green'},
+      updatedAt: serverTimestamp(),
+    },
+  ));
 });
 
 test('self-managed student may omit guardian email without creating access', async () => {

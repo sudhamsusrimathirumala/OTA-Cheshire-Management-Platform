@@ -150,12 +150,13 @@ void main() {
     expect(find.text('No Belt content'), findsNothing);
   });
 
-  testWidgets('under-16 profile never creates a YouTube iframe', (
+  testWidgets('parent can load curriculum for linked 10-year-old', (
     tester,
   ) async {
     var videoBuilderCalls = 0;
     final service = _CurriculumService(
-      selectedAge: 15,
+      accountRole: UserAccountRole.parent,
+      selectedAge: 10,
       curriculumData: {'White': _videoRequirement('White')},
       beltOrder: const ['White'],
     );
@@ -171,20 +172,16 @@ void main() {
       ),
     );
 
-    expect(videoBuilderCalls, 0);
-    expect(
-      find.textContaining('unavailable for profiles under 16'),
-      findsOneWidget,
-    );
-    expect(find.text('Copy YouTube link'), findsOneWidget);
-    expect(find.text('EMBEDDED PLAYER'), findsNothing);
+    expect(videoBuilderCalls, 1);
+    expect(find.text('EMBEDDED PLAYER'), findsOneWidget);
   });
 
-  testWidgets('profile aged 16 retains affirmative embedded playback', (
+  testWidgets('parent can load curriculum for linked 16-year-old', (
     tester,
   ) async {
     var videoBuilderCalls = 0;
     final service = _CurriculumService(
+      accountRole: UserAccountRole.parent,
       selectedAge: 16,
       curriculumData: {'White': _videoRequirement('White')},
       beltOrder: const ['White'],
@@ -203,31 +200,91 @@ void main() {
 
     expect(videoBuilderCalls, 1);
     expect(find.text('EMBEDDED abcdefghijk'), findsOneWidget);
-    expect(find.text('Copy YouTube link'), findsNothing);
   });
 
-  testWidgets('administrator retains curriculum video review', (tester) async {
+  testWidgets('authenticated student age 16 can load curriculum', (
+    tester,
+  ) async {
     var videoBuilderCalls = 0;
     final service = _CurriculumService(
-      throwOnSelectedStudent: true,
+      accountRole: UserAccountRole.student,
+      selectedAge: 16,
       curriculumData: {'White': _videoRequirement('White')},
       beltOrder: const ['White'],
     );
     await tester.pumpWidget(
       MaterialApp(
         home: CurriculumScreen(
-          isAdmin: true,
           dataService: service,
           videoBuilder: (context, videoId) {
             videoBuilderCalls++;
-            return Text('ADMIN EMBEDDED $videoId');
+            return Text('STUDENT EMBEDDED $videoId');
           },
         ),
       ),
     );
 
     expect(videoBuilderCalls, 1);
-    expect(find.text('ADMIN EMBEDDED abcdefghijk'), findsOneWidget);
+    expect(find.text('STUDENT EMBEDDED abcdefghijk'), findsOneWidget);
+  });
+
+  for (final role in const [
+    UserAccountRole.admin,
+    UserAccountRole.superAdmin,
+  ]) {
+    testWidgets('${role.name} retains curriculum video review', (tester) async {
+      var videoBuilderCalls = 0;
+      final service = _CurriculumService(
+        accountRole: role,
+        throwOnSelectedStudent: true,
+        curriculumData: {'White': _videoRequirement('White')},
+        beltOrder: const ['White'],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CurriculumScreen(
+            isAdmin: true,
+            dataService: service,
+            videoBuilder: (context, videoId) {
+              videoBuilderCalls++;
+              return Text('ADMIN EMBEDDED $videoId');
+            },
+          ),
+        ),
+      );
+
+      expect(videoBuilderCalls, 1);
+      expect(find.text('ADMIN EMBEDDED abcdefghijk'), findsOneWidget);
+    });
+  }
+
+  testWidgets('Guest Reviewer does not construct a YouTube player', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      accountRole: UserAccountRole.guest,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return const Text('EMBEDDED PLAYER');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 0);
+    expect(
+      find.textContaining('unavailable in the Guest Reviewer demo'),
+      findsOneWidget,
+    );
+    expect(find.text('EMBEDDED PLAYER'), findsNothing);
   });
 
   testWidgets('empty admin curriculum fails safely', (tester) async {
@@ -250,6 +307,7 @@ class _CurriculumService extends MockAppDataService {
     this.throwOnSelectedStudent = false,
     this.selectedBelt = 'White',
     this.selectedAge = 12,
+    this.accountRole = UserAccountRole.student,
     Map<String, CurriculumRequirement>? curriculumData,
     this.beltOrder = const ['No Belt', 'White', 'Blue'],
   }) : curriculumData =
@@ -263,11 +321,25 @@ class _CurriculumService extends MockAppDataService {
   final bool throwOnSelectedStudent;
   final String selectedBelt;
   final int selectedAge;
+  final UserAccountRole accountRole;
   final Map<String, CurriculumRequirement> curriculumData;
   final List<String> beltOrder;
 
   @override
   List<String> get curriculumBeltOrder => beltOrder;
+
+  @override
+  UserAccount get currentUserAccount => UserAccount(
+    id: 'account',
+    firstName: 'Authenticated',
+    lastName: 'User',
+    email: 'user@example.com',
+    role: accountRole,
+    locationId: 'ota-cheshire',
+    isActive: true,
+    linkedStudentProfileIds: const ['student'],
+    selectedStudentProfileId: 'student',
+  );
 
   @override
   Map<String, CurriculumRequirement> get curriculum => curriculumData;

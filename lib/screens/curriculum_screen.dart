@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../models/curriculum_requirement.dart';
+import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service.dart';
 import '../services/app_data_service_provider.dart';
-import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/admin/admin_bottom_nav_bar.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -61,6 +60,15 @@ YoutubePlayerParams curriculumYoutubePlayerParams() =>
       showVideoAnnotations: false,
     );
 
+bool curriculumVideoAvailableForAuthenticatedRole(UserAccountRole role) =>
+    switch (role) {
+      UserAccountRole.student ||
+      UserAccountRole.parent ||
+      UserAccountRole.admin ||
+      UserAccountRole.superAdmin => true,
+      UserAccountRole.guest => false,
+    };
+
 class CurriculumScreen extends StatefulWidget {
   const CurriculumScreen({
     this.isAdmin = false,
@@ -114,10 +122,9 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       videoBuilder: widget.videoBuilder,
       allowEmbeddedVideo:
           widget.isAdmin ||
-          const LocationTimeService().ageForStudent(
-                _service.selectedStudentProfile,
-              ) >=
-              16,
+          curriculumVideoAvailableForAuthenticatedRole(
+            _service.currentUserAccount.role,
+          ),
       backLabel: widget.isAdmin ? 'Back to Events & Resources' : null,
       onBeltChanged: (belt) {
         if (belt != null && _service.curriculum.containsKey(belt)) {
@@ -396,7 +403,7 @@ class _CurriculumItemView extends StatelessWidget {
             if (videoId == null)
               const _VideoUnavailable()
             else if (!allowEmbeddedVideo)
-              _YoungerUserYoutubeFallback(videoId: videoId)
+              const _GuestReviewerYoutubeFallback()
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -414,20 +421,8 @@ class _CurriculumItemView extends StatelessWidget {
   }
 }
 
-class _YoungerUserYoutubeFallback extends StatelessWidget {
-  const _YoungerUserYoutubeFallback({required this.videoId});
-
-  final String videoId;
-
-  String get _videoUrl => 'https://www.youtube.com/watch?v=$videoId';
-
-  Future<void> _copyLink(BuildContext context) async {
-    await Clipboard.setData(ClipboardData(text: _videoUrl));
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('YouTube link copied.')));
-  }
+class _GuestReviewerYoutubeFallback extends StatelessWidget {
+  const _GuestReviewerYoutubeFallback();
 
   @override
   Widget build(BuildContext context) => Container(
@@ -439,31 +434,17 @@ class _YoungerUserYoutubeFallback extends StatelessWidget {
     ),
     child: Column(
       children: [
-        const Icon(Icons.family_restroom_rounded, color: OtaColors.navy),
+        const Icon(Icons.visibility_outlined, color: OtaColors.navy),
         const SizedBox(height: 8),
         const Text(
-          'Embedded YouTube playback is unavailable for profiles under 16.',
+          'YouTube playback is unavailable in the Guest Reviewer demo.',
           textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 6),
         const Text(
-          'A parent or guardian can copy this link and open it using their '
-          'supervised YouTube settings. Copying the link does not contact '
-          'YouTube.',
+          'Sign in with an eligible OTA account to load curriculum videos.',
           textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 10),
-        SelectableText(
-          _videoUrl,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: OtaColors.mutedText),
-        ),
-        const SizedBox(height: 10),
-        OutlinedButton.icon(
-          onPressed: () => _copyLink(context),
-          icon: const Icon(Icons.copy_rounded),
-          label: const Text('Copy YouTube link'),
         ),
       ],
     ),

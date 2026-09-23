@@ -8,9 +8,9 @@ data, building a release, or changing Play Console declarations.
 
 ## Current milestone
 
-Validation and code changes are complete. Assemble and deliver the final
-evidence-based release decision, Data safety worksheet, privacy-policy wording,
-and remaining operational release gates.
+The clarified audience-model correction and validation are complete. The app
+now distinguishes authenticated users from the subjects of linked student
+records. Deliver the final evidence and integrate carefully with Flutter Web.
 
 ## Completed
 
@@ -72,14 +72,18 @@ and remaining operational release gates.
 - Preserved the 16+ and administrator behavior: no autoplay, no iframe before
   the existing affirmative Load action, privacy-enhanced mode, restricted
   related videos, and the pre-load data disclosure.
-- Added a conservative fallback for selected profiles under 16. The app never
-  constructs a YouTube iframe for those profiles and does not navigate to
-  YouTube. It displays a canonical watch URL and lets a parent/guardian copy it
-  for use with their own supervised YouTube settings; copying does not contact
-  YouTube.
-- Added tests proving the player builder is never called for an under-16
-  profile, remains available at age 16, and remains available to administrators
-  without reading a selected student profile.
+- Corrected the YouTube eligibility model after product clarification. A linked
+  student's age is no longer treated as the authenticated user's age. Student,
+  Parent, Admin, and Super Admin accounts may load curriculum video after the
+  existing affirmative action; a parent may do so while a 10-year-old linked
+  profile is selected. Guest Reviewer remains blocked from constructing the
+  player.
+- Removed the under-16-profile YouTube fallback and its copy-link behavior.
+  Preserved click-to-load, no autoplay, privacy-enhanced mode, strict related
+  videos, disabled annotations, and the pre-load disclosure.
+- Audited every production profile-age use. Remaining uses are independent
+  account onboarding, age display, belt/class training recommendations, and
+  profile administration; none authorizes general app functionality.
 - Resolved the Android `prodReleaseRuntimeClasspath` without building. The
   resolved Firebase BOM is 34.15.0; Crashlytics 20.0.6 transitively includes
   Firebase Sessions 3.0.6 and Installations 19.1.1; Messaging 25.1.0 also uses
@@ -103,8 +107,9 @@ and remaining operational release gates.
   Firestore export entrypoint, which refuses release mode. Production
   `main_prod.dart` cannot collect files or documents through it.
 - Confirmed production does not collect user-provided videos. YouTube video IDs
-  are academy curriculum content; for users 16+ and staff, the iframe is only
-  constructed after an explicit action. Under-16 profiles never construct it.
+  are academy curriculum content. The iframe is constructed only after an
+  eligible authenticated user explicitly chooses to load it; the selected
+  linked student's age does not control the adult account's access.
 - Confirmed App activity must be declared because Firebase Sessions collects
   session-start/foreground metadata and Firestore stores notification-read state
   and preferred-class interactions. Other in-app messages must remain declared
@@ -128,7 +133,9 @@ and remaining operational release gates.
   provider, while preserving authentication and authorization checks.
 - Updated the older general curriculum widget fixture to use an explicit adult
   profile so its player expectations remain valid. Dedicated tests separately
-  prove that an under-16 profile never constructs the player.
+  cover authenticated-role video eligibility.
+- Re-fetched the September 23, 2026 privacy policy. Its audience and YouTube
+  description now match the corrected account/profile distinction.
 
 ## Files modified
 
@@ -170,6 +177,15 @@ and remaining operational release gates.
 - Full Firestore emulator suite, using local demo project
   `demo-ota-compliance`: PASS, 58/58. The expected `PERMISSION_DENIED` emulator
   logs are assertions for rejected unauthorized operations.
+- Clarified-audience focused Flutter suite: PASS, 97/97. A first attempt failed
+  to compile after a new test referenced `SignInWithAppleButton` without its
+  package import; adding the test-only import fixed it.
+- Clarified curriculum suite: PASS, 18/18. It covers Parent with linked ages 10
+  and 16, authenticated Student age 16, Admin, Super Admin, and Guest Reviewer.
+- `flutter analyze --no-pub`: PASS, no issues found.
+- Final full `flutter test --no-pub`: PASS, 453/453.
+- Final full Firestore emulator suite: PASS, 59/59, including explicit proof
+  that a location admin may update an under-16 student's training record.
 - An initial emulator attempt did not run because Java was absent from `PATH`;
   retrying with Android Studio JBR started the emulator.
 - The first retry did not run tests because this new worktree lacked local npm
@@ -180,29 +196,23 @@ and remaining operational release gates.
 
 ## Known blockers and unresolved questions
 
-- OTA still needs an operational decision for parental authorization; the app
-  must not claim parental consent that the academy has not actually obtained.
+- The updated policy says any required authorization is handled through OTA's
+  enrollment or academy processes. Code cannot verify that operational process;
+  OTA must retain evidence supporting the statement.
 - If provider cleanup fails after Login unexpectedly provisions an identity,
   the session is signed out and Firestore still prevents under-age onboarding;
   the orphaned Auth record may require normal support cleanup.
-- Code cannot prove the current Made-for-Kids status of production Firestore
-  video IDs or that OTA has notified YouTube that the embedded client is
-  child-directed. OTA must inventory IDs, verify status through the YouTube Data
-  API, document content review, and complete the applicable Google notification
-  before public release.
-- Code cannot verify OTA's real-world parental authorization process. Firebase
-  collection from users of the parent-managed under-16 experience is disclosed
-  and limited to app functionality, authentication, notification delivery, and
-  diagnostics, but OTA must document the lawful parent/guardian authorization
-  it actually obtains rather than relying only on policy text.
-- The published policy needs wording changes: remove phone number unless OTA
-  confirms a current collection path; state that under-16 profiles never load
-  the embedded YouTube player; describe shared-profile assisted deletion and
-  provider diagnostic/installation retention; disclose contact/account email
-  processing by the external Google Forms deletion path; and explain whether
-  staff-authored institutional content remains after an administrator account
-  is deleted. Remove the confusing `Updated automatically every 5 minutes`
-  line if it is document content rather than Google Docs chrome.
+- YouTube requires the Made-for-Kids status of every embedded video to be
+  checked regardless of the videos' public availability. OTA must inventory
+  the production video IDs and document the result. Whether the API client or a
+  portion of it is legally child-directed for authenticated 16-17-year-olds is
+  a jurisdiction-specific determination; if it is, OTA must complete Google's
+  child-directed notification and associated requirements.
+- Genuine policy wording questions remain: guardian phone number is not
+  collected by current production Dart code; deletion wording does not explain
+  that shared profiles require assisted handling; and the policy links to, but
+  does not expressly describe, Google Forms processing of deletion-request
+  contact/account emails.
 - The Play Console itself was not available, so its saved answers could not be
   read. The release worksheet must declare Name, Email, User IDs, Other personal
   info, Crash logs, Diagnostics, Device or other IDs, App activity, Other in-app
@@ -219,12 +229,20 @@ The following likely changes may also be touched by the Flutter Web worktree:
 - `lib/services/firebase/firebase_authentication_service.dart`
 - `lib/services/firebase/profile_service.dart`
 - `firestore.rules`
+- `lib/screens/curriculum_screen.dart`
 
-All edits must remain narrowly scoped and documented for integration.
+The `flutter-web` branch already removes the old selected-profile age gate from
+`curriculum_screen.dart`, so integration may conflict on the same lines. Keep
+this branch's authenticated-role/Guest Reviewer behavior. The Web branch also
+changes authentication, account deletion, and startup; do not resolve those
+files by taking this older branch wholesale. Preserve Web popup authentication,
+Web reauthentication, platform-specific Crashlytics, and Hosting while retaining
+the Android 16+ registration safeguards and Rules changes.
 
 ## Exact next action
 
-Deliver the final report from the validated checkpoint. Before integration,
-review the documented shared-file conflict risks and apply this branch without
-overwriting the simultaneous task's changes. Do not push, merge, build, deploy,
-or change Play Console unless the user gives a new explicit instruction.
+Integrate the Android compliance commits with `flutter-web` using a deliberate
+file-by-file conflict resolution. Re-run Web and Android authentication tests,
+the full Flutter suite, and the Rules emulator after integration. Do not push,
+deploy, build, or change Play Console unless the user gives a new explicit
+instruction.
