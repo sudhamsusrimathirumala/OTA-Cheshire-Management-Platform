@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../models/curriculum_requirement.dart';
 import '../routes.dart';
 import '../services/app_data_service.dart';
 import '../services/app_data_service_provider.dart';
+import '../services/location_time_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/admin/admin_bottom_nav_bar.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
@@ -110,6 +112,12 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       selectedBelt: selectedBelt,
       beltDisplayLabel: _service.beltDisplayLabel,
       videoBuilder: widget.videoBuilder,
+      allowEmbeddedVideo:
+          widget.isAdmin ||
+          const LocationTimeService().ageForStudent(
+                _service.selectedStudentProfile,
+              ) >=
+              16,
       backLabel: widget.isAdmin ? 'Back to Events & Resources' : null,
       onBeltChanged: (belt) {
         if (belt != null && _service.curriculum.containsKey(belt)) {
@@ -169,6 +177,7 @@ class _CurriculumContent extends StatelessWidget {
     required this.selectedBelt,
     required this.beltDisplayLabel,
     required this.onBeltChanged,
+    required this.allowEmbeddedVideo,
     this.videoBuilder,
     this.onBack,
     this.backLabel,
@@ -180,6 +189,7 @@ class _CurriculumContent extends StatelessWidget {
   final String Function(String) beltDisplayLabel;
   final ValueChanged<String?> onBeltChanged;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
   final VoidCallback? onBack;
   final String? backLabel;
 
@@ -205,6 +215,7 @@ class _CurriculumContent extends StatelessWidget {
             CurriculumSectionCard(
               section: sections[index],
               videoBuilder: videoBuilder,
+              allowEmbeddedVideo: allowEmbeddedVideo,
             ),
             if (index != sections.length - 1) const SizedBox(height: 14),
           ],
@@ -297,11 +308,13 @@ class CurriculumSectionCard extends StatelessWidget {
   const CurriculumSectionCard({
     required this.section,
     this.videoBuilder,
+    this.allowEmbeddedVideo = true,
     super.key,
   });
 
   final CurriculumSection section;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -325,6 +338,7 @@ class CurriculumSectionCard extends StatelessWidget {
               _CurriculumItemView(
                 item: items[index],
                 videoBuilder: videoBuilder,
+                allowEmbeddedVideo: allowEmbeddedVideo,
               ),
               if (index != items.length - 1) const SizedBox(height: 10),
             ],
@@ -335,10 +349,15 @@ class CurriculumSectionCard extends StatelessWidget {
 }
 
 class _CurriculumItemView extends StatelessWidget {
-  const _CurriculumItemView({required this.item, this.videoBuilder});
+  const _CurriculumItemView({
+    required this.item,
+    required this.allowEmbeddedVideo,
+    this.videoBuilder,
+  });
 
   final CurriculumItem item;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -376,6 +395,8 @@ class _CurriculumItemView extends StatelessWidget {
             const SizedBox(height: 10),
             if (videoId == null)
               const _VideoUnavailable()
+            else if (!allowEmbeddedVideo)
+              _YoungerUserYoutubeFallback(videoId: videoId)
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -391,6 +412,62 @@ class _CurriculumItemView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _YoungerUserYoutubeFallback extends StatelessWidget {
+  const _YoungerUserYoutubeFallback({required this.videoId});
+
+  final String videoId;
+
+  String get _videoUrl => 'https://www.youtube.com/watch?v=$videoId';
+
+  Future<void> _copyLink(BuildContext context) async {
+    await Clipboard.setData(ClipboardData(text: _videoUrl));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('YouTube link copied.')));
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: OtaColors.white.withValues(alpha: 0.78),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      children: [
+        const Icon(Icons.family_restroom_rounded, color: OtaColors.navy),
+        const SizedBox(height: 8),
+        const Text(
+          'Embedded YouTube playback is unavailable for profiles under 16.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'A parent or guardian can copy this link and open it using their '
+          'supervised YouTube settings. Copying the link does not contact '
+          'YouTube.',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 10),
+        SelectableText(
+          _videoUrl,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: OtaColors.mutedText),
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () => _copyLink(context),
+          icon: const Icon(Icons.copy_rounded),
+          label: const Text('Copy YouTube link'),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmbeddedYoutubePlayer extends StatefulWidget {

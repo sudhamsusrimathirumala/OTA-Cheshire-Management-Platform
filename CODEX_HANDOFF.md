@@ -8,8 +8,8 @@ data, building a release, or changing Play Console declarations.
 
 ## Current milestone
 
-Audit YouTube/Families behavior and implement a conservative younger-user
-fallback while preserving the completed under-16 registration gate.
+Reconcile production data flows, account deletion, and the published privacy
+policy into the final Play Data safety worksheet and exact policy wording.
 
 ## Completed
 
@@ -64,15 +64,32 @@ fallback while preserving the completed under-16 registration gate.
 - Added Firestore emulator coverage for under-16 student bypass, exactly-16
   registration, adult parent plus younger managed child, and an under-16
   applicant attempting to choose the parent role.
+- Verified current YouTube policy states that basic data is shared when an
+  embedded player loads, more data is shared on playback, each embedded video's
+  Made-for-Kids status must be checked, and a child-directed API client must be
+  notified to Google. Privacy-enhanced mode does not eliminate collection.
+- Preserved the 16+ and administrator behavior: no autoplay, no iframe before
+  the existing affirmative Load action, privacy-enhanced mode, restricted
+  related videos, and the pre-load data disclosure.
+- Added a conservative fallback for selected profiles under 16. The app never
+  constructs a YouTube iframe for those profiles and does not navigate to
+  YouTube. It displays a canonical watch URL and lets a parent/guardian copy it
+  for use with their own supervised YouTube settings; copying does not contact
+  YouTube.
+- Added tests proving the player builder is never called for an under-16
+  profile, remains available at age 16, and remains available to administrators
+  without reading a selected student profile.
 
 ## Files modified
 
 - `CODEX_HANDOFF.md`
 - `firestore.rules`
 - `lib/screens/signup_screen.dart`
+- `lib/screens/curriculum_screen.dart`
 - `lib/services/firebase/firebase_authentication_service.dart`
 - `lib/services/registration_eligibility.dart`
 - `test/auth_navigation_test.dart`
+- `test/curriculum_admin_test.dart`
 - `test/registration_eligibility_test.dart`
 - `test/signup_session_transition_test.dart`
 - `tool/firebase_emulator_tests/client_workflows.js`
@@ -82,6 +99,7 @@ fallback while preserving the completed under-16 registration gate.
 
 - `flutter test --no-pub test/registration_eligibility_test.dart test/signup_session_transition_test.dart test/auth_navigation_test.dart test/account_deletion_service_test.dart`: PASS, 53/53.
 - Focused Firestore emulator `firestore_workflows.test.js`: PASS, 37/37.
+- `flutter test --no-pub test/curriculum_admin_test.dart test/privacy_policy_compliance_test.dart`: PASS, 24/24.
 - An initial emulator attempt did not run because Java was absent from `PATH`;
   retrying with Android Studio JBR started the emulator.
 - The first retry did not run tests because this new worktree lacked local npm
@@ -97,6 +115,11 @@ fallback while preserving the completed under-16 registration gate.
 - If provider cleanup fails after Login unexpectedly provisions an identity,
   the session is signed out and Firestore still prevents under-age onboarding;
   the orphaned Auth record may require normal support cleanup.
+- Code cannot prove the current Made-for-Kids status of production Firestore
+  video IDs or that OTA has notified YouTube that the embedded client is
+  child-directed. OTA must inventory IDs, verify status through the YouTube Data
+  API, document content review, and complete the applicable Google notification
+  before public release.
 
 ## Shared-file conflict risks
 
@@ -112,7 +135,7 @@ All edits must remain narrowly scoped and documented for integration.
 
 ## Exact next action
 
-Inspect how the selected student profile reaches `CurriculumScreen`, then
-implement and test the conservative no-iframe fallback for profiles younger
-than 16 while preserving privacy-enhanced click-to-load playback for eligible
-users and administrators.
+Re-audit dependencies, manifests, startup initialization, account deletion,
+phone-number paths, file/video/message flows, and the published privacy policy;
+record the complete Data safety worksheet and exact proposed wording before
+running full validation.

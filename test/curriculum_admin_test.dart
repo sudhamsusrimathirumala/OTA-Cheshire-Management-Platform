@@ -150,6 +150,86 @@ void main() {
     expect(find.text('No Belt content'), findsNothing);
   });
 
+  testWidgets('under-16 profile never creates a YouTube iframe', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      selectedAge: 15,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return const Text('EMBEDDED PLAYER');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 0);
+    expect(
+      find.textContaining('unavailable for profiles under 16'),
+      findsOneWidget,
+    );
+    expect(find.text('Copy YouTube link'), findsOneWidget);
+    expect(find.text('EMBEDDED PLAYER'), findsNothing);
+  });
+
+  testWidgets('profile aged 16 retains affirmative embedded playback', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      selectedAge: 16,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return Text('EMBEDDED $videoId');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 1);
+    expect(find.text('EMBEDDED abcdefghijk'), findsOneWidget);
+    expect(find.text('Copy YouTube link'), findsNothing);
+  });
+
+  testWidgets('administrator retains curriculum video review', (tester) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      throwOnSelectedStudent: true,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          isAdmin: true,
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return Text('ADMIN EMBEDDED $videoId');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 1);
+    expect(find.text('ADMIN EMBEDDED abcdefghijk'), findsOneWidget);
+  });
+
   testWidgets('empty admin curriculum fails safely', (tester) async {
     final service = _CurriculumService(
       throwOnSelectedStudent: true,
@@ -169,6 +249,7 @@ class _CurriculumService extends MockAppDataService {
   _CurriculumService({
     this.throwOnSelectedStudent = false,
     this.selectedBelt = 'White',
+    this.selectedAge = 12,
     Map<String, CurriculumRequirement>? curriculumData,
     this.beltOrder = const ['No Belt', 'White', 'Blue'],
   }) : curriculumData =
@@ -181,6 +262,7 @@ class _CurriculumService extends MockAppDataService {
 
   final bool throwOnSelectedStudent;
   final String selectedBelt;
+  final int selectedAge;
   final Map<String, CurriculumRequirement> curriculumData;
   final List<String> beltOrder;
 
@@ -200,7 +282,7 @@ class _CurriculumService extends MockAppDataService {
       name: 'Student',
       locationId: 'ota-cheshire',
       belt: selectedBelt,
-      legacyAge: 12,
+      dateOfBirth: DateTime(DateTime.now().year - selectedAge, 1, 1),
       stickerCount: 0,
       stickersRequired: 0,
       nextRank: 'Black',
@@ -220,6 +302,27 @@ CurriculumRequirement _requirement(String belt) => CurriculumRequirement(
       id: 'section-$belt',
       title: '$belt content',
       sortOrder: 1,
+    ),
+  ],
+);
+
+CurriculumRequirement _videoRequirement(String belt) => CurriculumRequirement(
+  locationId: 'ota-cheshire',
+  belt: belt,
+  sections: [
+    CurriculumSection(
+      id: 'section-$belt',
+      title: '$belt content',
+      sortOrder: 1,
+      items: const [
+        CurriculumItem(
+          id: 'video',
+          title: 'Training video',
+          contentType: CurriculumContentType.video,
+          sortOrder: 1,
+          videoUrl: 'abcdefghijk',
+        ),
+      ],
     ),
   ],
 );
