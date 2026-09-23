@@ -156,6 +156,22 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         return false;
       }
     }
+    if (_step == 1) {
+      final birthDate = _dateOfBirth;
+      if (birthDate == null) {
+        setState(() => _error = 'Select your date of birth.');
+        return false;
+      }
+      final ageError = applicantAgeError(
+        birthDate,
+        _role,
+        today: DateTime.now(),
+      );
+      if (ageError != null) {
+        setState(() => _error = ageError);
+        return false;
+      }
+    }
     if (_step == 1 &&
         _role == ProfileAccountRole.parent &&
         !_parentIsStudent &&

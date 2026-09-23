@@ -317,10 +317,10 @@ service cloud.firestore {
                   uid, getAfter(profilePath(data.parentSelfProfileId)).data)));
     }
 
-    function atLeastIndependentRegistrationAge(dateOfBirth) {
+    function atLeastAge(dateOfBirth, minimumAge) {
       return dateOfBirth is timestamp &&
           dateOfBirth.date() <= timestamp.date(
-            request.time.year() - 16,
+            request.time.year() - minimumAge,
             request.time.month(),
             request.time.day()
           );
@@ -328,16 +328,17 @@ service cloud.firestore {
 
     function validIndependentApplicantAge(data) {
       return data.role == 'student'
-          ? atLeastIndependentRegistrationAge(
+          ? atLeastAge(
               getAfter(profilePath(data.selectedStudentProfileId))
-                .data.dateOfBirth)
+                .data.dateOfBirth,
+              16)
           : (data.parentSelfProfileId != ''
-              ? atLeastIndependentRegistrationAge(
+              ? atLeastAge(
                   getAfter(profilePath(data.parentSelfProfileId))
-                    .data.dateOfBirth)
+                    .data.dateOfBirth,
+                  18)
               : data.keys().hasAny(['studentProfileDefaults']) &&
-                atLeastIndependentRegistrationAge(
-                  data.studentProfileDefaults.dateOfBirth));
+                atLeastAge(data.studentProfileDefaults.dateOfBirth, 18));
     }
 
     function validInitialUser(uid, data) {

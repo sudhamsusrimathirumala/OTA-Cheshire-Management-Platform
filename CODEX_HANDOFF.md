@@ -49,9 +49,10 @@ records. Deliver the final evidence and integrate carefully with Flutter Web.
   `lib/services/registration_eligibility.dart`.
 - Added a neutral, freely entered DOB field to Signup. Under-16 and malformed
   DOBs block email, Google, and Apple registration before authentication.
-- Added exact backend enforcement in `firestore.rules`. Initial student and
-  parent applicants must be at least 16 based on trusted `request.time`, while
-  parent-managed child profiles may remain younger than 16.
+- Added exact backend enforcement in `firestore.rules`. Initial Student
+  applicants must be at least 16 and Parent/Guardian applicants must be adults
+  (18+) based on trusted `request.time`, while managed child profiles may remain
+  younger than 16.
 - Changed production provider authentication so Login accepts existing
   Google/Apple identities but rejects newly provisioned identities. Apple
   authorization is revoked before deleting the unintended Auth user; provider
@@ -63,8 +64,8 @@ records. Deliver the final evidence and integrate carefully with Flutter Web.
 - Added Flutter regression coverage for parsing, boundary ages, leap days,
   under-16 email/provider attempts, valid signup, and provider-login routing.
 - Added Firestore emulator coverage for under-16 student bypass, exactly-16
-  registration, adult parent plus younger managed child, and an under-16
-  applicant attempting to choose the parent role.
+  registration, adult parent plus younger managed child, and an under-18
+  applicant attempting to choose the Parent role.
 - Verified current YouTube policy states that basic data is shared when an
   embedded player loads, more data is shared on playback, each embedded video's
   Made-for-Kids status must be checked, and a child-directed API client must be
@@ -136,6 +137,10 @@ records. Deliver the final evidence and integrate carefully with Flutter Web.
   cover authenticated-role video eligibility.
 - Re-fetched the September 23, 2026 privacy policy. Its audience and YouTube
   description now match the corrected account/profile distinction.
+- Corrected another audience-model edge: Parent/Guardian account holders are
+  now required to be 18+ in the onboarding UI, profile service, and Firestore
+  Rules. Student account eligibility remains 16+. This does not restrict
+  parent- or staff-managed profiles for younger students.
 
 ## Files modified
 
@@ -183,7 +188,9 @@ records. Deliver the final evidence and integrate carefully with Flutter Web.
 - Clarified curriculum suite: PASS, 18/18. It covers Parent with linked ages 10
   and 16, authenticated Student age 16, Admin, Super Admin, and Guest Reviewer.
 - `flutter analyze --no-pub`: PASS, no issues found.
-- Final full `flutter test --no-pub`: PASS, 453/453.
+- Final clarified-audience focused suite including role-specific age checks:
+  PASS, 122/122.
+- Final full `flutter test --no-pub`: PASS, 454/454.
 - Final full Firestore emulator suite: PASS, 59/59, including explicit proof
   that a location admin may update an under-16 student's training record.
 - An initial emulator attempt did not run because Java was absent from `PATH`;

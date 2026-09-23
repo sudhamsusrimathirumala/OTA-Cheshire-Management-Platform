@@ -9,6 +9,23 @@ import '../firestore/firestore_collections.dart';
 
 enum ProfileAccountRole { student, parent }
 
+int minimumApplicantAge(ProfileAccountRole role) => switch (role) {
+  ProfileAccountRole.student => 16,
+  ProfileAccountRole.parent => 18,
+};
+
+String? applicantAgeError(
+  DateTime dateOfBirth,
+  ProfileAccountRole role, {
+  required DateTime today,
+}) {
+  final minimumAge = minimumApplicantAge(role);
+  if (_ageOn(dateOfBirth, today) >= minimumAge) return null;
+  return role == ProfileAccountRole.parent
+      ? 'A parent or guardian account holder must be at least 18.'
+      : 'You must be at least 16. A parent must create your profile.';
+}
+
 enum ProfileServiceError {
   unauthenticated,
   alreadyExists,
@@ -803,11 +820,13 @@ ProfileCreationPlan buildProfileCreationPlan({
   final lastName = _requiredInput(request.lastName, 'Last name');
   final email = _normalizedEmail(identity.email, 'Account email');
   final locationId = _requiredInput(request.locationId, 'Academy location');
-  if (_ageOn(request.dateOfBirth, today) < 16) {
-    throw const ProfileServiceException(
-      ProfileServiceError.invalidAge,
-      'You must be at least 16. A parent must create this profile.',
-    );
+  final ageError = applicantAgeError(
+    request.dateOfBirth,
+    request.role,
+    today: today,
+  );
+  if (ageError != null) {
+    throw ProfileServiceException(ProfileServiceError.invalidAge, ageError);
   }
   if (request.dateOfBirth.isAfter(today)) {
     throw const ProfileServiceException(

@@ -355,10 +355,10 @@ test('adult parent registration permits an under-16 managed child', async () => 
   assert.equal(child.dateOfBirth.toDate().getUTCFullYear(), 2015);
 });
 
-test('under-16 applicant cannot bypass the gate by choosing parent', async () => {
+test('under-18 applicant cannot bypass the adult gate by choosing parent', async () => {
   const now = new Date();
-  const under16 = new Date(Date.UTC(
-    now.getUTCFullYear() - 15,
+  const under18 = new Date(Date.UTC(
+    now.getUTCFullYear() - 17,
     now.getUTCMonth(),
     now.getUTCDate(),
   ));
@@ -368,7 +368,7 @@ test('under-16 applicant cannot bypass the gate by choosing parent', async () =>
     email: 'underage-parent@example.com',
     role: 'parent',
     profileIds: ['managed-child'],
-    applicantDateOfBirth: under16,
+    applicantDateOfBirth: under18,
   }));
 });
 
