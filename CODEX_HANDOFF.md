@@ -6,7 +6,7 @@ Implement a production-capable Flutter Web target for iPhone browser and Home Sc
 
 ## Current milestone
 
-Milestone 3 complete: classic Firebase Hosting configuration, OTA browser/PWA branding, Web operator documentation, and the expanded narrow-iPhone layout suite are in place. The next milestone is final security/package audit validation and the full implementation report.
+Repository-side Web implementation and validation are complete. The work is blocked only on authorized external production setup, genuine Firebase Web values, integration with the Android branch's authentication changes, and physical/preview browser validation.
 
 ## Completed
 
@@ -73,6 +73,11 @@ Milestone 3 complete: classic Firebase Hosting configuration, OTA browser/PWA br
 - `flutter test --no-pub --platform chrome ...`: INCONCLUSIVE; the local Chrome harness never connected or emitted a result after two minutes and was stopped. Do not count as a browser pass.
 - `firebase hosting:sites:list --project prod`: read-only PASS; confirms site `ota-management-platform-e4847` at `https://ota-management-platform-e4847.web.app` with no associated Web App ID.
 - `firebase apps:list --project prod`: read-only PASS; lists Android/iOS only and confirms no production Web app registration.
+- First Firestore emulator attempt: did not run the Rules tests because this fresh worktree lacked `tool/firebase_emulator_tests/node_modules`; emulator startup itself was successful and production access was disabled by the `demo-*` project.
+- `npm --prefix tool/firebase_emulator_tests ci`: PASS, 87 locked packages installed, 0 vulnerabilities reported.
+- `firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test"`: PASS, 54/54 tests.
+- `flutter test --no-pub`: PASS, 450/450 tests.
+- Official documentation review: confirms Firebase Auth popup support, Firebase Web config registration, FCM Web VAPID/service-worker requirements, iOS 16.4+ Home Screen Web Push constraints, and current Web support declarations for the audited plugins.
 
 ## Blockers and unresolved questions
 
@@ -96,6 +101,12 @@ The Android compliance task is in a separate worktree. Likely shared files requi
 - `web/index.html`
 - authentication, account-deletion, startup, and layout tests
 
+Current observed overlap with the Android compliance branch:
+
+- `lib/services/firebase/firebase_authentication_service.dart` is modified by both branches. The Android branch adds provider registration-vs-sign-in safeguards and this branch adds Web popup/sign-out behavior; these changes must be reconciled manually rather than choosing either whole file.
+- Both worktrees maintain their own `CODEX_HANDOFF.md`; do not merge one over the other mechanically.
+- The Android worktree currently has uncommitted changes to `lib/screens/account_deletion_screen.dart` and `test/account_deletion_screen_test.dart`. This Web branch changes the deletion service/tests, so preserve both layers during integration.
+
 ## Exact next action
 
-Run final focused/full validation, audit package/platform and checked-in Firestore authorization coverage, inspect shared-file overlap with the Android worktree, update this handoff with the final state, and create a final local checkpoint. Do not build or deploy until genuine production Web values and explicit authorization exist.
+Manually integrate the Android branch's registration safeguards with this branch's Web popup logic in `lib/services/firebase/firebase_authentication_service.dart`, then rerun both branches' authentication/signup tests. After an authorized operator registers the production Firebase Web app, supply the generated `OTA_FIREBASE_WEB_*` values, run the documented release build and Hosting preview workflow, and complete the physical iPhone Safari/Home Screen checklist. Do not deploy the live site without explicit approval.
