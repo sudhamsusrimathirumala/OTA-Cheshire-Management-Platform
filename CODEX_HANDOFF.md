@@ -6,7 +6,7 @@ Implement a production-capable Flutter Web target for iPhone browser and Home Sc
 
 ## Current milestone
 
-Milestone 2 complete: Google authentication and account-deletion reauthentication use Firebase Auth popup flows on Web while native behavior remains intact. The next milestone is production Hosting configuration, browser metadata, and documented Firebase Console prerequisites.
+Milestone 3 complete: classic Firebase Hosting configuration, OTA browser/PWA branding, Web operator documentation, and the expanded narrow-iPhone layout suite are in place. The next milestone is final security/package audit validation and the full implementation report.
 
 ## Completed
 
@@ -23,6 +23,11 @@ Milestone 2 complete: Google authentication and account-deletion reauthenticatio
 - Configured Google Web authentication to request `prompt=select_account` so signed-out users can deliberately switch accounts.
 - Kept Firebase Auth as the canonical Web sign-out and avoided the unsupported native `google_sign_in` cleanup path on Web.
 - Mapped Web popup cancellation to safe, non-destructive sign-in/deletion cancellation behavior.
+- Prepared the existing classic Hosting site for `build/web` with SPA rewrites, source-map exclusion, conservative caching, and baseline security headers; no deployment was run.
+- Added OTA title/description/theme/Home Screen metadata and a stable manifest root ID/scope.
+- Replaced default Flutter Web icons with deterministic square derivatives of the repository's existing OTA logo; the logo artwork itself was not redrawn.
+- Documented exact production Web app registration, Firebase Auth/OAuth/Apple prerequisites, build definitions, preview-channel workflow, rollback, privacy wording, Web Push deferral, and physical-iPhone checks.
+- Expanded narrow-screen coverage to Welcome, Resources, Guest, Admin Dashboard, and Admin Profile; fixed real Welcome vertical and Admin Profile horizontal overflows.
 
 ## Files modified
 
@@ -41,6 +46,17 @@ Milestone 2 complete: Google authentication and account-deletion reauthenticatio
 - `lib/services/firebase/account_deletion_service.dart`
 - `test/firebase_authentication_service_test.dart`
 - `test/account_deletion_service_test.dart`
+- `firebase.json`
+- `web/index.html`
+- `web/manifest.json`
+- `web/favicon.png`
+- `web/icons/*.png`
+- `README.md`
+- `docs/CODEBASE_GUIDE.md`
+- `lib/screens/welcome_screen.dart`
+- `lib/screens/admin/admin_profile_screen.dart`
+- `test/layout_overflow_regression_test.dart`
+- `test/web_deployment_config_test.dart`
 - `CODEX_HANDOFF.md`
 
 ## Tests run
@@ -50,10 +66,20 @@ Milestone 2 complete: Google authentication and account-deletion reauthenticatio
 - `flutter analyze --no-pub`: PASS, no issues found.
 - `flutter test --no-pub test/firebase_authentication_service_test.dart test/account_deletion_service_test.dart`: PASS, 41 tests.
 - `flutter analyze --no-pub` after milestone 2: PASS, no issues found.
+- `flutter test --no-pub test/web_deployment_config_test.dart test/privacy_policy_compliance_test.dart`: PASS, 11 tests after correcting the new test's map matcher.
+- `flutter test --no-pub test/layout_overflow_regression_test.dart test/schedule_layout_regression_test.dart`: PASS, 12 tests before expanding route coverage.
+- Expanded `test/layout_overflow_regression_test.dart`: initially found real Welcome/Admin Profile overflows; after fixes, PASS, 6 viewport/text-scale combinations.
+- `flutter analyze --no-pub` after milestone 3: PASS, no issues found.
+- `flutter test --no-pub --platform chrome ...`: INCONCLUSIVE; the local Chrome harness never connected or emitted a result after two minutes and was stopped. Do not count as a browser pass.
+- `firebase hosting:sites:list --project prod`: read-only PASS; confirms site `ota-management-platform-e4847` at `https://ota-management-platform-e4847.web.app` with no associated Web App ID.
+- `firebase apps:list --project prod`: read-only PASS; lists Android/iOS only and confirms no production Web app registration.
 
 ## Blockers and unresolved questions
 
 - Production Firebase Web app credentials are not available and must not be invented.
+- A production Web release build was not run because genuine production Web app values do not exist yet.
+- The local Chrome test harness did not connect; preview Chrome and physical iPhone Safari runtime checks remain required.
+- The installed Firebase CLI exposes no read-only deployed-Rules retrieval command, so checked-in Rules were audited but were not proven byte-for-byte identical to the deployed production ruleset.
 - Production Firebase/Apple/Google console settings must remain unchanged without explicit authorization.
 - Apple Web Sign-In cannot be completed until Apple Service ID, Team ID, Key ID, and private key configuration exists.
 - iPhone OS-level Web Push is intentionally outside the first release.
@@ -72,4 +98,4 @@ The Android compliance task is in a separate worktree. Likely shared files requi
 
 ## Exact next action
 
-Add production-safe Firebase Hosting rewrites/cache/security headers and OTA browser/PWA metadata. Document required Firebase Web app registration, authorized domains/OAuth setup, privacy-policy review, Web Push deferral, local build inputs, preview-channel validation, and rollback without changing production settings or deploying.
+Run final focused/full validation, audit package/platform and checked-in Firestore authorization coverage, inspect shared-file overlap with the Android worktree, update this handoff with the final state, and create a final local checkpoint. Do not build or deploy until genuine production Web values and explicit authorization exist.
