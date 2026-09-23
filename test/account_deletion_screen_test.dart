@@ -59,15 +59,32 @@ void main() {
     await _pumpDeletionScreen(tester, fixture);
 
     expect(find.text('Permanent account deletion'), findsOneWidget);
-    expect(find.textContaining('every student profile linked'), findsOneWidget);
+    expect(find.textContaining('managed exclusively'), findsOneWidget);
+    expect(
+      find.textContaining('Shared profiles are not deleted'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Belt, sticker, testing'), findsOneWidget);
     expect(find.text('This cannot be undone'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
     expect(find.text('Permanently delete account'), findsOneWidget);
+    expect(find.text('Request account deletion online'), findsOneWidget);
     expect(find.textContaining('Step '), findsNothing);
     expect(find.text('Final confirmation'), findsNothing);
     expect(find.text('Verify and continue'), findsNothing);
   });
+
+  testWidgets(
+    'member without a supported provider gets external request path',
+    (tester) async {
+      final fixture = _Fixture(methods: const {});
+      await _pumpDeletionScreen(tester, fixture);
+
+      expect(find.text('Verification unavailable'), findsOneWidget);
+      expect(find.text('Request account deletion online'), findsOneWidget);
+      expect(find.text('Permanently delete account'), findsNothing);
+    },
+  );
 
   testWidgets('correct password immediately deletes and returns signed out', (
     tester,

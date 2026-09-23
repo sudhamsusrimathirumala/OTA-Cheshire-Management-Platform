@@ -110,12 +110,21 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
     }
     final methods = _service.availableMethods;
     if (methods.isEmpty) {
-      return const _MessageCard(
-        icon: Icons.no_accounts_outlined,
-        title: 'Verification unavailable',
-        message:
-            'This account does not have a supported password, Google, or Apple '
-            'sign-in method. Contact the academy.',
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _MessageCard(
+            icon: Icons.no_accounts_outlined,
+            title: 'Verification unavailable',
+            message:
+                'This account does not have a supported password, Google, or '
+                'Apple sign-in method. Submit a deletion request so OTA can '
+                'verify and complete it safely.',
+          ),
+          const SizedBox(height: 18),
+          const _ExternalDeletionRequestButton(),
+          const PrivacyPolicyButton(),
+        ],
       );
     }
     return Column(
@@ -130,8 +139,9 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
         ),
         const SizedBox(height: 10),
         const Text(
-          'This permanently deletes the login account and every student '
-          'profile linked to it.',
+          'This permanently deletes the login account and student profiles '
+          'managed exclusively by it. Shared profiles are not deleted '
+          'automatically; OTA must review them safely.',
         ),
         const SizedBox(height: 18),
         _DeletionSummary(profileCount: account.linkedStudentProfileIds.length),
@@ -140,8 +150,10 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
           icon: Icons.warning_amber_rounded,
           title: 'This cannot be undone',
           message:
-              'All linked student profiles, progress, and preferences will be '
-              'deleted and must be recreated manually if the student returns.',
+              'Exclusively managed student profiles, progress, and preferences '
+              'will be deleted and must be recreated manually if the student '
+              'returns. Automatic deletion stops if any linked profile is '
+              'shared with another account.',
         ),
         const SizedBox(height: 18),
         if (methods.length > 1) ...[
@@ -235,6 +247,14 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
           onPressed: _busy ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
+        const SizedBox(height: 12),
+        const Text(
+          'Need help, cannot verify this account, or manage a shared profile?',
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        const _ExternalDeletionRequestButton(),
+        const PrivacyPolicyButton(),
       ],
     );
   }
@@ -340,13 +360,20 @@ class _PrivilegedAccountRestriction extends StatelessWidget {
             'and complete it without weakening account protections.',
       ),
       const SizedBox(height: 18),
-      OutlinedButton.icon(
-        onPressed: () => openAccountDeletionRequest(context),
-        icon: const Icon(Icons.open_in_new_rounded),
-        label: const Text('Request account deletion online'),
-      ),
+      const _ExternalDeletionRequestButton(),
       const PrivacyPolicyButton(),
     ],
+  );
+}
+
+class _ExternalDeletionRequestButton extends StatelessWidget {
+  const _ExternalDeletionRequestButton();
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: () => openAccountDeletionRequest(context),
+    icon: const Icon(Icons.open_in_new_rounded),
+    label: const Text('Request account deletion online'),
   );
 }
 
