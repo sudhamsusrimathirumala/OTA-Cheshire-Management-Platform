@@ -307,6 +307,70 @@ test('student atomically creates active records at one location', async () => {
   assert.equal(profile.isActive, true);
 });
 
+test('independent registration rejects an under-16 student bypass', async () => {
+  const now = new Date();
+  const under16 = new Date(Date.UTC(
+    now.getUTCFullYear() - 15,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('underage-student');
+  await assertFails(createProfiles(db, {
+    uid: 'underage-student',
+    email: 'underage-student@example.com',
+    profileIds: ['underage-profile'],
+    applicantDateOfBirth: under16,
+  }));
+});
+
+test('independent registration accepts a student aged exactly 16', async () => {
+  const now = new Date();
+  const exactly16 = new Date(Date.UTC(
+    now.getUTCFullYear() - 16,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('sixteen-student');
+  await assertSucceeds(createProfiles(db, {
+    uid: 'sixteen-student',
+    email: 'sixteen-student@example.com',
+    profileIds: ['sixteen-profile'],
+    applicantDateOfBirth: exactly16,
+  }));
+});
+
+test('adult parent registration permits an under-16 managed child', async () => {
+  const db = auth('adult-parent');
+  await assertSucceeds(createProfiles(db, {
+    uid: 'adult-parent',
+    email: 'adult-parent@example.com',
+    role: 'parent',
+    profileIds: ['managed-child'],
+    applicantDateOfBirth: new Date('1990-01-02T00:00:00Z'),
+  }));
+  const child = (await getDoc(
+    doc(db, 'studentProfiles', 'managed-child'),
+  )).data();
+  assert.equal(child.dateOfBirth.toDate().getUTCFullYear(), 2015);
+});
+
+test('under-16 applicant cannot bypass the gate by choosing parent', async () => {
+  const now = new Date();
+  const under16 = new Date(Date.UTC(
+    now.getUTCFullYear() - 15,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('underage-parent');
+  await assertFails(createProfiles(db, {
+    uid: 'underage-parent',
+    email: 'underage-parent@example.com',
+    role: 'parent',
+    profileIds: ['managed-child'],
+    applicantDateOfBirth: under16,
+  }));
+});
+
 test('self-managed student may omit guardian email without creating access', async () => {
   const uid = 'self-managed';
   const db = auth(uid);

@@ -169,6 +169,67 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('under-16 email signup is blocked before authentication', (
+    tester,
+  ) async {
+    var creationCalls = 0;
+    await tester.pumpWidget(
+      _app(
+        SignupScreen(
+          emailSignUp: (email, password) async {
+            creationCalls++;
+            return Object();
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byType(TextFormField).at(0),
+      'student@example.com',
+    );
+    await tester.enterText(find.byType(TextFormField).at(1), 'password1');
+    await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+    await tester.enterText(
+      find.byType(TextFormField).at(3),
+      _under16DateOfBirth(),
+    );
+    await tester.ensureVisible(find.text('CREATE ACCOUNT'));
+
+    await tester.tap(find.text('CREATE ACCOUNT'));
+    await tester.pump();
+
+    expect(creationCalls, 0);
+    expect(find.textContaining('Students under 16'), findsOneWidget);
+    expect(find.byType(SignupScreen), findsOneWidget);
+  });
+
+  testWidgets('under-16 federated signup is blocked before authentication', (
+    tester,
+  ) async {
+    var googleCalls = 0;
+    await tester.pumpWidget(
+      _app(
+        SignupScreen(
+          googleSignIn: () async {
+            googleCalls++;
+            return Object();
+          },
+        ),
+      ),
+    );
+    await tester.enterText(
+      find.byType(TextFormField).last,
+      _under16DateOfBirth(),
+    );
+    await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));
+
+    await tester.tap(find.text('CONTINUE WITH GOOGLE'));
+    await tester.pump();
+
+    expect(googleCalls, 0);
+    expect(find.textContaining('Students under 16'), findsOneWidget);
+  });
+
   test('release display excludes signup diagnostics', () {
     const failure = AuthenticationException(
       AuthenticationError.networkFailure,
@@ -232,6 +293,16 @@ Future<void> _enterValidSignup(WidgetTester tester) async {
   );
   await tester.enterText(find.byType(TextFormField).at(1), 'password1');
   await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+  await tester.enterText(find.byType(TextFormField).at(3), '01/01/2000');
+  await tester.ensureVisible(find.text('CREATE ACCOUNT'));
+  await tester.pumpAndSettle();
+}
+
+String _under16DateOfBirth() {
+  final now = DateTime.now();
+  final year = now.year - 15;
+  return '${now.month.toString().padLeft(2, '0')}/'
+      '${now.day.toString().padLeft(2, '0')}/$year';
 }
 
 class _FakeUser implements User {

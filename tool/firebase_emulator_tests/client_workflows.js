@@ -10,6 +10,7 @@ export async function createProfiles(db, {
   parentIsStudent = false,
   omitGuardianEmail = false,
   studentProfileDefaults,
+  applicantDateOfBirth = new Date('2000-01-02T00:00:00Z'),
 }) {
   const timestamp = serverTimestamp();
   const batch = writeBatch(db);
@@ -26,7 +27,13 @@ export async function createProfiles(db, {
       parentSelfProfileId: parentIsStudent ? profileIds[0] : '',
     } : {}),
     ...(googleAccountId ? {googleAccountId} : {}),
-    ...(studentProfileDefaults ? {studentProfileDefaults} : {}),
+    ...(role === 'parent' && !parentIsStudent ? {
+      studentProfileDefaults: studentProfileDefaults ?? {
+        dateOfBirth: applicantDateOfBirth,
+        beltRank: 'White',
+        stickerProgress: {current: 0, required: 0, nextRank: 'White-Yellow'},
+      },
+    } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
   });
@@ -36,7 +43,7 @@ export async function createProfiles(db, {
       firstName: ownProfile ? 'Account' : `Child${index + 1}`,
       lastName: 'Holder',
       dateOfBirth: new Date(
-        ownProfile ? '2000-01-02T00:00:00Z' : '2015-01-02T00:00:00Z',
+        ownProfile ? applicantDateOfBirth : '2015-01-02T00:00:00Z',
       ),
       beltRank: 'White',
       locationId,
