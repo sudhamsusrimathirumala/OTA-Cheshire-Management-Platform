@@ -156,7 +156,7 @@ void main() {
       ),
     );
     expect(find.text('OTA Administration'), findsOneWidget);
-    expect(find.text('All locations'), findsOneWidget);
+    expect(find.text('All locations'), findsWidgets);
     await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
     expect(find.text('OTA Cheshire'), findsOneWidget);

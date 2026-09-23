@@ -56,10 +56,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     final now = DateTime.now();
 
     return events.where((event) {
-      final selectedLocationId = adminLocationController.selectedLocationId;
-      if (adminLocationController.isSuperAdmin &&
-          selectedLocationId != null &&
-          event.locationId != selectedLocationId) {
+      if (!adminLocationController.includesLocation(event.locationId)) {
         return false;
       }
       if (event.eventType == 'closure') {

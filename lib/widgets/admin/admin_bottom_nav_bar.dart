@@ -5,6 +5,7 @@ import '../../models/academy_location.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/admin_location_controller.dart';
 import '../../theme/ota_colors.dart';
+import 'admin_location_selector.dart';
 
 void returnToAdminResourcesLanding(BuildContext context) {
   final navigator = Navigator.of(context);
@@ -357,6 +358,21 @@ class AdminTopHeader extends StatelessWidget {
                 icon: const Icon(Icons.person_outline_rounded),
                 tooltip: 'Admin profile',
               );
+              final locationButton = locationController.isSuperAdmin
+                  ? IconButton.filledTonal(
+                      onPressed: () => _showAdminLocationSelector(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: OtaColors.white,
+                        foregroundColor: OtaColors.maroon,
+                        side: const BorderSide(color: Color(0xFFE9D2D7)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      icon: const Icon(Icons.location_on_outlined),
+                      tooltip: 'Change academy location',
+                    )
+                  : null;
               final logo = Container(
                 width: 34,
                 height: 34,
@@ -380,7 +396,14 @@ class AdminTopHeader extends StatelessWidget {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(children: [logo, identity, profileButton]),
+                    Row(
+                      children: [
+                        logo,
+                        identity,
+                        ?locationButton,
+                        profileButton,
+                      ],
+                    ),
                     const SizedBox(height: 8),
                     Align(alignment: Alignment.centerLeft, child: badge),
                   ],
@@ -392,11 +415,47 @@ class AdminTopHeader extends StatelessWidget {
                   identity,
                   badge,
                   const SizedBox(width: 8),
+                  if (locationButton != null) ...[
+                    locationButton,
+                    const SizedBox(width: 4),
+                  ],
                   profileButton,
                 ],
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAdminLocationSelector(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Admin data location',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 14),
+            const AdminLocationSelector(),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Done'),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -103,6 +103,18 @@ class AdminLocationController extends ChangeNotifier {
     return assignedLocation?.id ?? _assignedLocationId ?? '';
   }
 
+  bool includesLocation(String locationId) {
+    if (isSuperAdmin) {
+      final selected = selectedLocationId;
+      return selected == null || locationId == selected;
+    }
+    if (isLocationAdmin || isDebugAdmin || isGuestDemo) {
+      final assigned = writeLocationId;
+      return assigned.isEmpty || locationId == assigned;
+    }
+    return true;
+  }
+
   void start() {
     if (_started || _session == null) return;
     _started = true;

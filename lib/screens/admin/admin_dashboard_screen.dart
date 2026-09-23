@@ -14,27 +14,27 @@ class AdminDashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, _) {
-        final locationId = _dashboardLocationId();
-        final academyNow = locationId.isEmpty
-            ? DateTime.now()
-            : const LocationTimeService().toLocationTime(
-                DateTime.now(),
-                locationId,
-              );
-        final schedule =
-            appDataService
-                .scheduleForWeekday(academyNow.weekday)
-                .where((session) => session.isPublished)
-                .toList()
-              ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+        final now = DateTime.now();
+        final schedule = _todaySchedule(now);
         final announcements = activeDashboardAnnouncements(
-          appDataService.adminAnnouncements,
+          appDataService.adminAnnouncements
+              .where(
+                (announcement) => adminLocationController.includesLocation(
+                  announcement.locationId,
+                ),
+              )
+              .toList(growable: false),
         );
         final events = upcomingDashboardEvents(
-          appDataService.events,
-          now: DateTime.now(),
+          appDataService.events
+              .where(
+                (event) =>
+                    adminLocationController.includesLocation(event.locationId),
+              )
+              .toList(growable: false),
+          now: now,
         );
 
         return AdminPageShell(
@@ -106,12 +106,23 @@ class AdminDashboardScreen extends StatelessWidget {
     );
   }
 
-  String _dashboardLocationId() {
-    if (adminLocationController.isSuperAdmin) {
-      return adminLocationController.selectedLocationId ?? '';
+  List<ClassSession> _todaySchedule(DateTime now) {
+    const timeService = LocationTimeService();
+    final sessions = <ClassSession>[];
+    for (final entry in appDataService.schedule.entries) {
+      for (final session in entry.value) {
+        if (!session.isPublished ||
+            !adminLocationController.includesLocation(session.locationId)) {
+          continue;
+        }
+        final academyWeekday = timeService
+            .toLocationTime(now, session.locationId)
+            .weekday;
+        if (entry.key == academyWeekday) sessions.add(session);
+      }
     }
-    return adminLocationController.assignedLocation?.id ??
-        adminLocationController.writeLocationId;
+    sessions.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
+    return sessions;
   }
 
   _InfoRow _scheduleRow(ClassSession session) =>

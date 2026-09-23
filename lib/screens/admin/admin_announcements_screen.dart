@@ -30,12 +30,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
   var _selectedFilter = _AnnouncementFilter.all;
 
   List<_AdminAnnouncement> get _announcements {
-    final selectedLocationId = adminLocationController.selectedLocationId;
     return [
       for (final announcement in appDataService.adminAnnouncements)
-        if (!adminLocationController.isSuperAdmin ||
-            selectedLocationId == null ||
-            announcement.locationId == selectedLocationId)
+        if (adminLocationController.includesLocation(announcement.locationId))
           _AdminAnnouncement.fromAcademyAnnouncement(announcement),
     ]..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
@@ -1032,8 +1029,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   List<StudentProfile> _studentOptions() {
-    return [...appDataService.adminStudentProfiles]
-      ..sort((a, b) => a.name.compareTo(b.name));
+    return [
+      for (final profile in appDataService.adminStudentProfiles)
+        if (adminLocationController.includesLocation(profile.locationId))
+          profile,
+    ]..sort((a, b) => a.name.compareTo(b.name));
   }
 
   String? _targetingValidationMessage() {

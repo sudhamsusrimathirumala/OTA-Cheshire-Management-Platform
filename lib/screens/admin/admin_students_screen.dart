@@ -33,11 +33,23 @@ class _AdminStudentsScreenState extends State<AdminStudentsScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: appDataService,
+      animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, _) {
         final allStudents = _records(
-          appDataService.adminStudentProfiles,
-          appDataService.adminUserAccounts,
+          appDataService.adminStudentProfiles
+              .where(
+                (profile) => adminLocationController.includesLocation(
+                  profile.locationId,
+                ),
+              )
+              .toList(growable: false),
+          appDataService.adminUserAccounts
+              .where(
+                (account) => adminLocationController.includesLocation(
+                  account.locationId,
+                ),
+              )
+              .toList(growable: false),
         );
         final belts = {
           for (final student in allStudents) student.profile.belt,

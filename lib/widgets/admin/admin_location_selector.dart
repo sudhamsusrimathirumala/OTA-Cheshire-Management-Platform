@@ -4,6 +4,8 @@ import '../../services/app_data_service_provider.dart';
 
 String adminWriteLocationId() => adminLocationController.writeLocationId;
 
+const _allLocationsValue = '__all_locations__';
+
 class AdminLocationSelector extends StatelessWidget {
   const AdminLocationSelector({super.key});
 
@@ -23,15 +25,19 @@ class AdminLocationSelector extends StatelessWidget {
             key: ValueKey('admin-location-$selected-${locations.length}'),
             initialValue: locations.any((location) => location.id == selected)
                 ? selected
-                : null,
+                : _allLocationsValue,
             isExpanded: true,
             decoration: const InputDecoration(
-              labelText: 'Academy location for edits',
+              labelText: 'Academy location',
               helperText:
-                  'Choose an active location before creating academy content.',
+                  'All locations shows the overview. Select one to edit content.',
               border: OutlineInputBorder(),
             ),
             selectedItemBuilder: (context) => [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('All locations'),
+              ),
               for (final location in locations)
                 Align(
                   alignment: Alignment.centerLeft,
@@ -39,6 +45,10 @@ class AdminLocationSelector extends StatelessWidget {
                 ),
             ],
             items: [
+              const DropdownMenuItem(
+                value: _allLocationsValue,
+                child: Text('All locations'),
+              ),
               for (final location in locations)
                 DropdownMenuItem(
                   value: location.id,
@@ -57,9 +67,9 @@ class AdminLocationSelector extends StatelessWidget {
                   ),
                 ),
             ],
-            onChanged: locations.isEmpty
-                ? null
-                : adminLocationController.selectLocation,
+            onChanged: (value) => adminLocationController.selectLocation(
+              value == _allLocationsValue ? null : value,
+            ),
           ),
         );
       },

@@ -27,15 +27,13 @@ class _AdminScheduleScreenState extends State<AdminScheduleScreen> {
     return AnimatedBuilder(
       animation: Listenable.merge([appDataService, adminLocationController]),
       builder: (context, child) {
-        final selectedLocationId = adminLocationController.selectedLocationId;
         final sessions =
             appDataService
                 .scheduleForWeekday(_selectedWeekday)
                 .where(
-                  (session) =>
-                      !adminLocationController.isSuperAdmin ||
-                      selectedLocationId == null ||
-                      session.locationId == selectedLocationId,
+                  (session) => adminLocationController.includesLocation(
+                    session.locationId,
+                  ),
                 )
                 .toList()
               ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
@@ -741,7 +739,9 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
   List<String> get _classNames {
     final names = {
       for (final sessions in appDataService.schedule.values)
-        for (final session in sessions) session.className,
+        for (final session in sessions)
+          if (adminLocationController.includesLocation(session.locationId))
+            session.className,
     }.toList()..sort();
 
     return names;
@@ -758,6 +758,9 @@ class _BulkScheduleActionSheetState extends State<_BulkScheduleActionSheet> {
     ) {
       final sessions = appDataService.scheduleForWeekday(date.weekday);
       for (final session in sessions) {
+        if (!adminLocationController.includesLocation(session.locationId)) {
+          continue;
+        }
         final matchesClass =
             _action == _BulkScheduleAction.deleteAllClassesInRange ||
             session.className == _selectedClassName;

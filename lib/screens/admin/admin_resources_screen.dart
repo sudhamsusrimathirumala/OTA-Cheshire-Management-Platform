@@ -59,13 +59,7 @@ class _AdminGeneralResourcesScreenState
   List<AcademyResource> _filteredResources(List<AcademyResource> resources) {
     return resources.where((resource) {
       if (resource.resourceSection != 'general') return false;
-      if (!adminLocationController.isSuperAdmin &&
-          resource.locationId != _adminLocationId()) {
-        return false;
-      }
-      if (adminLocationController.isSuperAdmin &&
-          adminLocationController.selectedLocationId != null &&
-          resource.locationId != adminLocationController.selectedLocationId) {
+      if (!adminLocationController.includesLocation(resource.locationId)) {
         return false;
       }
       return switch (_selectedFilter) {
@@ -81,10 +75,6 @@ class _AdminGeneralResourcesScreenState
       }
       return a.title.compareTo(b.title);
     });
-  }
-
-  String _adminLocationId() {
-    return adminWriteLocationId();
   }
 
   @override
