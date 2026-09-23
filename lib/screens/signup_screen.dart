@@ -14,6 +14,7 @@ import '../widgets/ota_auth_switch_link.dart';
 import '../widgets/ota_auth_text_field.dart';
 import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
+import '../widgets/privacy_policy_link.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({
@@ -277,6 +278,12 @@ class _SignupScreenState extends State<SignupScreen> {
                     onTap: () => Navigator.of(
                       context,
                     ).pushReplacementNamed(OtaRoutes.login),
+                  ),
+                  const SizedBox(height: 8),
+                  const Center(
+                    child: PrivacyPolicyButton(
+                      foregroundColor: OtaColors.white,
+                    ),
                   ),
                 ],
               ),

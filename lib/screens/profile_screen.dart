@@ -17,6 +17,7 @@ import '../services/push_notification_service.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 import '../widgets/profile/profile_section.dart';
+import '../widgets/privacy_policy_link.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
@@ -407,9 +408,10 @@ class _SettingsActionsSection extends StatelessWidget {
           icon: Icons.notifications_rounded,
           label: 'Notification Preferences',
         ),
-        const ProfileActionRow(
-          icon: Icons.lock_rounded,
-          label: 'Privacy & Account',
+        ProfileActionRow(
+          icon: Icons.privacy_tip_outlined,
+          label: 'Privacy Policy',
+          onTap: () => openPrivacyPolicy(context),
         ),
         const ProfileActionRow(
           icon: Icons.help_rounded,

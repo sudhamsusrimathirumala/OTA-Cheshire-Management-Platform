@@ -10,6 +10,7 @@ import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_location_selector.dart';
 import '../../widgets/profile/profile_edit_sheets.dart';
 import '../../widgets/profile/profile_section.dart';
+import '../../widgets/privacy_policy_link.dart';
 
 class AdminProfileScreen extends StatelessWidget {
   const AdminProfileScreen({super.key});
@@ -170,6 +171,11 @@ class AdminProfileScreen extends StatelessWidget {
                       ProfileSection(
                         title: 'Actions',
                         children: [
+                          ProfileActionRow(
+                            icon: Icons.privacy_tip_outlined,
+                            label: 'Privacy Policy',
+                            onTap: () => openPrivacyPolicy(context),
+                          ),
                           ProfileActionRow(
                             icon: Icons.edit_rounded,
                             label: 'Edit Account',

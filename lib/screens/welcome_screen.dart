@@ -5,6 +5,7 @@ import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_branded_scaffold.dart';
 import '../widgets/ota_logo_mark.dart';
+import '../widgets/privacy_policy_link.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -74,6 +75,12 @@ class WelcomeScreen extends StatelessWidget {
                       onPressed: () {
                         Navigator.of(context).pushNamed(OtaRoutes.signup);
                       },
+                    ),
+                    const SizedBox(height: 10),
+                    const Center(
+                      child: PrivacyPolicyButton(
+                        foregroundColor: OtaColors.white,
+                      ),
                     ),
                   ],
                 ),

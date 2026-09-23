@@ -5,6 +5,7 @@ import '../services/debug_view_controller.dart';
 import '../services/firebase/account_deletion_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../theme/ota_colors.dart';
+import '../widgets/privacy_policy_link.dart';
 
 class AccountDeletionScreen extends StatefulWidget {
   const AccountDeletionScreen({
@@ -327,12 +328,25 @@ class _PrivilegedAccountRestriction extends StatelessWidget {
   const _PrivilegedAccountRestriction();
 
   @override
-  Widget build(BuildContext context) => const _MessageCard(
-    icon: Icons.admin_panel_settings_outlined,
-    title: 'Privileged account deletion is restricted',
-    message:
-        'Admin and Super Admin accounts cannot delete themselves here. '
-        'The account must be removed by another authorized administrator.',
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const _MessageCard(
+        icon: Icons.admin_panel_settings_outlined,
+        title: 'Privileged account deletion is restricted',
+        message:
+            'Admin and Super Admin accounts cannot delete themselves here. '
+            'Request deletion so another authorized administrator can verify '
+            'and complete it without weakening account protections.',
+      ),
+      const SizedBox(height: 18),
+      OutlinedButton.icon(
+        onPressed: () => openAccountDeletionRequest(context),
+        icon: const Icon(Icons.open_in_new_rounded),
+        label: const Text('Request account deletion online'),
+      ),
+      const PrivacyPolicyButton(),
+    ],
   );
 }
 

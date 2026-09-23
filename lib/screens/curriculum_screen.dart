@@ -51,6 +51,14 @@ String? youtubeVideoId(String? source) {
   return candidate != null && idPattern.hasMatch(candidate) ? candidate : null;
 }
 
+YoutubePlayerParams curriculumYoutubePlayerParams() =>
+    const YoutubePlayerParams(
+      showFullscreenButton: true,
+      privacyEnhancedMode: true,
+      strictRelatedVideos: true,
+      showVideoAnnotations: false,
+    );
+
 class CurriculumScreen extends StatefulWidget {
   const CurriculumScreen({
     this.isAdmin = false,
@@ -395,27 +403,61 @@ class _EmbeddedYoutubePlayer extends StatefulWidget {
 }
 
 class _EmbeddedYoutubePlayerState extends State<_EmbeddedYoutubePlayer> {
-  late final YoutubePlayerController _controller;
+  YoutubePlayerController? _controller;
+  bool _loadRequested = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _controller = YoutubePlayerController.fromVideoId(
+  void _loadVideo() {
+    if (_loadRequested) return;
+    final controller = YoutubePlayerController.fromVideoId(
       videoId: widget.videoId,
       autoPlay: false,
-      params: const YoutubePlayerParams(showFullscreenButton: true),
+      params: curriculumYoutubePlayerParams(),
     );
+    setState(() {
+      _controller = controller;
+      _loadRequested = true;
+    });
   }
 
   @override
   void dispose() {
-    _controller.close();
+    _controller?.close();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return YoutubePlayer(controller: _controller, aspectRatio: 16 / 9);
+    final controller = _controller;
+    if (controller != null) {
+      return YoutubePlayer(controller: controller, aspectRatio: 16 / 9);
+    }
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: ColoredBox(
+        color: Colors.black87,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FilledButton.icon(
+                  onPressed: _loadVideo,
+                  icon: const Icon(Icons.play_circle_outline_rounded),
+                  label: const Text('Load YouTube video'),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'YouTube may collect device and usage data when loaded.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
