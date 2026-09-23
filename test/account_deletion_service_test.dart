@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/account_deletion_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/web_authentication.dart';
 
 void main() {
   late List<String> events;
@@ -104,6 +105,26 @@ void main() {
       lessThan(events.indexOf('delete-private')),
     );
   });
+
+  test(
+    'Web Google deletion verification uses popup reauthentication',
+    () async {
+      final webAuthentication = _RecordingWebAuthentication();
+      final authentication = FirebaseAccountDeletionAuthentication(
+        _AppleAuthenticationService(),
+        webAuthentication: webAuthentication,
+        isWeb: true,
+      );
+      final user = _ProviderUser(GoogleAuthProvider.PROVIDER_ID);
+
+      await authentication.reauthenticate(
+        user,
+        AccountReauthenticationMethod.google,
+      );
+
+      expect(webAuthentication.reauthenticatedUser, same(user));
+    },
+  );
 
   test('Google cancellation changes nothing', () async {
     authentication.googleCancelled = true;
@@ -647,4 +668,17 @@ class _AppleAuthenticationService
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingWebAuthentication implements WebAuthentication {
+  User? reauthenticatedUser;
+
+  @override
+  Future<UserCredential> signInWithGoogle(FirebaseAuth auth) =>
+      throw UnimplementedError();
+
+  @override
+  Future<void> reauthenticateWithGoogle(User user) async {
+    reauthenticatedUser = user;
+  }
 }

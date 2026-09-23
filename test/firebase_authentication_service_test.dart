@@ -3,8 +3,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/web_authentication.dart';
 
 void main() {
+  test('Web Google provider always asks the user to select an account', () {
+    final provider = createGoogleWebAuthProvider();
+
+    expect(provider.providerId, GoogleAuthProvider.PROVIDER_ID);
+    expect(provider.parameters, {'prompt': 'select_account'});
+  });
+
+  test('Web Google sign-in uses the Firebase popup adapter', () async {
+    final auth = _FakeFirebaseAuth();
+    final webAuthentication = _RecordingWebAuthentication();
+    final service = FirebaseAuthenticationService(
+      auth: auth,
+      webAuthentication: webAuthentication,
+      isWeb: true,
+    );
+
+    final credential = await service.signInWithGoogle();
+
+    expect(credential, same(webAuthentication.credential));
+    expect(webAuthentication.signInAuth, same(auth));
+  });
+
+  test('Web Google popup cancellation remains distinct', () {
+    for (final code in [
+      'popup-closed-by-user',
+      'cancelled-popup-request',
+      'web-context-cancelled',
+    ]) {
+      final error = mapGoogleWebAuthException(
+        FirebaseAuthException(code: code),
+      );
+
+      expect(error.error, AuthenticationError.googleCancelled);
+      expect(error.message, 'Google Sign-In was cancelled.');
+    }
+  });
+
+  test('Web sign-out only clears the canonical Firebase session', () async {
+    final auth = _FakeFirebaseAuth();
+    final service = FirebaseAuthenticationService(auth: auth, isWeb: true);
+
+    await service.signOut();
+
+    expect(auth.signOutCalls, 1);
+  });
+
   test('Google configuration failures use a safe actionable reference', () {
     for (final code in [
       GoogleSignInExceptionCode.clientConfigurationError,
@@ -255,4 +302,29 @@ void main() {
       );
     }
   });
+}
+
+class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
+  int signOutCalls = 0;
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+  }
+}
+
+class _FakeUserCredential extends Fake implements UserCredential {}
+
+class _RecordingWebAuthentication implements WebAuthentication {
+  final credential = _FakeUserCredential();
+  FirebaseAuth? signInAuth;
+
+  @override
+  Future<UserCredential> signInWithGoogle(FirebaseAuth auth) async {
+    signInAuth = auth;
+    return credential;
+  }
+
+  @override
+  Future<void> reauthenticateWithGoogle(User user) async {}
 }
