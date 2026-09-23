@@ -224,6 +224,7 @@ All edits must remain narrowly scoped and documented for integration.
 
 ## Exact next action
 
-Run final `flutter analyze`, `git diff --check`, and `git status --short`; create
-a local checkpoint commit for the test-fixture and handoff updates; then deliver
-the final report. Do not push, merge, build, deploy, or change Play Console.
+Deliver the final report from the validated checkpoint. Before integration,
+review the documented shared-file conflict risks and apply this branch without
+overwriting the simultaneous task's changes. Do not push, merge, build, deploy,
+or change Play Console unless the user gives a new explicit instruction.
