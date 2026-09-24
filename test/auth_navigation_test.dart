@@ -53,7 +53,9 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'password1');
     await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+    await _enterEligibleSignupDate(tester);
 
+    await tester.ensureVisible(find.text('CREATE ACCOUNT'));
     await tester.tap(find.text('CREATE ACCOUNT'));
     await tester.pumpAndSettle();
 
@@ -127,6 +129,8 @@ void main() {
     ]) {
       final route = screen is LoginScreen ? OtaRoutes.login : OtaRoutes.signup;
       await tester.pumpWidget(app(route: route, screen: screen));
+      if (screen is SignupScreen) await _enterEligibleSignupDate(tester);
+      await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));
       await tester.tap(find.text('CONTINUE WITH GOOGLE'));
       await tester.pumpAndSettle();
       expect(find.text('AUTH GATE'), findsOneWidget);
@@ -143,6 +147,7 @@ void main() {
       final route = screen is LoginScreen ? OtaRoutes.login : OtaRoutes.signup;
       await tester.pumpWidget(app(route: route, screen: screen));
       expect(find.byType(SignInWithAppleButton), findsOneWidget);
+      if (screen is SignupScreen) await _enterEligibleSignupDate(tester);
       await tester.ensureVisible(find.text('Sign in with Apple'));
       await tester.tap(find.text('Sign in with Apple'));
       await tester.pumpAndSettle();
@@ -216,6 +221,7 @@ void main() {
         ),
       );
 
+      if (!isLogin) await _enterEligibleSignupDate(tester);
       await tester.ensureVisible(find.text('Sign in with Apple'));
       await tester.tap(find.text('Sign in with Apple'));
       await tester.pump();
@@ -308,6 +314,8 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'password1');
     await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+    await _enterEligibleSignupDate(tester);
+    await tester.ensureVisible(find.text('CREATE ACCOUNT'));
     await tester.tap(find.text('CREATE ACCOUNT'));
     await tester.pump();
     expect(find.text(expected), findsOneWidget);
@@ -367,7 +375,9 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'password1');
     await tester.enterText(find.byType(TextFormField).at(2), 'password1');
+    await _enterEligibleSignupDate(tester);
 
+    await tester.ensureVisible(find.text('CREATE ACCOUNT'));
     await tester.tap(find.text('CREATE ACCOUNT'));
     await tester.tap(find.text('CREATE ACCOUNT'));
     expect(calls, 1);
@@ -461,6 +471,11 @@ void main() {
     expect(account, isNull);
     expect(localIdentityWasRead, isFalse);
   });
+}
+
+Future<void> _enterEligibleSignupDate(WidgetTester tester) async {
+  await tester.enterText(find.byType(TextFormField).last, '01/01/2000');
+  await tester.pump();
 }
 
 class _TestUser implements User {

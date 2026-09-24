@@ -150,6 +150,143 @@ void main() {
     expect(find.text('No Belt content'), findsNothing);
   });
 
+  testWidgets('parent can load curriculum for linked 10-year-old', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      accountRole: UserAccountRole.parent,
+      selectedAge: 10,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return const Text('EMBEDDED PLAYER');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 1);
+    expect(find.text('EMBEDDED PLAYER'), findsOneWidget);
+  });
+
+  testWidgets('parent can load curriculum for linked 16-year-old', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      accountRole: UserAccountRole.parent,
+      selectedAge: 16,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return Text('EMBEDDED $videoId');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 1);
+    expect(find.text('EMBEDDED abcdefghijk'), findsOneWidget);
+  });
+
+  testWidgets('authenticated student age 16 can load curriculum', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      accountRole: UserAccountRole.student,
+      selectedAge: 16,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return Text('STUDENT EMBEDDED $videoId');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 1);
+    expect(find.text('STUDENT EMBEDDED abcdefghijk'), findsOneWidget);
+  });
+
+  for (final role in const [
+    UserAccountRole.admin,
+    UserAccountRole.superAdmin,
+  ]) {
+    testWidgets('${role.name} retains curriculum video review', (tester) async {
+      var videoBuilderCalls = 0;
+      final service = _CurriculumService(
+        accountRole: role,
+        throwOnSelectedStudent: true,
+        curriculumData: {'White': _videoRequirement('White')},
+        beltOrder: const ['White'],
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CurriculumScreen(
+            isAdmin: true,
+            dataService: service,
+            videoBuilder: (context, videoId) {
+              videoBuilderCalls++;
+              return Text('ADMIN EMBEDDED $videoId');
+            },
+          ),
+        ),
+      );
+
+      expect(videoBuilderCalls, 1);
+      expect(find.text('ADMIN EMBEDDED abcdefghijk'), findsOneWidget);
+    });
+  }
+
+  testWidgets('Guest Reviewer does not construct a YouTube player', (
+    tester,
+  ) async {
+    var videoBuilderCalls = 0;
+    final service = _CurriculumService(
+      accountRole: UserAccountRole.guest,
+      curriculumData: {'White': _videoRequirement('White')},
+      beltOrder: const ['White'],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CurriculumScreen(
+          dataService: service,
+          videoBuilder: (context, videoId) {
+            videoBuilderCalls++;
+            return const Text('EMBEDDED PLAYER');
+          },
+        ),
+      ),
+    );
+
+    expect(videoBuilderCalls, 0);
+    expect(
+      find.textContaining('unavailable in the Guest Reviewer demo'),
+      findsOneWidget,
+    );
+    expect(find.text('EMBEDDED PLAYER'), findsNothing);
+  });
+
   testWidgets('empty admin curriculum fails safely', (tester) async {
     final service = _CurriculumService(
       throwOnSelectedStudent: true,
@@ -169,6 +306,8 @@ class _CurriculumService extends MockAppDataService {
   _CurriculumService({
     this.throwOnSelectedStudent = false,
     this.selectedBelt = 'White',
+    this.selectedAge = 12,
+    this.accountRole = UserAccountRole.student,
     Map<String, CurriculumRequirement>? curriculumData,
     this.beltOrder = const ['No Belt', 'White', 'Blue'],
   }) : curriculumData =
@@ -181,11 +320,26 @@ class _CurriculumService extends MockAppDataService {
 
   final bool throwOnSelectedStudent;
   final String selectedBelt;
+  final int selectedAge;
+  final UserAccountRole accountRole;
   final Map<String, CurriculumRequirement> curriculumData;
   final List<String> beltOrder;
 
   @override
   List<String> get curriculumBeltOrder => beltOrder;
+
+  @override
+  UserAccount get currentUserAccount => UserAccount(
+    id: 'account',
+    firstName: 'Authenticated',
+    lastName: 'User',
+    email: 'user@example.com',
+    role: accountRole,
+    locationId: 'ota-cheshire',
+    isActive: true,
+    linkedStudentProfileIds: const ['student'],
+    selectedStudentProfileId: 'student',
+  );
 
   @override
   Map<String, CurriculumRequirement> get curriculum => curriculumData;
@@ -200,7 +354,7 @@ class _CurriculumService extends MockAppDataService {
       name: 'Student',
       locationId: 'ota-cheshire',
       belt: selectedBelt,
-      legacyAge: 12,
+      dateOfBirth: DateTime(DateTime.now().year - selectedAge, 1, 1),
       stickerCount: 0,
       stickersRequired: 0,
       nextRank: 'Black',
@@ -220,6 +374,27 @@ CurriculumRequirement _requirement(String belt) => CurriculumRequirement(
       id: 'section-$belt',
       title: '$belt content',
       sortOrder: 1,
+    ),
+  ],
+);
+
+CurriculumRequirement _videoRequirement(String belt) => CurriculumRequirement(
+  locationId: 'ota-cheshire',
+  belt: belt,
+  sections: [
+    CurriculumSection(
+      id: 'section-$belt',
+      title: '$belt content',
+      sortOrder: 1,
+      items: const [
+        CurriculumItem(
+          id: 'video',
+          title: 'Training video',
+          contentType: CurriculumContentType.video,
+          sortOrder: 1,
+          videoUrl: 'abcdefghijk',
+        ),
+      ],
     ),
   ],
 );

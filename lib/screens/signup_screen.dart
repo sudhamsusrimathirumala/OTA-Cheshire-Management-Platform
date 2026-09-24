@@ -8,6 +8,7 @@ import '../services/firebase/firebase_authentication_service.dart';
 import '../services/firebase/apple_authentication.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/debug_view_controller.dart';
+import '../services/registration_eligibility.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_action_button.dart';
 import '../widgets/ota_auth_switch_link.dart';
@@ -41,6 +42,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmation = TextEditingController();
+  final _dateOfBirth = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
   bool _emailAccountCreated = false;
@@ -51,6 +53,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _email.dispose();
     _password.dispose();
     _confirmation.dispose();
+    _dateOfBirth.dispose();
     super.dispose();
   }
 
@@ -116,6 +119,11 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Future<void> _run(Future<Object?> Function() action) async {
     if (_loading) return;
+    final eligibilityError = registrationDateOfBirthError(_dateOfBirth.text);
+    if (eligibilityError != null) {
+      setState(() => _error = eligibilityError);
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -216,6 +224,22 @@ class _SignupScreenState extends State<SignupScreen> {
                         ? null
                         : 'Passwords do not match.',
                   ),
+                  const SizedBox(height: 14),
+                  OtaAuthTextField(
+                    label: 'Date of birth (MM/DD/YYYY)',
+                    controller: _dateOfBirth,
+                    keyboardType: TextInputType.datetime,
+                    textInputAction: TextInputAction.done,
+                    validator: registrationDateOfBirthError,
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Students must be 16 or older to create an account. '
+                    'A parent or guardian can add younger students to a '
+                    'parent-managed account.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: OtaColors.white, fontSize: 12),
+                  ),
                   const SizedBox(height: 20),
                   if (_error != null)
                     Semantics(
@@ -243,8 +267,8 @@ class _SignupScreenState extends State<SignupScreen> {
                         : () => _run(
                             () =>
                                 widget.googleSignIn?.call() ??
-                                firebaseSessionController.authentication
-                                    .signInWithGoogle(),
+                                _registrationAuthentication()
+                                    .registerWithGoogle(),
                           ),
                   ),
                   if (widget.appleSupported ?? appleSignInSupported) ...[
@@ -255,16 +279,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           : () => _run(() {
                               final injected = widget.appleSignIn;
                               if (injected != null) return injected();
-                              final service = firebaseSessionController
-                                  .authentication
-                                  .appleAuthentication;
-                              if (service == null) {
-                                throw const AuthenticationException(
-                                  AuthenticationError.unknownFailure,
-                                  'Sign in with Apple is unavailable on this device.',
-                                );
-                              }
-                              return service.signInWithApple();
+                              final service = _registrationAuthentication();
+                              return service.registerWithApple();
                             }),
                       height: 58,
                       style: SignInWithAppleButtonStyle.whiteOutlined,
@@ -293,6 +309,18 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
     );
   }
+}
+
+RegistrationAuthenticationService _registrationAuthentication() {
+  final service =
+      firebaseSessionController.authentication.registrationAuthentication;
+  if (service == null) {
+    throw const AuthenticationException(
+      AuthenticationError.unknownFailure,
+      'Account creation is unavailable on this device.',
+    );
+  }
+  return service;
 }
 
 class _SignupSessionTransitionException implements Exception {

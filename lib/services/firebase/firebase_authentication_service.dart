@@ -18,6 +18,7 @@ enum AuthenticationError {
   googleCancelled,
   appleCancelled,
   providerConflict,
+  registrationRequired,
   unknownFailure,
 }
 
@@ -59,6 +60,11 @@ abstract interface class AuthenticationClaimsService {
   Future<Map<String, Object?>> currentUserClaims();
 }
 
+abstract interface class RegistrationAuthenticationService {
+  Future<UserCredential> registerWithGoogle();
+  Future<UserCredential> registerWithApple();
+}
+
 extension AuthenticationClaimsServiceAccess on AuthenticationService {
   AuthenticationClaimsService? get authenticationClaims =>
       this is AuthenticationClaimsService
@@ -73,11 +79,19 @@ extension AppleAuthenticationServiceAccess on AuthenticationService {
       : null;
 }
 
+extension RegistrationAuthenticationServiceAccess on AuthenticationService {
+  RegistrationAuthenticationService? get registrationAuthentication =>
+      this is RegistrationAuthenticationService
+      ? this as RegistrationAuthenticationService
+      : null;
+}
+
 class FirebaseAuthenticationService
     implements
         AuthenticationService,
         AppleAuthenticationService,
-        AuthenticationClaimsService {
+        AuthenticationClaimsService,
+        RegistrationAuthenticationService {
   FirebaseAuthenticationService({
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
@@ -133,7 +147,16 @@ class FirebaseAuthenticationService
   }
 
   @override
-  Future<UserCredential> signInWithGoogle() async {
+  Future<UserCredential> signInWithGoogle() =>
+      _signInWithGoogle(allowAccountCreation: false);
+
+  @override
+  Future<UserCredential> registerWithGoogle() =>
+      _signInWithGoogle(allowAccountCreation: true);
+
+  Future<UserCredential> _signInWithGoogle({
+    required bool allowAccountCreation,
+  }) async {
     try {
       _googleInitialization ??= _googleSignIn.initialize();
       await _googleInitialization;
@@ -145,9 +168,19 @@ class FirebaseAuthenticationService
           'Google Sign-In could not verify this account.',
         );
       }
-      return await _auth.signInWithCredential(
+      final result = await _auth.signInWithCredential(
         GoogleAuthProvider.credential(idToken: idToken),
       );
+      if (shouldRejectNewProviderIdentity(
+        isNewUser: result.additionalUserInfo?.isNewUser == true,
+        allowAccountCreation: allowAccountCreation,
+      )) {
+        await _rejectUnexpectedProviderRegistration(
+          result,
+          providerCleanup: _googleSignIn.signOut,
+        );
+      }
+      return result;
     } on GoogleSignInException catch (error) {
       throw mapGoogleSignInException(error);
     } on FirebaseAuthException catch (error) {
@@ -163,10 +196,29 @@ class FirebaseAuthenticationService
   }
 
   @override
-  Future<UserCredential> signInWithApple() async {
+  Future<UserCredential> signInWithApple() =>
+      _signInWithApple(allowAccountCreation: false);
+
+  @override
+  Future<UserCredential> registerWithApple() =>
+      _signInWithApple(allowAccountCreation: true);
+
+  Future<UserCredential> _signInWithApple({
+    required bool allowAccountCreation,
+  }) async {
     try {
       final request = await _appleAuthentication.createRequest();
-      return await _auth.signInWithCredential(request.credential);
+      final result = await _auth.signInWithCredential(request.credential);
+      if (shouldRejectNewProviderIdentity(
+        isNewUser: result.additionalUserInfo?.isNewUser == true,
+        allowAccountCreation: allowAccountCreation,
+      )) {
+        await _rejectUnexpectedProviderRegistration(
+          result,
+          revokeAppleAuthorizationCode: request.authorizationCode,
+        );
+      }
+      return result;
     } on AppleAuthorizationCancelled {
       throw const AuthenticationException(
         AuthenticationError.appleCancelled,
@@ -180,6 +232,40 @@ class FirebaseAuthenticationService
         'Sign in with Apple could not be completed.',
       );
     }
+  }
+
+  Future<Never> _rejectUnexpectedProviderRegistration(
+    UserCredential credential, {
+    Future<void> Function()? providerCleanup,
+    String? revokeAppleAuthorizationCode,
+  }) async {
+    try {
+      if (revokeAppleAuthorizationCode != null) {
+        await _auth.revokeTokenWithAuthorizationCode(
+          revokeAppleAuthorizationCode,
+        );
+      }
+      await credential.user?.delete();
+    } catch (_) {
+      // Firestore still rejects under-age onboarding. Always end this session,
+      // even if provider cleanup cannot remove a just-created Auth record.
+    } finally {
+      try {
+        await _auth.signOut();
+      } catch (_) {
+        // The new Auth user may already have been deleted.
+      }
+      try {
+        await providerCleanup?.call();
+      } catch (_) {
+        // Provider-session cleanup is best effort after Firebase sign-out.
+      }
+    }
+    throw const AuthenticationException(
+      AuthenticationError.registrationRequired,
+      'This provider account is not registered. Use Create Account to '
+      'complete the age check before signing in.',
+    );
   }
 
   @override
@@ -229,6 +315,11 @@ class FirebaseAuthenticationService
     }
   }
 }
+
+bool shouldRejectNewProviderIdentity({
+  required bool isNewUser,
+  required bool allowAccountCreation,
+}) => isNewUser && !allowAccountCreation;
 
 AuthenticationException mapGoogleSignInException(GoogleSignInException error) {
   final diagnosticCode =

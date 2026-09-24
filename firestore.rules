@@ -317,6 +317,30 @@ service cloud.firestore {
                   uid, getAfter(profilePath(data.parentSelfProfileId)).data)));
     }
 
+    function atLeastAge(dateOfBirth, minimumAge) {
+      return dateOfBirth is timestamp &&
+          dateOfBirth.date() <= timestamp.date(
+            request.time.year() - minimumAge,
+            request.time.month(),
+            request.time.day()
+          );
+    }
+
+    function validIndependentApplicantAge(data) {
+      return data.role == 'student'
+          ? atLeastAge(
+              getAfter(profilePath(data.selectedStudentProfileId))
+                .data.dateOfBirth,
+              16)
+          : (data.parentSelfProfileId != ''
+              ? atLeastAge(
+                  getAfter(profilePath(data.parentSelfProfileId))
+                    .data.dateOfBirth,
+                  18)
+              : data.keys().hasAny(['studentProfileDefaults']) &&
+                atLeastAge(data.studentProfileDefaults.dateOfBirth, 18));
+    }
+
     function validInitialUser(uid, data) {
       return data.keys().hasOnly([
             'firstName', 'lastName', 'email', 'role', 'isActive',
@@ -347,6 +371,7 @@ service cloud.firestore {
              validStudentProfileDefaults(data.studentProfileDefaults))) &&
           data.createdAt == request.time && data.updatedAt == request.time &&
           validParentSelfMarker(uid, data) &&
+          validIndependentApplicantAge(data) &&
           initialSelectedProfileValid(uid, data);
     }
 

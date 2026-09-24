@@ -3091,6 +3091,7 @@ class _CurriculumTestService extends MockAppDataService {
     name: 'Student',
     locationId: 'ota-cheshire',
     belt: selectedBelt,
+    dateOfBirth: DateTime.utc(2000, 1, 1),
     stickerCount: 0,
     stickersRequired: 0,
     nextRank: 'White',

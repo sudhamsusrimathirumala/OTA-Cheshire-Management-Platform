@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 import '../models/curriculum_requirement.dart';
+import '../models/user_account.dart';
 import '../routes.dart';
 import '../services/app_data_service.dart';
 import '../services/app_data_service_provider.dart';
@@ -59,6 +60,15 @@ YoutubePlayerParams curriculumYoutubePlayerParams() =>
       showVideoAnnotations: false,
     );
 
+bool curriculumVideoAvailableForAuthenticatedRole(UserAccountRole role) =>
+    switch (role) {
+      UserAccountRole.student ||
+      UserAccountRole.parent ||
+      UserAccountRole.admin ||
+      UserAccountRole.superAdmin => true,
+      UserAccountRole.guest => false,
+    };
+
 class CurriculumScreen extends StatefulWidget {
   const CurriculumScreen({
     this.isAdmin = false,
@@ -110,6 +120,11 @@ class _CurriculumScreenState extends State<CurriculumScreen> {
       selectedBelt: selectedBelt,
       beltDisplayLabel: _service.beltDisplayLabel,
       videoBuilder: widget.videoBuilder,
+      allowEmbeddedVideo:
+          widget.isAdmin ||
+          curriculumVideoAvailableForAuthenticatedRole(
+            _service.currentUserAccount.role,
+          ),
       backLabel: widget.isAdmin ? 'Back to Events & Resources' : null,
       onBeltChanged: (belt) {
         if (belt != null && _service.curriculum.containsKey(belt)) {
@@ -169,6 +184,7 @@ class _CurriculumContent extends StatelessWidget {
     required this.selectedBelt,
     required this.beltDisplayLabel,
     required this.onBeltChanged,
+    required this.allowEmbeddedVideo,
     this.videoBuilder,
     this.onBack,
     this.backLabel,
@@ -180,6 +196,7 @@ class _CurriculumContent extends StatelessWidget {
   final String Function(String) beltDisplayLabel;
   final ValueChanged<String?> onBeltChanged;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
   final VoidCallback? onBack;
   final String? backLabel;
 
@@ -205,6 +222,7 @@ class _CurriculumContent extends StatelessWidget {
             CurriculumSectionCard(
               section: sections[index],
               videoBuilder: videoBuilder,
+              allowEmbeddedVideo: allowEmbeddedVideo,
             ),
             if (index != sections.length - 1) const SizedBox(height: 14),
           ],
@@ -297,11 +315,13 @@ class CurriculumSectionCard extends StatelessWidget {
   const CurriculumSectionCard({
     required this.section,
     this.videoBuilder,
+    this.allowEmbeddedVideo = true,
     super.key,
   });
 
   final CurriculumSection section;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -325,6 +345,7 @@ class CurriculumSectionCard extends StatelessWidget {
               _CurriculumItemView(
                 item: items[index],
                 videoBuilder: videoBuilder,
+                allowEmbeddedVideo: allowEmbeddedVideo,
               ),
               if (index != items.length - 1) const SizedBox(height: 10),
             ],
@@ -335,10 +356,15 @@ class CurriculumSectionCard extends StatelessWidget {
 }
 
 class _CurriculumItemView extends StatelessWidget {
-  const _CurriculumItemView({required this.item, this.videoBuilder});
+  const _CurriculumItemView({
+    required this.item,
+    required this.allowEmbeddedVideo,
+    this.videoBuilder,
+  });
 
   final CurriculumItem item;
   final CurriculumVideoBuilder? videoBuilder;
+  final bool allowEmbeddedVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -376,6 +402,8 @@ class _CurriculumItemView extends StatelessWidget {
             const SizedBox(height: 10),
             if (videoId == null)
               const _VideoUnavailable()
+            else if (!allowEmbeddedVideo)
+              const _GuestReviewerYoutubeFallback()
             else
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
@@ -391,6 +419,36 @@ class _CurriculumItemView extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GuestReviewerYoutubeFallback extends StatelessWidget {
+  const _GuestReviewerYoutubeFallback();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: OtaColors.white.withValues(alpha: 0.78),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      children: [
+        const Icon(Icons.visibility_outlined, color: OtaColors.navy),
+        const SizedBox(height: 8),
+        const Text(
+          'YouTube playback is unavailable in the Guest Reviewer demo.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Sign in with an eligible OTA account to load curriculum videos.',
+          textAlign: TextAlign.center,
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmbeddedYoutubePlayer extends StatefulWidget {

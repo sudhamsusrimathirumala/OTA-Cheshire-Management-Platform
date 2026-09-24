@@ -207,6 +207,53 @@ void main() {
     );
   });
 
+  test('parent account holder must be an adult', () {
+    expect(
+      applicantAgeError(
+        DateTime(2009, 7, 15),
+        ProfileAccountRole.parent,
+        today: DateTime(2026, 7, 15),
+      ),
+      'A parent or guardian account holder must be at least 18.',
+    );
+    expect(
+      applicantAgeError(
+        DateTime(2008, 7, 15),
+        ProfileAccountRole.parent,
+        today: DateTime(2026, 7, 15),
+      ),
+      isNull,
+    );
+    expect(
+      () => build(
+        ProfileCreationRequest(
+          firstName: 'Teen',
+          lastName: 'Parent',
+          dateOfBirth: DateTime(2009, 7, 15),
+          applicantBeltRank: 'White',
+          role: ProfileAccountRole.parent,
+          locationId: 'cheshire',
+          additionalStudents: [
+            StudentProfileInput(
+              firstName: 'Child',
+              lastName: 'Student',
+              dateOfBirth: DateTime(2018, 1, 1),
+              beltRank: 'White',
+            ),
+          ],
+        ),
+        ids: const ['child-profile'],
+      ),
+      throwsA(
+        isA<ProfileServiceException>().having(
+          (error) => error.error,
+          'error',
+          ProfileServiceError.invalidAge,
+        ),
+      ),
+    );
+  });
+
   test('Firestore failures map to safe profile messages', () {
     final error = mapProfileFirebaseException(
       FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),

@@ -71,6 +71,7 @@ async function seedAccount({
   selectedProfileId = profileIds[0],
   profileActive = true,
   profileLocationId = locationId,
+  profileDateOfBirth = new Date('2010-01-02T00:00:00Z'),
   selfManaged = role === 'student',
 }) {
   await env.withSecurityRulesDisabled(async (context) => {
@@ -88,7 +89,7 @@ async function seedAccount({
     for (const profileId of profileIds) {
       await setDoc(doc(db, 'studentProfiles', profileId), {
         firstName: 'Student', lastName: profileId,
-        dateOfBirth: new Date('2010-01-02T00:00:00Z'), beltRank: 'White',
+        dateOfBirth: profileDateOfBirth, beltRank: 'White',
         locationId: profileLocationId,
         ...(selfManaged ? {linkedUserId: uid} : {guardianEmail: `${uid}@example.com`}),
         guardianUserIds: selfManaged ? [] : [uid], preferredClassGroupIds: [],
@@ -305,6 +306,87 @@ test('student atomically creates active records at one location', async () => {
   assert.equal(user.isActive, true);
   assert.equal(profile.locationId, 'cheshire');
   assert.equal(profile.isActive, true);
+});
+
+test('independent registration rejects an under-16 student bypass', async () => {
+  const now = new Date();
+  const under16 = new Date(Date.UTC(
+    now.getUTCFullYear() - 15,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('underage-student');
+  await assertFails(createProfiles(db, {
+    uid: 'underage-student',
+    email: 'underage-student@example.com',
+    profileIds: ['underage-profile'],
+    applicantDateOfBirth: under16,
+  }));
+});
+
+test('independent registration accepts a student aged exactly 16', async () => {
+  const now = new Date();
+  const exactly16 = new Date(Date.UTC(
+    now.getUTCFullYear() - 16,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('sixteen-student');
+  await assertSucceeds(createProfiles(db, {
+    uid: 'sixteen-student',
+    email: 'sixteen-student@example.com',
+    profileIds: ['sixteen-profile'],
+    applicantDateOfBirth: exactly16,
+  }));
+});
+
+test('adult parent registration permits an under-16 managed child', async () => {
+  const db = auth('adult-parent');
+  await assertSucceeds(createProfiles(db, {
+    uid: 'adult-parent',
+    email: 'adult-parent@example.com',
+    role: 'parent',
+    profileIds: ['managed-child'],
+    applicantDateOfBirth: new Date('1990-01-02T00:00:00Z'),
+  }));
+  const child = (await getDoc(
+    doc(db, 'studentProfiles', 'managed-child'),
+  )).data();
+  assert.equal(child.dateOfBirth.toDate().getUTCFullYear(), 2015);
+});
+
+test('under-18 applicant cannot bypass the adult gate by choosing parent', async () => {
+  const now = new Date();
+  const under18 = new Date(Date.UTC(
+    now.getUTCFullYear() - 17,
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  const db = auth('underage-parent');
+  await assertFails(createProfiles(db, {
+    uid: 'underage-parent',
+    email: 'underage-parent@example.com',
+    role: 'parent',
+    profileIds: ['managed-child'],
+    applicantDateOfBirth: under18,
+  }));
+});
+
+test('location admin may update an under-16 student training record', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  await seedAccount({
+    uid: 'younger-student-parent',
+    profileDateOfBirth: new Date('2018-01-02T00:00:00Z'),
+  });
+  const db = auth('admin');
+  await assertSucceeds(updateDoc(
+    doc(db, 'studentProfiles', 'younger-student-parent-profile'),
+    {
+      beltRank: 'Yellow',
+      stickerProgress: {current: 0, required: 0, nextRank: 'Yellow-Green'},
+      updatedAt: serverTimestamp(),
+    },
+  ));
 });
 
 test('self-managed student may omit guardian email without creating access', async () => {
