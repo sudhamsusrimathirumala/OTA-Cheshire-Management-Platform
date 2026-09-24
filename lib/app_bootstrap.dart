@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -13,7 +13,10 @@ import 'services/location_time_service.dart';
 import 'services/push_navigation_coordinator.dart';
 import 'services/push_notification_service.dart';
 import 'services/push_runtime.dart';
+import 'services/startup_crash_reporter_stub.dart'
+    if (dart.library.io) 'services/startup_crash_reporter_native.dart';
 import 'services/startup_diagnostics.dart';
+import 'services/startup_failure.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -22,8 +25,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> bootstrapApplication({
   required AppEnvironment environment,
-  required FirebaseOptions firebaseOptions,
+  FirebaseOptions? firebaseOptions,
+  FirebaseOptions Function()? firebaseOptionsProvider,
 }) async {
+  assert(
+    (firebaseOptions == null) != (firebaseOptionsProvider == null),
+    'Provide exactly one Firebase options source.',
+  );
   startupDiagnostics.checkpoint('dart_bootstrap_entered');
   WidgetsFlutterBinding.ensureInitialized();
   startupDiagnostics.installUncaughtErrorHandlers();
@@ -39,6 +47,7 @@ Future<void> bootstrapApplication({
         _initializeApplication(
           environment: environment,
           firebaseOptions: firebaseOptions,
+          firebaseOptionsProvider: firebaseOptionsProvider,
           reportStep: reportStep,
         ).catchError((Object error, StackTrace stack) {
           if (identical(initialization, started)) initialization = null;
@@ -61,7 +70,8 @@ Future<void> bootstrapApplication({
 
 Future<void> _initializeApplication({
   required AppEnvironment environment,
-  required FirebaseOptions firebaseOptions,
+  required FirebaseOptions? firebaseOptions,
+  required FirebaseOptions Function()? firebaseOptionsProvider,
   required ValueChanged<ApplicationStartupStep> reportStep,
 }) async {
   reportStep(ApplicationStartupStep.environment);
@@ -69,16 +79,23 @@ Future<void> _initializeApplication({
   LocationTimeService.initialize();
   reportStep(ApplicationStartupStep.firebase);
   startupDiagnostics.checkpoint('firebase_initialize_start');
+  final resolvedFirebaseOptions =
+      firebaseOptions ?? firebaseOptionsProvider!.call();
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: firebaseOptions);
+    await Firebase.initializeApp(options: resolvedFirebaseOptions);
   }
   startupDiagnostics.checkpoint('firebase_initialize_complete');
-  unawaited(
-    startupDiagnostics.attachCrashReporter(
-      reporter: FirebaseStartupCrashReporter(FirebaseCrashlytics.instance),
-      environment: environment,
-    ),
-  );
+  final crashReporter = createStartupCrashReporter();
+  if (crashReporter != null) {
+    unawaited(
+      startupDiagnostics.attachCrashReporter(
+        reporter: crashReporter,
+        environment: environment,
+      ),
+    );
+  } else {
+    startupDiagnostics.checkpoint('crash_reporting_unavailable');
+  }
   unawaited(
     startupDiagnostics.recordDevelopmentNonfatalVerification(
       environment: environment,
@@ -88,25 +105,38 @@ Future<void> _initializeApplication({
       ),
     ),
   );
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  final pushService = PushNotificationService();
-  pushNotificationService = pushService;
-  pushNavigationCoordinator = PushNavigationCoordinator(
-    navigatorKey: otaNavigatorKey,
-    service: pushService,
-  );
+  PushNotificationService? pushService;
+  if (shouldInitializePushNotifications(isWeb: kIsWeb)) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    pushService = PushNotificationService();
+    pushNotificationService = pushService;
+    pushNavigationCoordinator = PushNavigationCoordinator(
+      navigatorKey: otaNavigatorKey,
+      service: pushService,
+    );
+  } else {
+    pushNotificationService = null;
+    pushNavigationCoordinator = null;
+    startupDiagnostics.checkpoint('web_push_deferred');
+  }
   reportStep(ApplicationStartupStep.session);
-  firebaseSessionController.signOutCleanup = pushService.unregisterForSignOut;
+  firebaseSessionController.signOutCleanup = pushService?.unregisterForSignOut;
   firebaseSessionController.start();
   initializeFirebaseAppDataService();
   startupDiagnostics.checkpoint('session_initialize_complete');
-  unawaited(
-    _initializeNotifications(
-      coordinator: pushNavigationCoordinator!,
-      reportStep: reportStep,
-    ),
-  );
+  final coordinator = pushNavigationCoordinator;
+  if (coordinator != null) {
+    unawaited(
+      _initializeNotifications(
+        coordinator: coordinator,
+        reportStep: reportStep,
+      ),
+    );
+  }
 }
+
+@visibleForTesting
+bool shouldInitializePushNotifications({required bool isWeb}) => !isWeb;
 
 Future<void> _initializeNotifications({
   required PushNavigationCoordinator coordinator,
@@ -169,6 +199,7 @@ class ApplicationStartupGate extends StatefulWidget {
 class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
   ApplicationStartupStep _step = ApplicationStartupStep.preparing;
   String? _failureCode;
+  String? _failureMessage;
   bool _ready = false;
   bool _initializing = false;
 
@@ -183,6 +214,7 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
     setState(() {
       _initializing = true;
       _failureCode = null;
+      _failureMessage = null;
     });
     try {
       await widget.initialize(_reportStep).timeout(widget.timeout);
@@ -195,6 +227,8 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
       _fail('timeout');
     } on FirebaseException catch (error) {
       _fail(_safeCode(error.code));
+    } on ApplicationStartupFailure catch (error) {
+      _fail(_safeCode(error.code), message: error.userMessage);
     } catch (_) {
       _fail('startup-failed');
     }
@@ -206,11 +240,12 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
     setState(() => _step = step);
   }
 
-  void _fail(String code) {
+  void _fail(String code, {String? message}) {
     unawaited(widget.onFailure?.call(step: _step, code: code));
     if (!mounted) return;
     setState(() {
       _failureCode = code;
+      _failureMessage = message;
       _initializing = false;
     });
   }
@@ -246,9 +281,10 @@ class _ApplicationStartupGateState extends State<ApplicationStartupGate> {
                           ),
                         ),
                         const SizedBox(height: 10),
-                        const Text(
-                          'Check your connection and try again. If this '
-                          'continues, contact the academy.',
+                        Text(
+                          _failureMessage ??
+                              'Check your connection and try again. If this '
+                                  'continues, contact the academy.',
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 18),

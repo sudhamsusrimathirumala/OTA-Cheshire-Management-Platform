@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 
 import '../app_environment.dart';
@@ -19,27 +18,6 @@ abstract interface class StartupCrashReporter {
   });
 }
 
-class FirebaseStartupCrashReporter implements StartupCrashReporter {
-  FirebaseStartupCrashReporter(this._crashlytics);
-
-  final FirebaseCrashlytics _crashlytics;
-
-  @override
-  Future<void> log(String message) => _crashlytics.log(message);
-
-  @override
-  Future<void> setCustomKey(String key, Object value) =>
-      _crashlytics.setCustomKey(key, value);
-
-  @override
-  Future<void> recordError(
-    Object error,
-    StackTrace stack, {
-    required bool fatal,
-    String? reason,
-  }) => _crashlytics.recordError(error, stack, fatal: fatal, reason: reason);
-}
-
 class StartupDiagnostics {
   StartupDiagnostics([this._reporter]);
 
@@ -48,6 +26,9 @@ class StartupDiagnostics {
 
   StartupCrashReporter? _reporter;
   final List<String> _bufferedCheckpoints = <String>[];
+
+  @visibleForTesting
+  bool get hasReporter => _reporter != null;
 
   void checkpoint(String name) {
     final safeName = _safeDiagnosticValue(name);
@@ -67,14 +48,14 @@ class StartupDiagnostics {
     required StartupCrashReporter reporter,
     required AppEnvironment environment,
   }) async {
-    _reporter = reporter;
     try {
       await reporter.setCustomKey('app_environment', environment.name);
       for (final checkpoint in _bufferedCheckpoints) {
         await reporter.log('startup:$checkpoint');
       }
-      _bufferedCheckpoints.clear();
       await reporter.log('startup:crashlytics_ready');
+      _bufferedCheckpoints.clear();
+      _reporter = reporter;
     } catch (_) {
       developer.log('crashlytics_attach_failed', name: _logName);
     }

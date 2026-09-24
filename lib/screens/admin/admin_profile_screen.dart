@@ -63,14 +63,18 @@ class AdminProfileScreen extends StatelessWidget {
                             icon: const Icon(Icons.arrow_back_rounded),
                             tooltip: 'Back',
                           ),
-                          const Spacer(),
-                          Text(
-                            'Admin Profile',
-                            style: Theme.of(context).textTheme.titleLarge
-                                ?.copyWith(
-                                  color: OtaColors.ink,
-                                  fontWeight: FontWeight.w800,
-                                ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Admin Profile',
+                              maxLines: 2,
+                              textAlign: TextAlign.right,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    color: OtaColors.ink,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
                           ),
                         ],
                       ),

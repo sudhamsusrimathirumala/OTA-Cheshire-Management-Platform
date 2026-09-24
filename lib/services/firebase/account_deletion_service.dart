@@ -2,12 +2,14 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../models/user_account.dart';
 import '../firestore/firestore_collections.dart';
-import 'firebase_authentication_service.dart';
 import 'apple_authentication.dart';
+import 'firebase_authentication_service.dart';
+import 'web_authentication.dart';
 
 enum AccountReauthenticationMethod { password, google, apple }
 
@@ -217,12 +219,19 @@ class FirebaseAccountDeletionAuthentication
     this._authentication, {
     GoogleSignIn? googleSignIn,
     bool? appleSupported,
+    WebAuthentication? webAuthentication,
+    bool? isWeb,
   }) : _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
-       _appleSupported = appleSupported ?? appleSignInSupported;
+       _appleSupported = appleSupported ?? appleSignInSupported,
+       _webAuthentication =
+           webAuthentication ?? const FirebaseWebAuthentication(),
+       _isWeb = isWeb ?? kIsWeb;
 
   final AuthenticationService _authentication;
   final GoogleSignIn _googleSignIn;
   final bool _appleSupported;
+  final WebAuthentication _webAuthentication;
+  final bool _isWeb;
   Future<void>? _googleInitialization;
 
   @override
@@ -284,6 +293,10 @@ class FirebaseAccountDeletionAuthentication
     User user,
   ) async {
     try {
+      if (_isWeb) {
+        await _webAuthentication.reauthenticateWithGoogle(user);
+        return null;
+      }
       _googleInitialization ??= _googleSignIn.initialize();
       await _googleInitialization;
       final googleUser = await _googleSignIn.authenticate();
@@ -567,6 +580,12 @@ AccountDeletionException _mapDeletionAuthException(
   bool passwordAttempt = false,
 }) {
   return switch (error.code) {
+    'popup-closed-by-user' ||
+    'cancelled-popup-request' ||
+    'web-context-cancelled' => const AccountDeletionException(
+      AccountDeletionError.cancelled,
+      'Google verification was cancelled. Nothing was deleted.',
+    ),
     'wrong-password' ||
     'invalid-credential' when passwordAttempt => const AccountDeletionException(
       AccountDeletionError.incorrectPassword,

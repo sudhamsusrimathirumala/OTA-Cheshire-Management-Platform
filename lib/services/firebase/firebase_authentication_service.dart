@@ -1,7 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import 'apple_authentication.dart';
+import 'web_authentication.dart';
 
 enum AuthenticationError {
   invalidEmail,
@@ -96,14 +98,21 @@ class FirebaseAuthenticationService
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
     AppleAuthenticationCoordinator? appleAuthentication,
+    WebAuthentication? webAuthentication,
+    bool? isWeb,
   }) : _auth = auth ?? FirebaseAuth.instance,
        _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
        _appleAuthentication =
-           appleAuthentication ?? AppleAuthenticationCoordinator();
+           appleAuthentication ?? AppleAuthenticationCoordinator(),
+       _webAuthentication =
+           webAuthentication ?? const FirebaseWebAuthentication(),
+       _isWeb = isWeb ?? kIsWeb;
 
   final FirebaseAuth _auth;
   final GoogleSignIn _googleSignIn;
   final AppleAuthenticationCoordinator _appleAuthentication;
+  final WebAuthentication _webAuthentication;
+  final bool _isWeb;
   Future<void>? _googleInitialization;
 
   @override
@@ -158,33 +167,40 @@ class FirebaseAuthenticationService
     required bool allowAccountCreation,
   }) async {
     try {
-      _googleInitialization ??= _googleSignIn.initialize();
-      await _googleInitialization;
-      final googleUser = await _googleSignIn.authenticate();
-      final idToken = googleUser.authentication.idToken;
-      if (idToken == null || idToken.isEmpty) {
-        throw const AuthenticationException(
-          AuthenticationError.unknownFailure,
-          'Google Sign-In could not verify this account.',
+      final UserCredential result;
+      if (_isWeb) {
+        result = await _webAuthentication.signInWithGoogle(_auth);
+      } else {
+        _googleInitialization ??= _googleSignIn.initialize();
+        await _googleInitialization;
+        final googleUser = await _googleSignIn.authenticate();
+        final idToken = googleUser.authentication.idToken;
+        if (idToken == null || idToken.isEmpty) {
+          throw const AuthenticationException(
+            AuthenticationError.unknownFailure,
+            'Google Sign-In could not verify this account.',
+          );
+        }
+        result = await _auth.signInWithCredential(
+          GoogleAuthProvider.credential(idToken: idToken),
         );
       }
-      final result = await _auth.signInWithCredential(
-        GoogleAuthProvider.credential(idToken: idToken),
-      );
       if (shouldRejectNewProviderIdentity(
         isNewUser: result.additionalUserInfo?.isNewUser == true,
         allowAccountCreation: allowAccountCreation,
       )) {
         await _rejectUnexpectedProviderRegistration(
           result,
-          providerCleanup: _googleSignIn.signOut,
+          providerCleanup: _isWeb ? null : _googleSignIn.signOut,
         );
       }
       return result;
     } on GoogleSignInException catch (error) {
       throw mapGoogleSignInException(error);
     } on FirebaseAuthException catch (error) {
-      throw mapFirebaseAuthException(error);
+      throw _isWeb
+          ? mapGoogleWebAuthException(error)
+          : mapFirebaseAuthException(error);
     } on AuthenticationException {
       rethrow;
     } catch (_) {
@@ -304,6 +320,7 @@ class FirebaseAuthenticationService
   Future<void> signOut() async {
     try {
       await _auth.signOut();
+      if (_isWeb) return;
       _googleInitialization ??= _googleSignIn.initialize();
       await _googleInitialization;
       await _googleSignIn.signOut();
@@ -352,6 +369,21 @@ AuthenticationException mapGoogleSignInException(GoogleSignInException error) {
       diagnosticCode: diagnosticCode,
     ),
   };
+}
+
+AuthenticationException mapGoogleWebAuthException(FirebaseAuthException error) {
+  if (const {
+    'popup-closed-by-user',
+    'cancelled-popup-request',
+    'web-context-cancelled',
+  }.contains(error.code)) {
+    return const AuthenticationException(
+      AuthenticationError.googleCancelled,
+      'Google Sign-In was cancelled.',
+      diagnosticCode: 'google-cancelled',
+    );
+  }
+  return mapFirebaseAuthException(error);
 }
 
 AuthenticationException mapFirebaseAuthException(FirebaseAuthException error) {

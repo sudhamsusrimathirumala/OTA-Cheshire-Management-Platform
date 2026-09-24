@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/admin/admin_profile_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/admin/admin_students_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/curriculum_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/guest/guest_dashboard_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/login_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notification_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/notifications_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/resources_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/schedule_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/signup_screen.dart';
 import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/welcome_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 
 void main() {
@@ -25,18 +30,23 @@ void main() {
         addTearDown(tester.view.resetPhysicalSize);
         addTearDown(tester.view.resetDevicePixelRatio);
         for (final screen in <Widget>[
+          const WelcomeScreen(),
           const LoginScreen(),
           const SignupScreen(),
           const StudentDashboardScreen(),
           const ScheduleScreen(),
           const CurriculumScreen(),
+          const ResourcesScreen(),
           const NotificationsScreen(),
           NotificationDetailScreen(
             notification: appDataService.notifications.first,
           ),
           const ProfileScreen(managementAvailableOverride: false),
+          const GuestDashboardScreen(),
+          const AdminDashboardScreen(),
           const AdminStudentsScreen(),
           const AdminScheduleScreen(),
+          const AdminProfileScreen(),
         ]) {
           await tester.pumpWidget(
             MaterialApp(
@@ -104,7 +114,8 @@ void _expectNoFlutterLayoutErrors(WidgetTester tester, String screen) {
   while ((error = tester.takeException()) != null) {
     final text = error.toString();
     if (text.contains('RenderFlex') && text.contains('overflowed')) {
-      fail('$screen RenderFlex overflow: $text');
+      final details = error is FlutterError ? error.toStringDeep() : text;
+      fail('$screen RenderFlex overflow: $details');
     }
     fail('Unexpected Flutter error: $text');
   }

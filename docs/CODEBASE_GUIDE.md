@@ -38,6 +38,7 @@ You can read this guide from the beginning to learn how the app fits together, o
 - [Cloud Functions](#cloud-functions)
 - [Android integration](#android-integration)
 - [iOS integration](#ios-integration)
+- [Web integration and Hosting](#web-integration-and-hosting)
 - [Continuous integration](#continuous-integration)
 - [Test map](#test-map)
 - [Developer tools and historical artifacts](#developer-tools-and-historical-artifacts)
@@ -809,6 +810,77 @@ iOS uses Xcode schemes and build configurations for the same dev/prod separation
 | `ios/RunnerTests/RunnerTests.swift` | Default native unit-test target placeholder; substantive behavior is currently tested in Flutter/Node/emulator suites. |
 
 Apple sign-in requires matching Apple Developer capability, identifiers, Firebase provider setup, and provisioning. Push similarly requires APNs credentials and Firebase configuration. Files in the repository document client intent; they do not confirm console-side setup or live deployment.
+
+## Web integration and Hosting
+
+The Web target is intended as a production-capable browser and Add to Home Screen experience for iPhone users while the native App Store release is pending. It uses the same production Firebase Authentication and Firestore project as the native production app, so the existing Rules—not browser UI checks—continue to enforce Student, Parent, Admin, Super Admin, and Guest Reviewer access. No separate Web database or relaxed Rules path should be introduced.
+
+### Repository-side Web behavior
+
+| Path | Responsibility |
+| --- | --- |
+| `lib/main_prod.dart` | Starts the production application while deferring Web option resolution until the recoverable startup gate is visible. |
+| `lib/firebase_options_prod.dart` | Reads production Web Firebase values from `OTA_FIREBASE_WEB_*` compile-time definitions. It contains no invented production Web app identity and fails with a safe actionable screen when required values are missing. |
+| `lib/app_bootstrap.dart` | Skips Crashlytics, Firebase Messaging, local notifications, and push navigation on Web. In-app notifications loaded from Firestore remain available. |
+| `lib/services/firebase/web_authentication.dart` | Uses Firebase Auth popup APIs for Google sign-in and deletion reauthentication, requesting an account chooser each time. |
+| `web/index.html` and `web/manifest.json` | Supply mobile viewport, iPhone Home Screen, OTA naming, theme, and stable root-scope metadata. |
+| `firebase.json` | Serves `build/web` from the existing classic Hosting site, rewrites application routes to `index.html`, prevents source-map publication, and applies conservative cache and security headers. |
+
+Crashlytics is intentionally not initialized on Web. Startup checkpoints remain local browser diagnostics, and failed reporter attachment is not described as successful reporting. Adding a browser monitoring vendor later requires a data-retention, access, processor, and privacy-policy review before its SDK is added.
+
+OS-level Web Push is also intentionally deferred. The Web app does not ask for notification permission, create a Web FCM token, or label the browser as Android. This does not affect the authenticated in-app notification center. iPhone Web Push would additionally require a Home Screen-installed web app on supported iOS versions, user-triggered permission, a service worker, a Web Push certificate/VAPID configuration, a `web` device schema accepted by Rules and Functions, and physical-device validation.
+
+### Required production Firebase Console setup
+
+The production project currently needs a Web app registration. An authorized operator must perform these steps without changing the Android or iOS registrations:
+
+1. Open Firebase Console, select project `ota-management-platform-e4847`, then open **Project settings > General > Your apps**.
+2. Choose **Add app > Web**, use an unambiguous nickname such as `OTA Cheshire Web`, and register the app. The default Hosting site already exists, so creating a second site is unnecessary.
+3. Copy the generated Web configuration values: `apiKey`, `appId`, `messagingSenderId`, `projectId`, `authDomain`, `storageBucket`, and optional `measurementId`. Confirm `projectId` is exactly `ota-management-platform-e4847`. Do not substitute Android/iOS app IDs.
+4. Under **Authentication > Settings > Authorized domains**, verify `ota-management-platform-e4847.web.app` and `ota-management-platform-e4847.firebaseapp.com`. Add each approved custom production domain before using it. Keep `localhost` only for deliberate local testing.
+5. Under **Authentication > Sign-in method**, verify Email/Password and Google are enabled and the Google provider has the intended support email and public-facing project name.
+6. If the underlying Google OAuth Web client is managed manually, authorize `https://ota-management-platform-e4847.web.app` as a JavaScript origin and `https://ota-management-platform-e4847.firebaseapp.com/__/auth/handler` as the redirect URI. Repeat with the exact custom origin/auth handler if a custom auth domain is introduced.
+
+Apple login remains hidden on Web until its independent setup is complete. To offer it later, create an Apple Services ID for the website, associate it with the existing primary App ID, register each exact website domain, and use `https://ota-management-platform-e4847.firebaseapp.com/__/auth/handler` (or the approved custom auth-domain handler) as the return URL. Then configure Firebase Authentication's Apple provider with the real Services ID, Apple Team ID, Key ID, and private key. Never commit the Apple private key. Native Apple sign-in remains separate and must continue working throughout this setup.
+
+### Building and previewing without deploying production
+
+Supply the generated values at compile time. Firebase Web configuration identifies a public client and is not a server credential, but values should still come from controlled CI/operator configuration so the wrong project cannot be selected accidentally.
+
+```powershell
+flutter build web --release -t lib/main_prod.dart `
+  --dart-define=OTA_FIREBASE_WEB_API_KEY=<firebase-api-key> `
+  --dart-define=OTA_FIREBASE_WEB_APP_ID=<firebase-web-app-id> `
+  --dart-define=OTA_FIREBASE_WEB_MESSAGING_SENDER_ID=<sender-id> `
+  --dart-define=OTA_FIREBASE_WEB_PROJECT_ID=ota-management-platform-e4847 `
+  --dart-define=OTA_FIREBASE_WEB_AUTH_DOMAIN=ota-management-platform-e4847.firebaseapp.com `
+  --dart-define=OTA_FIREBASE_WEB_STORAGE_BUCKET=<storage-bucket> `
+  --dart-define=OTA_FIREBASE_WEB_MEASUREMENT_ID=<optional-measurement-id>
+```
+
+Omit the final definition when Analytics measurement is not configured. Do not add `--source-maps`; `firebase.json` also excludes `*.map` as a defense against accidental publication. Inspect `build/web`, confirm it contains no credentials other than the expected public Firebase client configuration, and serve it locally before any remote action.
+
+After explicit deployment authorization, use a short-lived Firebase Hosting preview channel first rather than the live site:
+
+```powershell
+firebase hosting:channel:deploy web-qa --only hosting --project prod --expires 7d
+```
+
+Add the preview channel's exact domain to Firebase Authentication authorized domains before testing OAuth, then remove it when the preview expires if it remains listed. Test every role with dedicated non-privileged accounts. Only after approval should an operator deploy `--only hosting` to alias `prod`. Firebase Hosting release history is the rollback mechanism: select the last known-good release in the Console and roll it back if the live smoke test fails. This repository does not authorize either preview or production deployment by itself.
+
+### Manual iPhone validation still required
+
+Automated narrow-screen widget tests do not prove Mobile Safari behavior. On at least one supported physical iPhone, validate normal Safari and Add to Home Screen modes at minimum:
+
+- first load, reload, offline/reconnect startup, and a deliberately missing-config build;
+- Email/Password and Google popup sign-in, cancellation, explicit account switching, session restoration, sign-out, and password reset;
+- Student, Parent, Admin, Super Admin, and isolated Guest Reviewer routing and data boundaries;
+- browser Back/Forward, copied deep links, reload on a nested route, keyboard appearance, autofill, scrolling, safe-area insets, rotation, and increased text size;
+- schedule, curriculum/YouTube, resources, file upload/download, location selection, profile/settings, and account deletion with correct/incorrect credentials;
+- in-app notification center behavior with no browser notification prompt; and
+- privacy-policy and account-deletion links opening the exact published destinations.
+
+The existing privacy policy must be reviewed before launch to state that browser sessions can use local storage/IndexedDB, Firebase Hosting and upstream services can process technical request logs including IP/device/browser information, OAuth uses external redirects/popups, embedded YouTube can receive browser data under Google's policies, and Web error reporting is currently local/no-op unless a separately disclosed processor is later enabled. The app must continue linking to the published policy at `https://docs.google.com/document/d/e/2PACX-1vQNJ9fGPhLxG9lkE8RXoMwdOXIFh9wc19rJXgCqefbEnE-c3nFnK9VpVhRMK-SLR7sPFuWQl3ZDMQy-/pub`.
 
 ## Continuous integration
 

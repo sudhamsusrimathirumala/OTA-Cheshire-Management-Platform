@@ -29,14 +29,15 @@ This README is the authoritative product, architecture, history, security, and r
 19. [Development and production environments](#development-and-production-environments)
 20. [Android build and release architecture](#android-build-and-release-architecture)
 21. [iOS build and release architecture](#ios-build-and-release-architecture)
-22. [Cloud Functions](#cloud-functions)
-23. [Testing and validation](#testing-and-validation)
-24. [CI and release automation](#ci-and-release-automation)
-25. [Production readiness](#production-readiness)
-26. [Known limitations and future work](#known-limitations-and-future-work)
-27. [Project structure](#project-structure)
-28. [How to run and develop](#how-to-run-and-develop)
-29. [Current status](#current-status)
+22. [Web build and release architecture](#web-build-and-release-architecture)
+23. [Cloud Functions](#cloud-functions)
+24. [Testing and validation](#testing-and-validation)
+25. [CI and release automation](#ci-and-release-automation)
+26. [Production readiness](#production-readiness)
+27. [Known limitations and future work](#known-limitations-and-future-work)
+28. [Project structure](#project-structure)
+29. [How to run and develop](#how-to-run-and-develop)
+30. [Current status](#current-status)
 
 ## Project overview
 
@@ -47,7 +48,7 @@ OTA is a community academy with several kinds of people interacting with the sam
 - location administrators need controlled tools for schedules, communications, events, resources, and student progress; and
 - a Super Admin needs to work across academy locations without weakening location isolation for everyone else.
 
-The application targets Android and iOS. Flutter supplies a shared UI and application layer; Firebase Authentication supplies login identity; Cloud Firestore stores academy and account data; Cloud Functions calculate authorized announcement recipients and send publication notifications; and Firebase Cloud Messaging (FCM), with APNs on iOS, carries push notifications.
+The application targets Android and iOS, with a production Web target prepared as an interim iPhone browser and Home Screen experience. Flutter supplies a shared UI and application layer; Firebase Authentication supplies login identity; Cloud Firestore stores academy and account data; Cloud Functions calculate authorized announcement recipients and send publication notifications; and Firebase Cloud Messaging (FCM), with APNs on iOS, carries native push notifications.
 
 The current product supports Super Admin, Admin, Parent, Student, and a tightly isolated Guest Reviewer role. It does **not** use an account-approval workflow. Public signup creates an active Parent or Student account immediately; Guest Reviewer identities are provisioned only by an authorized operator. Access is then constrained by authentication, active state, exact profile ownership, academy location, selected profile, role, Auth claims, and strict Firestore document rules.
 
@@ -423,6 +424,7 @@ Ordinary “remove child” behavior is different: it unlinks/deactivates one pr
 | Android Firebase file | `android/app/src/dev/google-services.json` | `android/app/src/prod/google-services.json` |
 | iOS bundle ID | `com.example.otaCheshireManagementPlatform` | `com.otacheshire.app` |
 | iOS Firebase file | Expected `ios/Firebase/dev/GoogleService-Info.plist` | `ios/Firebase/prod/GoogleService-Info.plist` |
+| Web Firebase client | Generated development options | Production Web app registration and `OTA_FIREBASE_WEB_*` build definitions required |
 | CLI alias | `dev` | `prod` |
 
 Environment choice never comes from `kDebugMode`. Dart imports, Android flavors, iOS schemes/configurations, native Firebase files, and IDs must agree. `main.dart` has no fallback. Android pins generated Flutter tasks to the selected flavor target even if a conflicting `-t` is supplied. iOS sets `APP_ENVIRONMENT`/`FLUTTER_TARGET`; its copy phase accepts only the matching plist and fails when absent.
@@ -448,6 +450,14 @@ The Xcode project contains `dev` and `prod` schemes with matching Debug/Release/
 `Runner.entitlements` declares environment-substituted `aps-environment` and Sign in with Apple. The target declares the Apple capability, while `Info.plist` enables remote-notification background mode. Those settings are necessary but not sufficient for a signed device build.
 
 External iOS work requires an academy Apple Developer Team ID, certificates, App ID capabilities, regenerated profiles, Firebase Apple-provider setup, APNs connection, App Store Connect access, macOS/Xcode archive, and physical-iPhone validation of Apple sign-in, cancellation, revocation, deletion, and foreground/background/terminated push.
+
+## Web build and release architecture
+
+The production Web target reuses project `ota-management-platform-e4847`, its existing Firestore data, and the same server-enforced role/location/ownership Rules as the native app. It does not create a weaker browser-only authorization model. Email/Password uses Firebase Auth directly. Google uses Firebase Auth's supported Web popup APIs, asks the user to choose an account, and uses the same popup mechanism to reauthenticate before deletion. Apple remains hidden on Web until the separate Apple Services ID and Firebase provider setup exists; native Apple behavior is unchanged.
+
+Production Web Firebase values are supplied as compile-time `OTA_FIREBASE_WEB_*` definitions after an authorized operator registers the missing production Web app. No plausible placeholder credentials are committed. Missing values produce a recoverable configuration screen. Crashlytics and OS push initialization are skipped on Web; the Firestore-backed in-app notification center remains available. A browser monitoring vendor and iPhone Web Push are intentionally deferred rather than being introduced without privacy, schema, service-worker, and device validation.
+
+Classic Firebase Hosting is prepared for the existing `ota-management-platform-e4847.web.app` site. `firebase.json` serves `build/web`, rewrites deep links to the Flutter shell, excludes source maps, prevents stale shell/service-worker caching, applies bounded asset caching, and sends baseline browser security headers. Repository configuration is not a deployment. The production Web app registration, Auth authorized domains, generated values, privacy-policy update, preview-channel testing, physical iPhone Safari/Home Screen testing, and explicit deployment approval are still required. Exact operator steps and manual coverage are in the [Web integration and Hosting guide](docs/CODEBASE_GUIDE.md#web-integration-and-hosting).
 
 ## Cloud Functions
 
