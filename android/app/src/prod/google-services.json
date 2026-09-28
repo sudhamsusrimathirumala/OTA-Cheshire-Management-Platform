@@ -38,6 +38,14 @@
           }
         },
         {
+          "client_id": "675595858362-s3gk0iln84vpgu93srnnniv1p82ml8kk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.otacheshire.app",
+            "certificate_hash": "e2d52561fd9dd35eb6fee9a12e6644b51be571f1"
+          }
+        },
+        {
           "client_id": "675595858362-fgcp3lqcru2feuaugpdvl491fugs0ofo.apps.googleusercontent.com",
           "client_type": 3
         }

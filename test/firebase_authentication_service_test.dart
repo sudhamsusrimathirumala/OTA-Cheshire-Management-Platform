@@ -28,6 +28,215 @@ void main() {
     expect(webAuthentication.signInAuth, same(auth));
   });
 
+  test(
+    'native existing Google user completes every pre-session stage',
+    () async {
+      final diagnostics = <AuthenticationDiagnostic>[];
+      final credential = _FakeUserCredential(
+        isNewUser: false,
+        user: _FakeUser(),
+      );
+      final auth = _FakeFirebaseAuth(credential: credential);
+      final nativeGoogle = _FakeNativeGoogleAuthentication(idToken: 'id-token');
+      final service = FirebaseAuthenticationService(
+        auth: auth,
+        nativeGoogleAuthentication: nativeGoogle,
+        diagnostics: diagnostics.add,
+        isWeb: false,
+      );
+
+      final result = await service.signInWithGoogle();
+
+      expect(result, same(credential));
+      expect(auth.signInWithCredentialCalls, 1);
+      expect(nativeGoogle.signOutCalls, 0);
+      expect(
+        diagnostics.map((diagnostic) => diagnostic.stage),
+        orderedEquals([
+          'GOOGLE_ACCOUNT_SELECTED',
+          'GOOGLE_TOKENS_RECEIVED',
+          'FIREBASE_SIGNIN_SUCCEEDED',
+          'PROVIDER_GUARD_ACCEPTED',
+        ]),
+      );
+    },
+  );
+
+  test(
+    'native first-time Google login is rejected as registration required',
+    () async {
+      final diagnostics = <AuthenticationDiagnostic>[];
+      final user = _FakeUser();
+      final auth = _FakeFirebaseAuth(
+        credential: _FakeUserCredential(isNewUser: true, user: user),
+      );
+      final nativeGoogle = _FakeNativeGoogleAuthentication(idToken: 'id-token');
+      final service = FirebaseAuthenticationService(
+        auth: auth,
+        nativeGoogleAuthentication: nativeGoogle,
+        diagnostics: diagnostics.add,
+        isWeb: false,
+      );
+
+      await expectLater(
+        service.signInWithGoogle(),
+        throwsA(
+          isA<AuthenticationException>().having(
+            (error) => error.error,
+            'error',
+            AuthenticationError.registrationRequired,
+          ),
+        ),
+      );
+
+      expect(user.deleteCalls, 1);
+      expect(auth.signOutCalls, 1);
+      expect(nativeGoogle.signOutCalls, 1);
+      expect(
+        diagnostics.map((diagnostic) => diagnostic.stage),
+        contains('PROVIDER_GUARD_REJECTED'),
+      );
+    },
+  );
+
+  test(
+    'native first-time Google signup remains allowed after age gate',
+    () async {
+      final diagnostics = <AuthenticationDiagnostic>[];
+      final credential = _FakeUserCredential(
+        isNewUser: true,
+        user: _FakeUser(),
+      );
+      final service = FirebaseAuthenticationService(
+        auth: _FakeFirebaseAuth(credential: credential),
+        nativeGoogleAuthentication: _FakeNativeGoogleAuthentication(
+          idToken: 'id-token',
+        ),
+        diagnostics: diagnostics.add,
+        isWeb: false,
+      );
+
+      final result = await service.registerWithGoogle();
+
+      expect(result, same(credential));
+      expect(
+        diagnostics.map((diagnostic) => diagnostic.stage),
+        contains('PROVIDER_GUARD_ACCEPTED'),
+      );
+    },
+  );
+
+  test(
+    'native FirebaseAuth failure is never reported as cancellation',
+    () async {
+      final diagnostics = <AuthenticationDiagnostic>[];
+      final service = FirebaseAuthenticationService(
+        auth: _FakeFirebaseAuth(
+          signInError: FirebaseAuthException(code: 'network-request-failed'),
+        ),
+        nativeGoogleAuthentication: _FakeNativeGoogleAuthentication(
+          idToken: 'id-token',
+        ),
+        diagnostics: diagnostics.add,
+        isWeb: false,
+      );
+
+      await expectLater(
+        service.signInWithGoogle(),
+        throwsA(
+          isA<AuthenticationException>()
+              .having(
+                (error) => error.error,
+                'error',
+                AuthenticationError.networkFailure,
+              )
+              .having(
+                (error) => error.message,
+                'message',
+                isNot(contains('cancelled')),
+              ),
+        ),
+      );
+
+      expect(
+        diagnostics.last,
+        isA<AuthenticationDiagnostic>()
+            .having(
+              (diagnostic) => diagnostic.stage,
+              'stage',
+              'FIREBASE_SIGNIN_FAILED',
+            )
+            .having(
+              (diagnostic) => diagnostic.code,
+              'code',
+              'network-request-failed',
+            ),
+      );
+    },
+  );
+
+  test('native token failure is never reported as cancellation', () async {
+    final service = FirebaseAuthenticationService(
+      auth: _FakeFirebaseAuth(),
+      nativeGoogleAuthentication: _FakeNativeGoogleAuthentication(),
+      diagnostics: (_) {},
+      isWeb: false,
+    );
+
+    await expectLater(
+      service.signInWithGoogle(),
+      throwsA(
+        isA<AuthenticationException>()
+            .having(
+              (error) => error.error,
+              'error',
+              AuthenticationError.unknownFailure,
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              isNot(contains('cancelled')),
+            ),
+      ),
+    );
+  });
+
+  test('native chooser cancellation remains a genuine cancellation', () async {
+    final diagnostics = <AuthenticationDiagnostic>[];
+    final auth = _FakeFirebaseAuth();
+    final service = FirebaseAuthenticationService(
+      auth: auth,
+      nativeGoogleAuthentication: _FakeNativeGoogleAuthentication(
+        authenticateError: const GoogleSignInException(
+          code: GoogleSignInExceptionCode.canceled,
+        ),
+      ),
+      diagnostics: diagnostics.add,
+      isWeb: false,
+    );
+
+    await expectLater(
+      service.signInWithGoogle(),
+      throwsA(
+        isA<AuthenticationException>()
+            .having(
+              (error) => error.error,
+              'error',
+              AuthenticationError.googleCancelled,
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              'Google Sign-In was cancelled.',
+            ),
+      ),
+    );
+
+    expect(auth.signInWithCredentialCalls, 0);
+    expect(diagnostics.single.stage, 'GOOGLE_AUTHENTICATION_FAILED');
+    expect(diagnostics.single.code, 'google-canceled');
+  });
+
   test('Web Google login rejects a newly provisioned identity', () async {
     final auth = _FakeFirebaseAuth();
     final user = _FakeUser();
@@ -125,6 +334,17 @@ void main() {
 
     expect(error.error, AuthenticationError.googleCancelled);
     expect(error.message, 'Google Sign-In was cancelled.');
+  });
+
+  test('Google interruption is not treated as user cancellation', () {
+    final error = mapGoogleSignInException(
+      const GoogleSignInException(code: GoogleSignInExceptionCode.interrupted),
+    );
+
+    expect(error.error, AuthenticationError.unknownFailure);
+    expect(error.message, contains('interrupted'));
+    expect(error.message, isNot(contains('cancelled')));
+    expect(error.diagnosticCode, 'google-interrupted');
   });
 
   test('credential failures use a neutral message', () {
@@ -351,7 +571,51 @@ void main() {
 }
 
 class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
+  _FakeFirebaseAuth({this.credential, this.signInError});
+
+  final UserCredential? credential;
+  final FirebaseAuthException? signInError;
   int signOutCalls = 0;
+  int signInWithCredentialCalls = 0;
+
+  @override
+  User? get currentUser => credential?.user;
+
+  @override
+  Future<UserCredential> signInWithCredential(AuthCredential credential) async {
+    signInWithCredentialCalls++;
+    final error = signInError;
+    if (error != null) throw error;
+    return this.credential ?? _FakeUserCredential();
+  }
+
+  @override
+  Future<void> signOut() async {
+    signOutCalls++;
+  }
+}
+
+class _FakeNativeGoogleAuthentication implements NativeGoogleAuthentication {
+  _FakeNativeGoogleAuthentication({this.idToken, this.authenticateError});
+
+  final String? idToken;
+  final Object? authenticateError;
+  int initializeCalls = 0;
+  int authenticateCalls = 0;
+  int signOutCalls = 0;
+
+  @override
+  Future<void> initialize() async {
+    initializeCalls++;
+  }
+
+  @override
+  Future<String?> authenticate() async {
+    authenticateCalls++;
+    final error = authenticateError;
+    if (error != null) throw error;
+    return idToken;
+  }
 
   @override
   Future<void> signOut() async {
@@ -368,6 +632,9 @@ class _FakeAdditionalUserInfo extends Fake implements AdditionalUserInfo {
 
 class _FakeUser extends Fake implements User {
   int deleteCalls = 0;
+
+  @override
+  String get uid => 'test-user';
 
   @override
   Future<void> delete() async {

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -39,6 +41,53 @@ class AuthenticationException implements Exception {
 
   @override
   String toString() => message;
+}
+
+@immutable
+class AuthenticationDiagnostic {
+  const AuthenticationDiagnostic(this.stage, {this.exceptionType, this.code});
+
+  final String stage;
+  final String? exceptionType;
+  final String? code;
+}
+
+typedef AuthenticationDiagnosticSink =
+    void Function(AuthenticationDiagnostic diagnostic);
+
+void logAuthenticationDiagnostic(AuthenticationDiagnostic diagnostic) {
+  final fields = <String>[
+    diagnostic.stage,
+    if (diagnostic.exceptionType case final type?) 'type=$type',
+    if (diagnostic.code case final code?) 'code=$code',
+  ];
+  developer.log(fields.join(' '), name: 'ota.authentication');
+}
+
+abstract interface class NativeGoogleAuthentication {
+  Future<void> initialize();
+  Future<String?> authenticate();
+  Future<void> signOut();
+}
+
+class GoogleSignInNativeAuthentication implements NativeGoogleAuthentication {
+  GoogleSignInNativeAuthentication([GoogleSignIn? googleSignIn])
+    : _googleSignIn = googleSignIn ?? GoogleSignIn.instance;
+
+  final GoogleSignIn _googleSignIn;
+  Future<void>? _initialization;
+
+  @override
+  Future<void> initialize() => _initialization ??= _googleSignIn.initialize();
+
+  @override
+  Future<String?> authenticate() async {
+    final account = await _googleSignIn.authenticate();
+    return account.authentication.idToken;
+  }
+
+  @override
+  Future<void> signOut() => _googleSignIn.signOut();
 }
 
 abstract interface class AuthenticationService {
@@ -97,23 +146,28 @@ class FirebaseAuthenticationService
   FirebaseAuthenticationService({
     FirebaseAuth? auth,
     GoogleSignIn? googleSignIn,
+    NativeGoogleAuthentication? nativeGoogleAuthentication,
     AppleAuthenticationCoordinator? appleAuthentication,
     WebAuthentication? webAuthentication,
+    AuthenticationDiagnosticSink? diagnostics,
     bool? isWeb,
   }) : _auth = auth ?? FirebaseAuth.instance,
-       _googleSignIn = googleSignIn ?? GoogleSignIn.instance,
+       _nativeGoogleAuthentication =
+           nativeGoogleAuthentication ??
+           GoogleSignInNativeAuthentication(googleSignIn),
        _appleAuthentication =
            appleAuthentication ?? AppleAuthenticationCoordinator(),
        _webAuthentication =
            webAuthentication ?? const FirebaseWebAuthentication(),
+       _diagnostics = diagnostics ?? logAuthenticationDiagnostic,
        _isWeb = isWeb ?? kIsWeb;
 
   final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn;
+  final NativeGoogleAuthentication _nativeGoogleAuthentication;
   final AppleAuthenticationCoordinator _appleAuthentication;
   final WebAuthentication _webAuthentication;
+  final AuthenticationDiagnosticSink _diagnostics;
   final bool _isWeb;
-  Future<void>? _googleInitialization;
 
   @override
   User? get currentUser => _auth.currentUser;
@@ -171,33 +225,81 @@ class FirebaseAuthenticationService
       if (_isWeb) {
         result = await _webAuthentication.signInWithGoogle(_auth);
       } else {
-        _googleInitialization ??= _googleSignIn.initialize();
-        await _googleInitialization;
-        final googleUser = await _googleSignIn.authenticate();
-        final idToken = googleUser.authentication.idToken;
+        await _nativeGoogleAuthentication.initialize();
+        final idToken = await _nativeGoogleAuthentication.authenticate();
+        _diagnostics(const AuthenticationDiagnostic('GOOGLE_ACCOUNT_SELECTED'));
         if (idToken == null || idToken.isEmpty) {
+          _diagnostics(
+            const AuthenticationDiagnostic(
+              'GOOGLE_TOKEN_FAILED',
+              code: 'missing-google-id-token',
+            ),
+          );
           throw const AuthenticationException(
             AuthenticationError.unknownFailure,
             'Google Sign-In could not verify this account.',
+            diagnosticCode: 'google-missing-id-token',
           );
         }
+        _diagnostics(const AuthenticationDiagnostic('GOOGLE_TOKENS_RECEIVED'));
         result = await _auth.signInWithCredential(
           GoogleAuthProvider.credential(idToken: idToken),
+        );
+        final signedInUser = result.user;
+        if (signedInUser == null ||
+            _auth.currentUser?.uid != signedInUser.uid) {
+          _diagnostics(
+            const AuthenticationDiagnostic(
+              'FIREBASE_SIGNIN_FAILED',
+              code: 'authenticated-user-mismatch',
+            ),
+          );
+          try {
+            await _auth.signOut();
+          } catch (_) {
+            // The inconsistent session is already unusable. Preserve the
+            // original failure without exposing provider details.
+          }
+          throw const AuthenticationException(
+            AuthenticationError.unknownFailure,
+            'Google Sign-In could not establish a valid session. Please try '
+            'again.',
+            diagnosticCode: 'authenticated-user-mismatch',
+          );
+        }
+        _diagnostics(
+          const AuthenticationDiagnostic('FIREBASE_SIGNIN_SUCCEEDED'),
         );
       }
       if (shouldRejectNewProviderIdentity(
         isNewUser: result.additionalUserInfo?.isNewUser == true,
         allowAccountCreation: allowAccountCreation,
       )) {
+        _diagnostics(const AuthenticationDiagnostic('PROVIDER_GUARD_REJECTED'));
         await _rejectUnexpectedProviderRegistration(
           result,
-          providerCleanup: _isWeb ? null : _googleSignIn.signOut,
+          providerCleanup: _isWeb ? null : _nativeGoogleAuthentication.signOut,
         );
       }
+      _diagnostics(const AuthenticationDiagnostic('PROVIDER_GUARD_ACCEPTED'));
       return result;
     } on GoogleSignInException catch (error) {
+      _diagnostics(
+        AuthenticationDiagnostic(
+          'GOOGLE_AUTHENTICATION_FAILED',
+          exceptionType: 'GoogleSignInException',
+          code: _googleDiagnosticCode(error.code),
+        ),
+      );
       throw mapGoogleSignInException(error);
     } on FirebaseAuthException catch (error) {
+      _diagnostics(
+        AuthenticationDiagnostic(
+          'FIREBASE_SIGNIN_FAILED',
+          exceptionType: 'FirebaseAuthException',
+          code: sanitizedAuthenticationDiagnosticCode(error.code),
+        ),
+      );
       throw _isWeb
           ? mapGoogleWebAuthException(error)
           : mapFirebaseAuthException(error);
@@ -321,9 +423,8 @@ class FirebaseAuthenticationService
     try {
       await _auth.signOut();
       if (_isWeb) return;
-      _googleInitialization ??= _googleSignIn.initialize();
-      await _googleInitialization;
-      await _googleSignIn.signOut();
+      await _nativeGoogleAuthentication.initialize();
+      await _nativeGoogleAuthentication.signOut();
     } on FirebaseAuthException catch (error) {
       throw mapFirebaseAuthException(error);
     } on GoogleSignInException {
@@ -339,14 +440,18 @@ bool shouldRejectNewProviderIdentity({
 }) => isNewUser && !allowAccountCreation;
 
 AuthenticationException mapGoogleSignInException(GoogleSignInException error) {
-  final diagnosticCode =
-      'google-${error.code.name.replaceAllMapped(RegExp(r'[A-Z]'), (match) => '-${match.group(0)!.toLowerCase()}')}';
+  final diagnosticCode = _googleDiagnosticCode(error.code);
   return switch (error.code) {
-    GoogleSignInExceptionCode.canceled ||
-    GoogleSignInExceptionCode.interrupted => const AuthenticationException(
+    GoogleSignInExceptionCode.canceled => const AuthenticationException(
       AuthenticationError.googleCancelled,
       'Google Sign-In was cancelled.',
       diagnosticCode: 'google-cancelled',
+    ),
+    GoogleSignInExceptionCode.interrupted => AuthenticationException(
+      AuthenticationError.unknownFailure,
+      'Google Sign-In was interrupted. Please try again. '
+      'Reference: google-interrupted.',
+      diagnosticCode: diagnosticCode,
     ),
     GoogleSignInExceptionCode.clientConfigurationError ||
     GoogleSignInExceptionCode.providerConfigurationError =>
@@ -370,6 +475,9 @@ AuthenticationException mapGoogleSignInException(GoogleSignInException error) {
     ),
   };
 }
+
+String _googleDiagnosticCode(GoogleSignInExceptionCode code) =>
+    'google-${code.name.replaceAllMapped(RegExp(r'[A-Z]'), (match) => '-${match.group(0)!.toLowerCase()}')}';
 
 AuthenticationException mapGoogleWebAuthException(FirebaseAuthException error) {
   if (const {

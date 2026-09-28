@@ -31,15 +31,18 @@ class FirebaseSessionController extends ChangeNotifier {
     AuthenticationService? authentication,
     FirebaseFirestore? firestore,
     FirestoreProfileService? profileService,
+    AuthenticationDiagnosticSink? diagnostics,
   }) : authentication = authentication ?? FirebaseAuthenticationService(),
        _firestoreOverride = firestore,
-       _profileServiceOverride = profileService;
+       _profileServiceOverride = profileService,
+       _diagnostics = diagnostics ?? logAuthenticationDiagnostic;
 
   final AuthenticationService authentication;
   final FirebaseFirestore? _firestoreOverride;
   FirebaseFirestore get _database =>
       _firestoreOverride ?? FirebaseFirestore.instance;
   FirestoreProfileService? _profileServiceOverride;
+  final AuthenticationDiagnosticSink _diagnostics;
   FirestoreProfileService get profileService =>
       _profileServiceOverride ??= FirestoreProfileService();
 
@@ -233,6 +236,7 @@ class FirebaseSessionController extends ChangeNotifier {
   ) {
     final data = snapshot.data();
     if (data == null) {
+      _diagnostics(const AuthenticationDiagnostic('USER_DOC_MISSING'));
       if (_authenticatedGuestClaim) {
         _setError('This reviewer account is not configured correctly.');
         return;
@@ -251,9 +255,11 @@ class FirebaseSessionController extends ChangeNotifier {
       unawaited(_replaceProfilesSubscription(null, sessionGeneration));
       stage = SessionStage.needsProfiles;
       errorMessage = null;
+      _reportSessionLoaded(stage);
       notifyListeners();
       return;
     }
+    _diagnostics(const AuthenticationDiagnostic('USER_DOC_FOUND'));
     try {
       account = userAccountFromFirestoreData(snapshot.id, data);
     } catch (_) {
@@ -286,6 +292,7 @@ class FirebaseSessionController extends ChangeNotifier {
       errorMessage = loadedAccount.isActive
           ? null
           : 'This reviewer account is unavailable.';
+      _reportSessionLoaded(stage);
       unawaited(_cancelProfilesSubscription());
       unawaited(_cancelLocationSubscription());
       notifyListeners();
@@ -309,6 +316,7 @@ class FirebaseSessionController extends ChangeNotifier {
       } else {
         unawaited(_replaceAdminLocationSubscription(sessionGeneration));
       }
+      if (stage != SessionStage.loading) _reportSessionLoaded(stage);
       unawaited(_cancelProfilesSubscription());
       notifyListeners();
       return;
@@ -317,6 +325,7 @@ class FirebaseSessionController extends ChangeNotifier {
     if (!loadedAccount.isActive) {
       stage = SessionStage.disabled;
       errorMessage = 'This account is unavailable.';
+      _reportSessionLoaded(stage);
       unawaited(_cancelProfilesSubscription());
       notifyListeners();
       return;
@@ -387,6 +396,7 @@ class FirebaseSessionController extends ChangeNotifier {
             } else {
               errorMessage = 'This academy location is unavailable.';
             }
+            _reportSessionLoaded(stage);
             notifyListeners();
           },
           onError: (_) {
@@ -664,9 +674,11 @@ class FirebaseSessionController extends ChangeNotifier {
             )) {
               stage = SessionStage.member;
               errorMessage = null;
+              _reportSessionLoaded(stage);
             } else {
               stage = SessionStage.disabled;
               errorMessage = 'This academy location is unavailable.';
+              _reportSessionLoaded(stage);
             }
             notifyListeners();
           },
@@ -692,6 +704,7 @@ class FirebaseSessionController extends ChangeNotifier {
 
   void _setError(String message) {
     if (_disposed) return;
+    _diagnostics(const AuthenticationDiagnostic('SESSION_LOAD_FAILED'));
     ++_profilesGeneration;
     ++_locationGeneration;
     final profiles = _profilesSubscription;
@@ -709,6 +722,15 @@ class FirebaseSessionController extends ChangeNotifier {
     errorMessage = message;
     stage = SessionStage.error;
     notifyListeners();
+  }
+
+  void _reportSessionLoaded(SessionStage loadedStage) {
+    _diagnostics(
+      AuthenticationDiagnostic(
+        'SESSION_LOAD_SUCCEEDED',
+        code: loadedStage.name,
+      ),
+    );
   }
 
   Future<void> _cancelFirestoreSubscriptions() async {
