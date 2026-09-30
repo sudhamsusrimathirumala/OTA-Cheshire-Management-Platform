@@ -32,6 +32,7 @@ Future<LinkedProfileResolution> reconcileLinkedProfiles({
   required List<String> expectedIds,
   required List<StudentProfile> snapshotProfiles,
   required bool isFromCache,
+  bool deferServerRecovery = false,
   required MissingProfileLoader loadMissingFromServer,
 }) async {
   final profilesById = {
@@ -47,7 +48,7 @@ Future<LinkedProfileResolution> reconcileLinkedProfiles({
       profiles: _orderedProfiles(expectedIds, profilesById),
     );
   }
-  if (isFromCache) {
+  if (isFromCache || deferServerRecovery) {
     return LinkedProfileResolution(
       status: LinkedProfileResolutionStatus.transitional,
       missingIds: missingIds,

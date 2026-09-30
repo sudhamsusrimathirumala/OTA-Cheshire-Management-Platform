@@ -225,6 +225,23 @@ class AdminLocationController extends ChangeNotifier {
       _reset();
       return;
     }
+    final cached = const LocationTimeService().cachedLocation(locationId);
+    if (cached != null) {
+      final alreadyApplied =
+          _listeningAccess == AdminLocationAccess.locationAdmin &&
+          _listeningLocationId == locationId &&
+          _locations.length == 1 &&
+          identical(_locations.single, cached);
+      if (alreadyApplied) return;
+      ++_generation;
+      _cancelSubscriptions();
+      _listeningAccess = AdminLocationAccess.locationAdmin;
+      _listeningLocationId = locationId;
+      _assignedLocationId = locationId;
+      _selectedLocationId = null;
+      _applyLocations([cached]);
+      return;
+    }
     if (_listeningAccess == AdminLocationAccess.locationAdmin &&
         _listeningLocationId == locationId &&
         _assignedLocationSubscription != null) {
@@ -253,6 +270,9 @@ class AdminLocationController extends ChangeNotifier {
 
   void _applyLocations(List<AcademyLocation> value) {
     _locations = List.unmodifiable(value);
+    for (final location in value) {
+      const LocationTimeService().cacheLocation(location);
+    }
     if (_selectedLocationId != null &&
         !activeLocationIds.contains(_selectedLocationId)) {
       _selectedLocationId = null;

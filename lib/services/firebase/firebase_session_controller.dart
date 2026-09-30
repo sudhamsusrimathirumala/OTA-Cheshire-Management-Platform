@@ -8,6 +8,8 @@ import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import '../firestore/firestore_collections.dart';
+import '../location_time_service.dart';
+import '../performance_diagnostics.dart';
 import 'firebase_app_data_service.dart';
 import 'firebase_authentication_service.dart';
 import 'firebase_identity_contract.dart';
@@ -25,6 +27,8 @@ enum SessionStage {
   admin,
   error,
 }
+
+enum ProfileCreationPhase { savingProfiles, finishingAccountSetup }
 
 class FirebaseSessionController extends ChangeNotifier {
   FirebaseSessionController({
@@ -68,8 +72,18 @@ class FirebaseSessionController extends ChangeNotifier {
   String? _profilesLinkedFingerprint;
   String? _profileRecoveryFingerprint;
   bool _profileCreationInProgress = false;
+  Set<String> _recentlyCreatedProfileIds = const {};
+  bool _deferCreatedProfileRecovery = false;
+  Timer? _createdProfileRecoveryTimer;
+  QuerySnapshot<Map<String, dynamic>>? _latestProfilesSnapshot;
   bool _authenticatedGuestClaim = false;
   bool _disposed = false;
+  bool _authStateTimingReported = false;
+  bool _firstUserSnapshotPending = false;
+  bool _firstProfilesSnapshotPending = false;
+  bool _firstLocationSnapshotPending = false;
+  PerformanceTrace? _sessionLoadTrace;
+  DateTime? _lastWebResumeRequest;
 
   bool get hasActiveAcademyAccess => stage == SessionStage.member;
   bool get isAdministrator => stage == SessionStage.admin;
@@ -77,10 +91,13 @@ class FirebaseSessionController extends ChangeNotifier {
   void start() {
     if (_started) return;
     _started = true;
-    _authSubscription = authentication.authStateChanges().listen(
-      (user) => unawaited(_replaceAuthUser(user)),
-      onError: (_) => _setError('Unable to observe authentication state.'),
-    );
+    _authSubscription = authentication.authStateChanges().listen((user) {
+      if (!_authStateTimingReported) {
+        _authStateTimingReported = true;
+        PerformanceDiagnostics.webStartupStage('auth_state_resolved');
+      }
+      unawaited(_replaceAuthUser(user));
+    }, onError: (_) => _setError('Unable to observe authentication state.'));
   }
 
   Future<void> retry() async {
@@ -130,20 +147,130 @@ class FirebaseSessionController extends ChangeNotifier {
     await _replaceAuthUser(null);
   }
 
-  Future<void> createProfiles(ProfileCreationRequest request) async {
+  Future<void> createProfiles(
+    ProfileCreationRequest request, {
+    ValueChanged<ProfileCreationPhase>? onPhaseChanged,
+  }) async {
+    final generation = _sessionGeneration;
+    final identity = authUser?.uid;
+    final trace = PerformanceDiagnostics.start('profile_creation_total');
     _profileCreationInProgress = true;
+    _deferCreatedProfileRecovery = true;
+    _recentlyCreatedProfileIds = const {};
+    var transitionStarted = false;
+    onPhaseChanged?.call(ProfileCreationPhase.savingProfiles);
     try {
-      await profileService.createProfiles(request);
+      final createdIds = await profileService.createProfiles(request);
+      trace.stage('write_complete');
+      if (!_isCurrentSession(generation, identity ?? '')) return;
+      _recentlyCreatedProfileIds = createdIds.toSet();
+      transitionStarted = true;
+      justCreatedProfiles = true;
+      _profileCreationInProgress = false;
+      onPhaseChanged?.call(ProfileCreationPhase.finishingAccountSetup);
+      notifyListeners();
+      _scheduleCreatedProfileRecovery(generation);
+      await _resumeProfileTransitionAfterWrite(generation);
+      await _waitForProfileCreationTransition(generation);
+      trace.stage('session_transition_complete');
     } finally {
       _profileCreationInProgress = false;
+      if (!transitionStarted) _clearCreatedProfileRecovery();
     }
-    justCreatedProfiles = true;
-    final user = authUser;
-    if (user == null) {
-      notifyListeners();
+  }
+
+  Future<void> _resumeProfileTransitionAfterWrite(int sessionGeneration) async {
+    final snapshot = _latestProfilesSnapshot;
+    if (snapshot != null &&
+        sessionGeneration == _sessionGeneration &&
+        _profilesLinkedFingerprint != null) {
+      await _handleProfilesSnapshot(
+        snapshot,
+        sessionGeneration,
+        _profilesGeneration,
+        _profilesLinkedFingerprint!,
+      );
       return;
     }
-    await _replaceAuthUser(user);
+    final loadedAccount = account;
+    if (loadedAccount == null || profiles.isEmpty || selectedProfile == null) {
+      return;
+    }
+    final loadedIds = profiles.map((profile) => profile.id).toSet();
+    if (!loadedIds.containsAll(loadedAccount.linkedStudentProfileIds)) return;
+    await _evaluateSelectedProfile(sessionGeneration, _profilesGeneration);
+  }
+
+  Future<void> _waitForProfileCreationTransition(int sessionGeneration) async {
+    if (_profileCreationTransitionFinished(sessionGeneration)) return;
+    final completer = Completer<void>();
+    void handleChange() {
+      if (!completer.isCompleted &&
+          _profileCreationTransitionFinished(sessionGeneration)) {
+        completer.complete();
+      }
+    }
+
+    addListener(handleChange);
+    try {
+      handleChange();
+      await completer.future;
+    } finally {
+      removeListener(handleChange);
+    }
+  }
+
+  bool _profileCreationTransitionFinished(int generation) =>
+      generation != _sessionGeneration ||
+      authUser == null ||
+      stage == SessionStage.member ||
+      stage == SessionStage.disabled ||
+      stage == SessionStage.error ||
+      stage == SessionStage.signedOut;
+
+  void _scheduleCreatedProfileRecovery(int sessionGeneration) {
+    _createdProfileRecoveryTimer?.cancel();
+    _createdProfileRecoveryTimer = Timer(const Duration(seconds: 2), () {
+      if (_disposed || sessionGeneration != _sessionGeneration) return;
+      _deferCreatedProfileRecovery = false;
+      final snapshot = _latestProfilesSnapshot;
+      final fingerprint = _profilesLinkedFingerprint;
+      if (snapshot != null && fingerprint != null) {
+        unawaited(
+          _handleProfilesSnapshot(
+            snapshot,
+            sessionGeneration,
+            _profilesGeneration,
+            fingerprint,
+          ),
+        );
+      }
+    });
+  }
+
+  Future<void> handleAppResumed({
+    bool? isWeb,
+    Future<void> Function()? enableNetwork,
+    DateTime? now,
+  }) async {
+    final web = isWeb ?? kIsWeb;
+    final current = now ?? DateTime.now();
+    if (!shouldRequestWebFirestoreResume(
+      isWeb: web,
+      hasAuthenticatedUser: authUser != null,
+      lastRequest: _lastWebResumeRequest,
+      now: current,
+    )) {
+      return;
+    }
+    _lastWebResumeRequest = current;
+    final trace = PerformanceDiagnostics.start('web_resume');
+    try {
+      await (enableNetwork?.call() ?? _database.enableNetwork());
+      trace.stage('firestore_network_enabled');
+    } catch (_) {
+      trace.stage('firestore_network_enable_failed');
+    }
   }
 
   void dismissCreatedConfirmation() {
@@ -185,6 +312,13 @@ class FirebaseSessionController extends ChangeNotifier {
 
   Future<void> _replaceAuthUser(User? user) async {
     final generation = ++_sessionGeneration;
+    _sessionLoadTrace = user == null
+        ? null
+        : PerformanceDiagnostics.start('session_load');
+    _sessionLoadTrace?.stage('authenticated_user_available');
+    _firstUserSnapshotPending = user != null;
+    _firstProfilesSnapshotPending = false;
+    _firstLocationSnapshotPending = false;
     _profilesGeneration++;
     _locationGeneration++;
     await _cancelFirestoreSubscriptions();
@@ -207,6 +341,7 @@ class FirebaseSessionController extends ChangeNotifier {
       final claims = await authentication.authenticationClaims
           ?.currentUserClaims();
       _authenticatedGuestClaim = claims?['otaGuest'] == true;
+      _sessionLoadTrace?.stage('claims_fetch_complete');
     } catch (_) {
       _setError('Unable to verify this account authorization.');
       return;
@@ -234,6 +369,14 @@ class FirebaseSessionController extends ChangeNotifier {
     DocumentSnapshot<Map<String, dynamic>> snapshot,
     int sessionGeneration,
   ) {
+    if (_firstUserSnapshotPending) {
+      _firstUserSnapshotPending = false;
+      _sessionLoadTrace?.stage(
+        snapshot.metadata.isFromCache
+            ? 'user_snapshot_first_cache'
+            : 'user_snapshot_first_server',
+      );
+    }
     final data = snapshot.data();
     if (data == null) {
       _diagnostics(const AuthenticationDiagnostic('USER_DOC_MISSING'));
@@ -372,6 +515,7 @@ class FirebaseSessionController extends ChangeNotifier {
       _setError('This administrator has no assigned academy location.');
       return;
     }
+    _firstLocationSnapshotPending = true;
     _locationSubscription = _database
         .collection(FirestoreCollections.locations)
         .doc(locationId)
@@ -386,6 +530,15 @@ class FirebaseSessionController extends ChangeNotifier {
               return;
             }
             final data = snapshot.data();
+            if (_firstLocationSnapshotPending) {
+              _firstLocationSnapshotPending = false;
+              _sessionLoadTrace?.stage(
+                snapshot.metadata.isFromCache
+                    ? 'location_first_cache'
+                    : 'location_first_server',
+              );
+            }
+            const LocationTimeService().cacheLocationSnapshot(locationId, data);
             selectedLocationName = _locationName(data);
             stage = adminAccessStageFor(
               account: account,
@@ -417,6 +570,8 @@ class FirebaseSessionController extends ChangeNotifier {
     _profilesSubscription = null;
     _profilesLinkedFingerprint = null;
     _profileRecoveryFingerprint = null;
+    _latestProfilesSnapshot = null;
+    _clearCreatedProfileRecovery();
     profiles = const [];
     selectedProfile = null;
     await previous?.cancel();
@@ -441,6 +596,7 @@ class FirebaseSessionController extends ChangeNotifier {
     _profilesSubscription = null;
     _profilesLinkedFingerprint = null;
     _profileRecoveryFingerprint = null;
+    _latestProfilesSnapshot = null;
     _locationSubscription = null;
     await Future.wait<void>([
       if (previousProfiles != null) previousProfiles.cancel(),
@@ -454,6 +610,7 @@ class FirebaseSessionController extends ChangeNotifier {
     }
     final linkedFingerprint = linkedIds.join('\u0000');
     _profilesLinkedFingerprint = linkedFingerprint;
+    _firstProfilesSnapshotPending = true;
     _profilesSubscription = _database
         .collection(FirestoreCollections.studentProfiles)
         .where(FieldPath.documentId, whereIn: linkedIds)
@@ -494,6 +651,15 @@ class FirebaseSessionController extends ChangeNotifier {
     String linkedFingerprint,
   ) async {
     try {
+      _latestProfilesSnapshot = snapshot;
+      if (_firstProfilesSnapshotPending) {
+        _firstProfilesSnapshotPending = false;
+        _sessionLoadTrace?.stage(
+          snapshot.metadata.isFromCache
+              ? 'linked_profiles_first_cache'
+              : 'linked_profiles_first_server',
+        );
+      }
       final loaded = snapshot.docs
           .map(
             (document) =>
@@ -507,20 +673,37 @@ class FirebaseSessionController extends ChangeNotifier {
         linkedFingerprint,
         ...loadedIds,
       ].join('\u0001');
-      if (!snapshot.metadata.isFromCache &&
+      final missingIds = linkedIds
+          .where((id) => !loadedIds.contains(id))
+          .toList(growable: false);
+      final deferCreatedRecovery = shouldDeferCreatedProfileServerRecovery(
+        creationWritePending: _profileCreationInProgress,
+        deferAfterWrite: _deferCreatedProfileRecovery,
+        recentlyCreatedIds: _recentlyCreatedProfileIds,
+        missingIds: missingIds,
+      );
+      if (!deferCreatedRecovery &&
+          !snapshot.metadata.isFromCache &&
           loaded.length != linkedIds.length &&
           _profileRecoveryFingerprint == recoveryFingerprint) {
         return;
       }
-      if (!snapshot.metadata.isFromCache && loaded.length != linkedIds.length) {
+      if (!deferCreatedRecovery &&
+          !snapshot.metadata.isFromCache &&
+          loaded.length != linkedIds.length) {
         _profileRecoveryFingerprint = recoveryFingerprint;
       }
+      final reconciliationTrace = PerformanceDiagnostics.start(
+        'linked_profile_reconciliation',
+      );
       final resolution = await reconcileLinkedProfiles(
         expectedIds: linkedIds,
         snapshotProfiles: loaded,
         isFromCache: snapshot.metadata.isFromCache,
+        deferServerRecovery: deferCreatedRecovery,
         loadMissingFromServer: _loadProfilesFromServer,
       );
+      reconciliationTrace.stage('complete_${resolution.status.name}');
       if (!_isCurrentProfiles(
         sessionGeneration,
         profilesGeneration,
@@ -567,6 +750,7 @@ class FirebaseSessionController extends ChangeNotifier {
         return;
       }
       _profileRecoveryFingerprint = null;
+      _clearCreatedProfileRecovery();
       final reconciledProfiles = resolution.profiles;
       profiles = reconciledProfiles;
       final selectedId = account!.selectedStudentProfileId;
@@ -574,7 +758,14 @@ class FirebaseSessionController extends ChangeNotifier {
           .where((profile) => profile.id == selectedId)
           .firstOrNull;
       if (selectedProfile == null) {
-        unawaited(profileService.selectProfile(reconciledProfiles.first.id));
+        final selectionTrace = PerformanceDiagnostics.start(
+          'selected_profile_write',
+        );
+        unawaited(
+          profileService
+              .selectProfile(reconciledProfiles.first.id)
+              .whenComplete(() => selectionTrace.stage('complete')),
+        );
         selectedProfile = reconciledProfiles.first;
       }
       if (shouldHoldProfileSetupDuringCreation(
@@ -596,6 +787,9 @@ class FirebaseSessionController extends ChangeNotifier {
   Future<List<StudentProfile>> _loadProfilesFromServer(
     List<String> profileIds,
   ) async {
+    final trace = PerformanceDiagnostics.start(
+      'linked_profile_server_recovery',
+    );
     final snapshots = await Future.wait(
       profileIds.map(
         (id) => _database
@@ -604,7 +798,7 @@ class FirebaseSessionController extends ChangeNotifier {
             .get(const GetOptions(source: Source.server)),
       ),
     );
-    return snapshots
+    final loaded = snapshots
         .where((snapshot) => snapshot.exists && snapshot.data() != null)
         .map(
           (snapshot) =>
@@ -612,6 +806,8 @@ class FirebaseSessionController extends ChangeNotifier {
         )
         .whereType<StudentProfile>()
         .toList(growable: false);
+    trace.stage('complete');
+    return loaded;
   }
 
   Future<void> _evaluateSelectedProfile(
@@ -650,6 +846,7 @@ class FirebaseSessionController extends ChangeNotifier {
       current: stage,
       established: SessionStage.member,
     );
+    _firstLocationSnapshotPending = true;
     _locationSubscription = _database
         .collection(FirestoreCollections.locations)
         .doc(locationId)
@@ -665,6 +862,15 @@ class FirebaseSessionController extends ChangeNotifier {
               return;
             }
             final data = snapshot.data();
+            if (_firstLocationSnapshotPending) {
+              _firstLocationSnapshotPending = false;
+              _sessionLoadTrace?.stage(
+                snapshot.metadata.isFromCache
+                    ? 'location_first_cache'
+                    : 'location_first_server',
+              );
+            }
+            const LocationTimeService().cacheLocationSnapshot(locationId, data);
             selectedLocationName = _locationName(data);
             final locationActive = data?['isActive'] == true;
             if (hasActiveAcademyAccessFor(
@@ -675,6 +881,7 @@ class FirebaseSessionController extends ChangeNotifier {
               stage = SessionStage.member;
               errorMessage = null;
               _reportSessionLoaded(stage);
+              _sessionLoadTrace?.stage('member_ready');
             } else {
               stage = SessionStage.disabled;
               errorMessage = 'This academy location is unavailable.';
@@ -695,6 +902,13 @@ class FirebaseSessionController extends ChangeNotifier {
         );
     errorMessage = null;
     notifyListeners();
+  }
+
+  void _clearCreatedProfileRecovery() {
+    _createdProfileRecoveryTimer?.cancel();
+    _createdProfileRecoveryTimer = null;
+    _deferCreatedProfileRecovery = false;
+    _recentlyCreatedProfileIds = const {};
   }
 
   String? _locationName(Map<String, dynamic>? data) {
@@ -731,6 +945,11 @@ class FirebaseSessionController extends ChangeNotifier {
         code: loadedStage.name,
       ),
     );
+    if (loadedStage == SessionStage.member ||
+        loadedStage == SessionStage.admin ||
+        loadedStage == SessionStage.guest) {
+      PerformanceDiagnostics.webStartupStage('session_ready');
+    }
   }
 
   Future<void> _cancelFirestoreSubscriptions() async {
@@ -741,6 +960,8 @@ class FirebaseSessionController extends ChangeNotifier {
     _profilesSubscription = null;
     _profilesLinkedFingerprint = null;
     _profileRecoveryFingerprint = null;
+    _latestProfilesSnapshot = null;
+    _clearCreatedProfileRecovery();
     _locationSubscription = null;
     selectedLocationName = null;
     await Future.wait<void>([
@@ -799,6 +1020,7 @@ class FirebaseSessionController extends ChangeNotifier {
     ++_sessionGeneration;
     ++_profilesGeneration;
     ++_locationGeneration;
+    _createdProfileRecoveryTimer?.cancel();
     final auth = _authSubscription;
     _authSubscription = null;
     unawaited(auth?.cancel());
@@ -834,6 +1056,32 @@ bool shouldHoldProfileSetupDuringCreation({
   required bool creationInProgress,
   required SessionStage current,
 }) => creationInProgress && current == SessionStage.needsProfiles;
+
+@visibleForTesting
+bool shouldDeferCreatedProfileServerRecovery({
+  required bool creationWritePending,
+  required bool deferAfterWrite,
+  required Set<String> recentlyCreatedIds,
+  required List<String> missingIds,
+}) {
+  if (missingIds.isEmpty) return false;
+  if (creationWritePending) return true;
+  return deferAfterWrite &&
+      recentlyCreatedIds.isNotEmpty &&
+      missingIds.every(recentlyCreatedIds.contains);
+}
+
+@visibleForTesting
+bool shouldRequestWebFirestoreResume({
+  required bool isWeb,
+  required bool hasAuthenticatedUser,
+  required DateTime? lastRequest,
+  required DateTime now,
+  Duration minimumInterval = const Duration(seconds: 3),
+}) {
+  if (!isWeb || !hasAuthenticatedUser) return false;
+  return lastRequest == null || now.difference(lastRequest) >= minimumInterval;
+}
 
 @visibleForTesting
 bool shouldRunSignOutCleanup(SessionStage stage) => stage != SessionStage.guest;

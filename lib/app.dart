@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -63,7 +65,10 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _handleSessionChanged();
+    if (state == AppLifecycleState.resumed) {
+      unawaited(firebaseSessionController.handleAppResumed());
+      _handleSessionChanged();
+    }
   }
 
   void _handleSessionChanged() {

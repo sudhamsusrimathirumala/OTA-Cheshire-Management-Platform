@@ -10,6 +10,7 @@ import 'app_environment.dart';
 import 'services/app_data_service_provider.dart';
 import 'services/firebase/firebase_session_controller.dart';
 import 'services/location_time_service.dart';
+import 'services/performance_diagnostics.dart';
 import 'services/push_navigation_coordinator.dart';
 import 'services/push_notification_service.dart';
 import 'services/push_runtime.dart';
@@ -34,6 +35,7 @@ Future<void> bootstrapApplication({
   );
   startupDiagnostics.checkpoint('dart_bootstrap_entered');
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) PerformanceDiagnostics.startWebStartup();
   startupDiagnostics.installUncaughtErrorHandlers();
   WidgetsBinding.instance.addPostFrameCallback((_) {
     startupDiagnostics.checkpoint('dart_first_frame_rendered');
@@ -85,6 +87,7 @@ Future<void> _initializeApplication({
     await Firebase.initializeApp(options: resolvedFirebaseOptions);
   }
   startupDiagnostics.checkpoint('firebase_initialize_complete');
+  if (kIsWeb) PerformanceDiagnostics.webStartupStage('firebase_initialized');
   final crashReporter = createStartupCrashReporter();
   if (crashReporter != null) {
     unawaited(
@@ -124,6 +127,9 @@ Future<void> _initializeApplication({
   firebaseSessionController.start();
   initializeFirebaseAppDataService();
   startupDiagnostics.checkpoint('session_initialize_complete');
+  if (kIsWeb) {
+    PerformanceDiagnostics.webStartupStage('session_listeners_started');
+  }
   final coordinator = pushNavigationCoordinator;
   if (coordinator != null) {
     unawaited(

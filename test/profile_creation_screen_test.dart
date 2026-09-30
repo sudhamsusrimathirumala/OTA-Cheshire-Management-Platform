@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
 
 void main() {
@@ -86,6 +89,40 @@ void main() {
     );
     expect(firstName.controller?.text, 'Ada');
     expect(lastName.controller?.text, 'Lovelace');
+  });
+
+  testWidgets('location loading does not block applicant form entry', (
+    tester,
+  ) async {
+    final locations = Completer<List<AcademyLocation>>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileCreationScreen(
+          accountEmail: 'student@example.com',
+          loadLocations: () => locations.future,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(Stepper), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'First name'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+
+    locations.complete(const [cheshire]);
+    await tester.pumpAndSettle();
+  });
+
+  test('profile creation progress describes real asynchronous phases', () {
+    expect(
+      profileCreationProgressLabel(ProfileCreationPhase.savingProfiles),
+      'Saving profiles…',
+    );
+    expect(
+      profileCreationProgressLabel(ProfileCreationPhase.finishingAccountSetup),
+      'Finishing account setup…',
+    );
   });
 
   testWidgets('blank added students render safe review placeholders', (
@@ -327,13 +364,14 @@ void main() {
     );
   });
 
-  testWidgets('no active location blocks setup with retry and sign out', (
+  testWidgets('no active location leaves applicant form and sign out usable', (
     tester,
   ) async {
     var signedOut = false;
     await tester.pumpWidget(
       MaterialApp(
         home: ProfileCreationScreen(
+          accountEmail: 'student@example.com',
           loadLocations: () async => const [],
           onSignOut: () => signedOut = true,
         ),
@@ -341,11 +379,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No active academy location'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
-    expect(find.text('Sign out'), findsNWidgets(2));
-    expect(find.byType(Stepper), findsNothing);
-    await tester.tap(find.text('Sign out').last);
+    expect(find.byType(Stepper), findsOneWidget);
+    expect(find.text('Sign out'), findsOneWidget);
+    await tester.tap(find.text('Sign out'));
     expect(signedOut, isTrue);
   });
 }

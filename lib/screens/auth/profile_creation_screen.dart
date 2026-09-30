@@ -40,6 +40,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   bool _parentIsStudent = false;
   bool _confirmed = false;
   bool _saving = false;
+  ProfileCreationPhase _savingPhase = ProfileCreationPhase.savingProfiles;
   bool _loadingLocations = true;
   int _step = 0;
   String? _error;
@@ -205,6 +206,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
     }
     setState(() {
       _saving = true;
+      _savingPhase = ProfileCreationPhase.savingProfiles;
       _error = null;
     });
     final applicantBirthDate = _dateOfBirth;
@@ -260,7 +262,12 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         await createProfiles(request);
         widget.onProfilesCreated?.call();
       } else {
-        await firebaseSessionController.createProfiles(request);
+        await firebaseSessionController.createProfiles(
+          request,
+          onPhaseChanged: (phase) {
+            if (mounted) setState(() => _savingPhase = phase);
+          },
+        );
       }
     } on ProfileServiceException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -283,309 +290,312 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
         ],
       ),
       body: SafeArea(
-        child: _loadingLocations
-            ? const Center(child: CircularProgressIndicator())
-            : _locationsError != null
-            ? Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 520),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.location_off_outlined, size: 52),
-                        const SizedBox(height: 14),
-                        Text(_locationsError!, textAlign: TextAlign.center),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _loadLocations,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
-                        ),
-                        TextButton(
-                          onPressed:
-                              widget.onSignOut ??
-                              firebaseSessionController.signOut,
-                          child: const Text('Sign out'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              )
-            : Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 780),
-                  child: Column(
-                    children: [
-                      _OnboardingProgressHeader(step: _step),
-                      Expanded(
-                        child: Stepper(
-                          currentStep: _step,
-                          onStepTapped: (value) {
-                            if (value < _step) setState(() => _step = value);
-                          },
-                          controlsBuilder: (context, details) => Padding(
-                            padding: const EdgeInsets.only(top: 20),
-                            child: Row(
-                              children: [
-                                FilledButton(
-                                  key: ValueKey(
-                                    'profile-continue-${details.stepIndex}',
-                                  ),
-                                  onPressed: _saving ? null : _continue,
-                                  child: Text(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: Column(
+              children: [
+                _OnboardingProgressHeader(step: _step),
+                Expanded(
+                  child: Stepper(
+                    currentStep: _step,
+                    onStepTapped: (value) {
+                      if (value < _step) setState(() => _step = value);
+                    },
+                    controlsBuilder: (context, details) => Padding(
+                      padding: const EdgeInsets.only(top: 20),
+                      child: Row(
+                        children: [
+                          FilledButton(
+                            key: ValueKey(
+                              'profile-continue-${details.stepIndex}',
+                            ),
+                            onPressed:
+                                _saving ||
+                                    (_step == 2 &&
+                                        (_loadingLocations ||
+                                            _locationsError != null))
+                                ? null
+                                : _continue,
+                            child: _saving
+                                ? Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const SizedBox.square(
+                                        dimension: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Text(
+                                        profileCreationProgressLabel(
+                                          _savingPhase,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Text(
                                     _step == 2 ? 'Create profiles' : 'Continue',
                                   ),
-                                ),
-                                if (_step > 0) ...[
-                                  const SizedBox(width: 10),
-                                  TextButton(
-                                    key: ValueKey(
-                                      'profile-back-${details.stepIndex}',
-                                    ),
-                                    onPressed: _saving
-                                        ? null
-                                        : () => setState(() => _step--),
-                                    child: const Text('Back'),
-                                  ),
-                                ],
-                              ],
-                            ),
                           ),
-                          steps: [
-                            Step(
-                              title: const Text('Applicant information'),
-                              isActive: _step >= 0,
-                              content: Form(
-                                key: _formKeys[0],
-                                child: Column(
-                                  children: [
-                                    _field(_firstName, 'First name'),
-                                    _field(_lastName, 'Last name'),
-                                    ListTile(
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text('Date of birth'),
-                                      subtitle: Text(
-                                        _formatOptionalDate(
-                                          _dateOfBirth,
-                                          placeholder: 'Required',
-                                        ),
-                                      ),
-                                      trailing: const Icon(
-                                        Icons.calendar_month_rounded,
-                                      ),
-                                      onTap: _pickApplicantBirthDate,
-                                    ),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _beltRank,
-                                      decoration: const InputDecoration(
-                                        labelText: 'Belt rank',
-                                      ),
-                                      items: curriculumBeltOrder
-                                          .map(
-                                            (belt) => DropdownMenuItem(
-                                              value: belt,
-                                              child: Text(belt),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) {
-                                        if (value != null) {
-                                          setState(() => _beltRank = value);
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
+                          if (_step > 0) ...[
+                            const SizedBox(width: 10),
+                            TextButton(
+                              key: ValueKey(
+                                'profile-back-${details.stepIndex}',
                               ),
-                            ),
-                            Step(
-                              title: const Text('Role and family'),
-                              isActive: _step >= 1,
-                              content: Form(
-                                key: _formKeys[1],
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    SegmentedButton<ProfileAccountRole>(
-                                      segments: const [
-                                        ButtonSegment(
-                                          value: ProfileAccountRole.student,
-                                          label: Text('Student'),
-                                          icon: Icon(Icons.person),
-                                        ),
-                                        ButtonSegment(
-                                          value: ProfileAccountRole.parent,
-                                          label: Text('Parent'),
-                                          icon: Icon(Icons.family_restroom),
-                                        ),
-                                      ],
-                                      selected: {_role},
-                                      onSelectionChanged: (value) {
-                                        final role = value.firstOrNull;
-                                        if (role != null) {
-                                          setState(() => _role = role);
-                                        }
-                                      },
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _role == ProfileAccountRole.parent
-                                          ? 'Create one family account and manage each linked student profile.'
-                                          : 'Use this option when you are age 16 or older and manage your own student profile.',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium
-                                          ?.copyWith(
-                                            color: OtaColors.mutedText,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    if (_role == ProfileAccountRole.student)
-                                      _field(
-                                        _guardianEmail,
-                                        'Guardian email (optional)',
-                                        required: false,
-                                        email: true,
-                                      ),
-                                    if (_role == ProfileAccountRole.parent) ...[
-                                      SwitchListTile(
-                                        value: _parentIsStudent,
-                                        title: const Text(
-                                          'I am also an OTA student',
-                                        ),
-                                        onChanged: (value) => setState(
-                                          () => _parentIsStudent = value,
-                                        ),
-                                      ),
-                                      for (var i = 0; i < _children.length; i++)
-                                        _ChildEditor(
-                                          key: ValueKey(_children[i]),
-                                          fields: _children[i],
-                                          index: i,
-                                          onRemove: () => _removeChild(i),
-                                        ),
-                                      OutlinedButton.icon(
-                                        key: const ValueKey('add-student'),
-                                        onPressed: _children.length >= 10
-                                            ? null
-                                            : _addChild,
-                                        icon: const Icon(
-                                          Icons.person_add_alt_1_rounded,
-                                        ),
-                                        label: Text(
-                                          'Add student (${_children.length}/10)',
-                                        ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                            Step(
-                              title: const Text('Review and create'),
-                              isActive: _step >= 2,
-                              content: Form(
-                                key: _formKeys[2],
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _review(
-                                      'Applicant',
-                                      '${_firstName.text} ${_lastName.text}',
-                                    ),
-                                    _review('Account email', _accountEmail),
-                                    _review('Role', _role.name),
-                                    if (_locations.length == 1) ...[
-                                      _review(
-                                        'Academy',
-                                        _locations.single.name,
-                                      ),
-                                      _review(
-                                        'Academy address',
-                                        _locations.single.formattedAddress,
-                                      ),
-                                    ] else ...[
-                                      DropdownButtonFormField<String>(
-                                        initialValue: _selectedLocationId,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Academy location',
-                                          border: OutlineInputBorder(),
-                                        ),
-                                        items: [
-                                          for (final location in _locations)
-                                            DropdownMenuItem(
-                                              value: location.id,
-                                              child: Text(location.name),
-                                            ),
-                                        ],
-                                        onChanged: (value) => setState(
-                                          () => _selectedLocationId = value,
-                                        ),
-                                        validator: (value) => value == null
-                                            ? 'Select an academy location.'
-                                            : null,
-                                      ),
-                                      if (_selectedLocation != null)
-                                        _review(
-                                          'Academy address',
-                                          _selectedLocation!.formattedAddress,
-                                        ),
-                                    ],
-                                    _review(
-                                      'Date of birth',
-                                      _formatOptionalDate(_dateOfBirth),
-                                    ),
-                                    if (_role == ProfileAccountRole.student ||
-                                        _parentIsStudent)
-                                      _review('Applicant belt', _beltRank),
-                                    if (_role == ProfileAccountRole.student &&
-                                        _guardianEmail.text.trim().isNotEmpty)
-                                      _review(
-                                        'Guardian email',
-                                        _guardianEmail.text,
-                                      ),
-                                    for (
-                                      var i = 0;
-                                      _role == ProfileAccountRole.parent &&
-                                          i < _children.length;
-                                      i++
-                                    )
-                                      _review(
-                                        'Student ${i + 1}',
-                                        _children[i].summary,
-                                      ),
-                                    CheckboxListTile(
-                                      value: _confirmed,
-                                      contentPadding: EdgeInsets.zero,
-                                      title: const Text(
-                                        'I confirm these permanent profile details are correct.',
-                                      ),
-                                      onChanged: (value) => setState(
-                                        () => _confirmed = value ?? false,
-                                      ),
-                                    ),
-                                    if (_error != null)
-                                      Text(
-                                        _error!,
-                                        style: const TextStyle(
-                                          color: OtaColors.actionRed,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
+                              onPressed: _saving
+                                  ? null
+                                  : () => setState(() => _step--),
+                              child: const Text('Back'),
                             ),
                           ],
+                        ],
+                      ),
+                    ),
+                    steps: [
+                      Step(
+                        title: const Text('Applicant information'),
+                        isActive: _step >= 0,
+                        content: Form(
+                          key: _formKeys[0],
+                          child: Column(
+                            children: [
+                              _field(_firstName, 'First name'),
+                              _field(_lastName, 'Last name'),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Date of birth'),
+                                subtitle: Text(
+                                  _formatOptionalDate(
+                                    _dateOfBirth,
+                                    placeholder: 'Required',
+                                  ),
+                                ),
+                                trailing: const Icon(
+                                  Icons.calendar_month_rounded,
+                                ),
+                                onTap: _pickApplicantBirthDate,
+                              ),
+                              DropdownButtonFormField<String>(
+                                initialValue: _beltRank,
+                                decoration: const InputDecoration(
+                                  labelText: 'Belt rank',
+                                ),
+                                items: curriculumBeltOrder
+                                    .map(
+                                      (belt) => DropdownMenuItem(
+                                        value: belt,
+                                        child: Text(belt),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => _beltRank = value);
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Step(
+                        title: const Text('Role and family'),
+                        isActive: _step >= 1,
+                        content: Form(
+                          key: _formKeys[1],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SegmentedButton<ProfileAccountRole>(
+                                segments: const [
+                                  ButtonSegment(
+                                    value: ProfileAccountRole.student,
+                                    label: Text('Student'),
+                                    icon: Icon(Icons.person),
+                                  ),
+                                  ButtonSegment(
+                                    value: ProfileAccountRole.parent,
+                                    label: Text('Parent'),
+                                    icon: Icon(Icons.family_restroom),
+                                  ),
+                                ],
+                                selected: {_role},
+                                onSelectionChanged: (value) {
+                                  final role = value.firstOrNull;
+                                  if (role != null) {
+                                    setState(() => _role = role);
+                                  }
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                _role == ProfileAccountRole.parent
+                                    ? 'Create one family account and manage each linked student profile.'
+                                    : 'Use this option when you are age 16 or older and manage your own student profile.',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(color: OtaColors.mutedText),
+                              ),
+                              const SizedBox(height: 12),
+                              if (_role == ProfileAccountRole.student)
+                                _field(
+                                  _guardianEmail,
+                                  'Guardian email (optional)',
+                                  required: false,
+                                  email: true,
+                                ),
+                              if (_role == ProfileAccountRole.parent) ...[
+                                SwitchListTile(
+                                  value: _parentIsStudent,
+                                  title: const Text('I am also an OTA student'),
+                                  onChanged: (value) =>
+                                      setState(() => _parentIsStudent = value),
+                                ),
+                                for (var i = 0; i < _children.length; i++)
+                                  _ChildEditor(
+                                    key: ValueKey(_children[i]),
+                                    fields: _children[i],
+                                    index: i,
+                                    onRemove: () => _removeChild(i),
+                                  ),
+                                OutlinedButton.icon(
+                                  key: const ValueKey('add-student'),
+                                  onPressed: _children.length >= 10
+                                      ? null
+                                      : _addChild,
+                                  icon: const Icon(
+                                    Icons.person_add_alt_1_rounded,
+                                  ),
+                                  label: Text(
+                                    'Add student (${_children.length}/10)',
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      Step(
+                        title: const Text('Review and create'),
+                        isActive: _step >= 2,
+                        content: Form(
+                          key: _formKeys[2],
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_loadingLocations) ...[
+                                const LinearProgressIndicator(),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'Loading academy locations… You can review the rest of your details while this finishes.',
+                                ),
+                                const SizedBox(height: 12),
+                              ] else if (_locationsError != null) ...[
+                                Text(
+                                  _locationsError!,
+                                  style: const TextStyle(
+                                    color: OtaColors.actionRed,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _loadLocations,
+                                  icon: const Icon(Icons.refresh_rounded),
+                                  label: const Text('Retry locations'),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              _review(
+                                'Applicant',
+                                '${_firstName.text} ${_lastName.text}',
+                              ),
+                              _review('Account email', _accountEmail),
+                              _review('Role', _role.name),
+                              if (!_loadingLocations &&
+                                  _locationsError == null &&
+                                  _locations.length == 1) ...[
+                                _review('Academy', _locations.single.name),
+                                _review(
+                                  'Academy address',
+                                  _locations.single.formattedAddress,
+                                ),
+                              ] else if (!_loadingLocations &&
+                                  _locationsError == null) ...[
+                                DropdownButtonFormField<String>(
+                                  initialValue: _selectedLocationId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Academy location',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: [
+                                    for (final location in _locations)
+                                      DropdownMenuItem(
+                                        value: location.id,
+                                        child: Text(location.name),
+                                      ),
+                                  ],
+                                  onChanged: (value) => setState(
+                                    () => _selectedLocationId = value,
+                                  ),
+                                  validator: (value) => value == null
+                                      ? 'Select an academy location.'
+                                      : null,
+                                ),
+                                if (_selectedLocation != null)
+                                  _review(
+                                    'Academy address',
+                                    _selectedLocation!.formattedAddress,
+                                  ),
+                              ],
+                              _review(
+                                'Date of birth',
+                                _formatOptionalDate(_dateOfBirth),
+                              ),
+                              if (_role == ProfileAccountRole.student ||
+                                  _parentIsStudent)
+                                _review('Applicant belt', _beltRank),
+                              if (_role == ProfileAccountRole.student &&
+                                  _guardianEmail.text.trim().isNotEmpty)
+                                _review('Guardian email', _guardianEmail.text),
+                              for (
+                                var i = 0;
+                                _role == ProfileAccountRole.parent &&
+                                    i < _children.length;
+                                i++
+                              )
+                                _review(
+                                  'Student ${i + 1}',
+                                  _children[i].summary,
+                                ),
+                              CheckboxListTile(
+                                value: _confirmed,
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text(
+                                  'I confirm these permanent profile details are correct.',
+                                ),
+                                onChanged: (value) =>
+                                    setState(() => _confirmed = value ?? false),
+                              ),
+                              if (_error != null)
+                                Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: OtaColors.actionRed,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -691,6 +701,11 @@ String? initialLocationSelection(
       .firstOrNull
       ?.id;
 }
+
+String profileCreationProgressLabel(ProfileCreationPhase phase) =>
+    phase == ProfileCreationPhase.savingProfiles
+    ? 'Saving profiles…'
+    : 'Finishing account setup…';
 
 class _ChildFields {
   _ChildFields({required String guardianEmail}) {

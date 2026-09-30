@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/linked_profile_reconciler.dart';
 
@@ -96,6 +98,44 @@ void main() {
         'existing',
         'new-child',
       ]);
+    },
+  );
+
+  test(
+    'just-created profiles defer redundant direct server recovery',
+    () async {
+      var serverLoads = 0;
+      final result = await reconcileLinkedProfiles(
+        expectedIds: const ['existing', 'new-child'],
+        snapshotProfiles: const [_existingProfile],
+        isFromCache: false,
+        deferServerRecovery: true,
+        loadMissingFromServer: (_) async {
+          serverLoads++;
+          return const [];
+        },
+      );
+
+      expect(result.status, LinkedProfileResolutionStatus.transitional);
+      expect(serverLoads, 0);
+      expect(
+        shouldDeferCreatedProfileServerRecovery(
+          creationWritePending: false,
+          deferAfterWrite: true,
+          recentlyCreatedIds: const {'new-child'},
+          missingIds: const ['new-child'],
+        ),
+        isTrue,
+      );
+      expect(
+        shouldDeferCreatedProfileServerRecovery(
+          creationWritePending: false,
+          deferAfterWrite: true,
+          recentlyCreatedIds: const {'new-child'},
+          missingIds: const ['genuinely-missing'],
+        ),
+        isFalse,
+      );
     },
   );
 
@@ -196,6 +236,57 @@ void main() {
       isFalse,
     );
   });
+
+  test(
+    'Web resume enables Firestore once without restarting the session',
+    () async {
+      final controller =
+          FirebaseSessionController(
+              authentication: const _TestAuthenticationService(),
+            )
+            ..authUser = _FakeUser()
+            ..stage = SessionStage.member;
+      var enableCalls = 0;
+      final now = DateTime.utc(2026, 9, 30, 12);
+
+      await controller.handleAppResumed(
+        isWeb: true,
+        now: now,
+        enableNetwork: () async => enableCalls++,
+      );
+      await controller.handleAppResumed(
+        isWeb: true,
+        now: now.add(const Duration(seconds: 1)),
+        enableNetwork: () async => enableCalls++,
+      );
+
+      expect(enableCalls, 1);
+      expect(controller.stage, SessionStage.member);
+      expect(controller.authUser, isNotNull);
+      controller.dispose();
+    },
+  );
+}
+
+class _FakeUser implements User {
+  @override
+  String get uid => 'test-user';
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _TestAuthenticationService implements AuthenticationService {
+  const _TestAuthenticationService();
+
+  @override
+  User? get currentUser => null;
+
+  @override
+  Stream<User?> authStateChanges() => const Stream.empty();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 const _existingProfile = Student(

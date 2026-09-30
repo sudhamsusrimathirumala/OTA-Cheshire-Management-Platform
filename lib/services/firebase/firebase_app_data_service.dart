@@ -22,6 +22,7 @@ import '../app_data_service.dart';
 import '../firestore/firestore_collections.dart';
 import '../location_time_service.dart';
 import '../mock_app_data_service.dart';
+import '../performance_diagnostics.dart';
 
 const _debugAdminAccount = UserAccount(
   id: 'debug-admin',
@@ -151,6 +152,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   String _sessionDataFingerprint = '';
   String _notificationReadIdsFingerprint = '';
   FirebaseFirestore? _notificationReadsFirestore;
+  PerformanceTrace? _initialDataTrace;
+  final Set<String> _initialSnapshotSources = {};
 
   static const memberAnnouncementLimit = 30;
   static const memberEventLimit = 50;
@@ -198,8 +201,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       }
       return;
     }
-    if (_listeningLocationId == locationId &&
-        _listeningAsSuperAdmin == superAdmin) {
+    if (!shouldRestartAppDataListeners(
+      currentLocationId: _listeningLocationId,
+      currentSuperAdmin: _listeningAsSuperAdmin,
+      nextLocationId: locationId,
+      nextSuperAdmin: superAdmin,
+    )) {
       if (_sessionDataFingerprint == sessionFingerprint) return;
       _sessionDataFingerprint = sessionFingerprint;
       final announcements = _latestAnnouncementsSnapshot;
@@ -218,6 +225,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   void _listenToFirestore({String? locationId, required bool superAdmin}) {
     try {
+      _initialDataTrace = PerformanceDiagnostics.start('app_data_initial_load');
+      _initialSnapshotSources.clear();
+      _initialDataTrace?.stage('listeners_started');
       if (_firestore == null && Firebase.apps.isEmpty) {
         _useFallbackDataForUnavailableFirebase();
         return;
@@ -280,6 +290,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _listeningLocationId = null;
     _listeningAsSuperAdmin = false;
     _sessionDataFingerprint = '';
+    _initialDataTrace = null;
+    _initialSnapshotSources.clear();
     _clearData();
     notifyListeners();
   }
@@ -628,6 +640,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     };
     _isScheduleLoading = false;
     _scheduleErrorMessage = null;
+    _reportInitialSnapshot('schedule');
     notifyListeners();
   }
 
@@ -647,6 +660,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     )..sort((a, b) => b.displayDate.compareTo(a.displayDate));
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
+    _reportInitialSnapshot('announcements');
     notifyListeners();
   }
 
@@ -664,6 +678,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     )..sort((a, b) => a.startDateTime.compareTo(b.startDateTime));
     _isEventsLoading = false;
     _eventsErrorMessage = null;
+    _reportInitialSnapshot('events');
     notifyListeners();
   }
 
@@ -681,6 +696,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     )..sort((a, b) => a.title.compareTo(b.title));
     _isResourcesLoading = false;
     _resourcesErrorMessage = null;
+    _reportInitialSnapshot('resources');
     notifyListeners();
   }
 
@@ -726,6 +742,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     }
     _isScheduleLoading = false;
     _scheduleErrorMessage = null;
+    _reportInitialSnapshot('schedule');
     notifyListeners();
   }
 
@@ -734,6 +751,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isScheduleLoading = false;
     _scheduleErrorMessage = 'Unable to load schedule from Firestore.';
     _debugFirebaseError('schedule', error);
+    _reportInitialSnapshot('schedule_error');
     notifyListeners();
   }
 
@@ -754,6 +772,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
+    _reportInitialSnapshot('announcements');
     notifyListeners();
   }
 
@@ -767,6 +786,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = null;
+    _reportInitialSnapshot('targeted_announcements');
     notifyListeners();
   }
 
@@ -832,6 +852,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isAnnouncementsLoading = false;
     _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
     _debugFirebaseError('announcements', error);
+    _reportInitialSnapshot('announcements_error');
     notifyListeners();
   }
 
@@ -851,6 +872,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isEventsLoading = false;
     _eventsErrorMessage = null;
+    _reportInitialSnapshot('events');
     notifyListeners();
   }
 
@@ -859,6 +881,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isEventsLoading = false;
     _eventsErrorMessage = 'Unable to load events from Firestore.';
     _debugFirebaseError('events', error);
+    _reportInitialSnapshot('events_error');
     notifyListeners();
   }
 
@@ -868,6 +891,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isResourcesLoading = false;
     _resourcesErrorMessage = null;
+    _reportInitialSnapshot('resources');
     notifyListeners();
   }
 
@@ -876,6 +900,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isResourcesLoading = false;
     _resourcesErrorMessage = 'Unable to load resources from Firestore.';
     _debugFirebaseError('resources', error);
+    _reportInitialSnapshot('resources_error');
     notifyListeners();
   }
 
@@ -886,6 +911,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isAdminStudentsLoading = false;
     _adminStudentsErrorMessage = null;
+    _reportInitialSnapshot('admin_students');
     notifyListeners();
   }
 
@@ -895,6 +921,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminStudentsErrorMessage =
         'Unable to load student profiles from Firestore.';
     _debugFirebaseError('student profiles', error);
+    _reportInitialSnapshot('admin_students_error');
     notifyListeners();
   }
 
@@ -921,7 +948,32 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           ..sort((a, b) => a.displayName.compareTo(b.displayName));
     _isAdminUsersLoading = false;
     _adminUsersErrorMessage = null;
+    _reportInitialSnapshot('admin_users');
     notifyListeners();
+  }
+
+  void _reportInitialSnapshot(String source) {
+    if (!_initialSnapshotSources.add(source)) return;
+    _initialDataTrace?.stage('${source}_first_snapshot');
+    if (!hasUsableInitialData) return;
+    _initialDataTrace?.stage('usable_data_ready');
+    PerformanceDiagnostics.webStartupStage('app_data_ready');
+    _initialDataTrace = null;
+  }
+
+  @visibleForTesting
+  bool get hasUsableInitialData {
+    final session = firebaseSessionController;
+    if (_isScheduleLoading ||
+        _isAnnouncementsLoading ||
+        _isEventsLoading ||
+        _isResourcesLoading) {
+      return false;
+    }
+    if (session.stage == SessionStage.admin) {
+      return !_isAdminStudentsLoading && !_isAdminUsersLoading;
+    }
+    return session.stage == SessionStage.member;
   }
 
   void _handleAdminUsersError(Object error) {
@@ -929,6 +981,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isAdminUsersLoading = false;
     _adminUsersErrorMessage = 'Unable to load account holders from Firestore.';
     _debugFirebaseError('account holders', error);
+    _reportInitialSnapshot('admin_users_error');
     notifyListeners();
   }
 
@@ -1604,6 +1657,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 }
 
 enum _SuperAdminContent { schedule, announcements, events, resources }
+
+@visibleForTesting
+bool shouldRestartAppDataListeners({
+  required String? currentLocationId,
+  required bool currentSuperAdmin,
+  required String? nextLocationId,
+  required bool nextSuperAdmin,
+}) =>
+    currentLocationId != nextLocationId || currentSuperAdmin != nextSuperAdmin;
 
 List<T> mergeActiveLocationRecords<T>(
   Map<String, List<T>> recordsByLocation,

@@ -18,6 +18,8 @@ class LocationTimeService {
   static final Map<String, String> _timeZoneIds = {
     otaCheshireLocationId: otaCheshireTimeZoneId,
   };
+  static final Map<String, AcademyLocation> _locations = {};
+  static final Map<String, Future<AcademyLocation>> _locationLoads = {};
 
   static void initialize() {
     if (_isInitialized) return;
@@ -36,47 +38,93 @@ class LocationTimeService {
     _timeZoneIds[locationId] = timeZoneId;
   }
 
+  void cacheLocation(AcademyLocation location) {
+    if (location.id.trim().isEmpty) return;
+    cacheTimeZone(location.id, location.timeZoneId);
+    _locations[location.id] = location;
+  }
+
+  AcademyLocation? cachedLocation(String locationId) => _locations[locationId];
+
+  void cacheLocationSnapshot(String locationId, Map<String, dynamic>? data) {
+    if (locationId.trim().isEmpty || data == null) return;
+    cacheLocation(_locationFromData(locationId, data));
+  }
+
   Future<AcademyLocation> loadLocation(
     FirebaseFirestore firestore,
     String locationId,
-  ) async {
+  ) {
     initialize();
+    final cached = _locations[locationId];
+    if (cached != null) return Future.value(cached);
+    final pending = _locationLoads[locationId];
+    if (pending != null) return pending;
+    late Future<AcademyLocation> load;
+    load = _loadLocation(firestore, locationId).whenComplete(() {
+      if (identical(_locationLoads[locationId], load)) {
+        _locationLoads.remove(locationId);
+      }
+    });
+    _locationLoads[locationId] = load;
+    return load;
+  }
+
+  Future<AcademyLocation> _loadLocation(
+    FirebaseFirestore firestore,
+    String locationId,
+  ) async {
     try {
       final snapshot = await firestore
           .collection(FirestoreCollections.locations)
           .doc(locationId)
           .get();
       final data = snapshot.data();
-      final timeZoneId = data?['timeZoneId'];
-      final name = data?['name'];
-      final isActive = data?['isActive'];
-      if (timeZoneId is String && timeZoneId.trim().isNotEmpty) {
-        // Validate the IANA identifier before it becomes active.
-        tz.getLocation(timeZoneId);
-        _timeZoneIds[locationId] = timeZoneId;
-      }
-      return AcademyLocation(
-        id: locationId,
-        name: name is String && name.isNotEmpty ? name : 'Academy location',
-        timeZoneId: timeZoneIdFor(locationId),
-        isActive: isActive is bool ? isActive : true,
-        addressLine1: _stringValue(data?['addressLine1']),
-        addressLine2: _stringValue(data?['addressLine2']),
-        city: _stringValue(data?['city']),
-        state: _stringValue(data?['state']),
-        postalCode: _stringValue(data?['postalCode']),
-        country: _stringValue(data?['country']),
-        createdAt: _dateTimeValue(data?['createdAt']),
-        updatedAt: _dateTimeValue(data?['updatedAt']),
-      );
+      if (data == null) return _fallbackLocation(locationId);
+      final location = _locationFromData(locationId, data);
+      cacheLocation(location);
+      return location;
     } catch (_) {
-      return AcademyLocation(
-        id: locationId,
-        name: 'Academy location',
-        timeZoneId: timeZoneIdFor(locationId),
-        isActive: true,
-      );
+      return _fallbackLocation(locationId);
     }
+  }
+
+  AcademyLocation _locationFromData(
+    String locationId,
+    Map<String, dynamic> data,
+  ) {
+    final timeZoneId = _stringValue(data['timeZoneId']);
+    if (timeZoneId != null) tz.getLocation(timeZoneId);
+    return AcademyLocation(
+      id: locationId,
+      name: _stringValue(data['name']) ?? 'Academy location',
+      timeZoneId: timeZoneId ?? timeZoneIdFor(locationId),
+      isActive: data['isActive'] is bool ? data['isActive'] as bool : true,
+      addressLine1: _stringValue(data['addressLine1']),
+      addressLine2: _stringValue(data['addressLine2']),
+      city: _stringValue(data['city']),
+      state: _stringValue(data['state']),
+      postalCode: _stringValue(data['postalCode']),
+      country: _stringValue(data['country']),
+      createdAt: _dateTimeValue(data['createdAt']),
+      updatedAt: _dateTimeValue(data['updatedAt']),
+    );
+  }
+
+  AcademyLocation _fallbackLocation(String locationId) => AcademyLocation(
+    id: locationId,
+    name: 'Academy location',
+    timeZoneId: timeZoneIdFor(locationId),
+    isActive: true,
+  );
+
+  @visibleForTesting
+  static void clearLocationCache() {
+    _locations.clear();
+    _locationLoads.clear();
+    _timeZoneIds
+      ..clear()
+      ..[otaCheshireLocationId] = otaCheshireTimeZoneId;
   }
 
   tz.Location locationFor(String locationId) {

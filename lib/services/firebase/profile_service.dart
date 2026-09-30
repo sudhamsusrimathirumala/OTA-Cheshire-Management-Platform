@@ -6,6 +6,8 @@ import '../../models/academy_location.dart';
 import '../../models/class_session.dart';
 import '../../models/student_profile.dart';
 import '../firestore/firestore_collections.dart';
+import '../location_time_service.dart';
+import '../performance_diagnostics.dart';
 
 enum ProfileAccountRole { student, parent }
 
@@ -167,29 +169,55 @@ class FirestoreProfileService {
   final FirebaseFirestore _firestore;
 
   Future<List<String>> createProfiles(ProfileCreationRequest request) async {
+    final totalTrace = PerformanceDiagnostics.start('profile_creation_write');
     try {
       final identity = authProfileIdentity(_auth.currentUser);
       final userRef = _firestore
           .collection(FirestoreCollections.users)
           .doc(identity.uid);
-      if ((await userRef.get()).exists) {
-        throw const ProfileServiceException(
-          ProfileServiceError.alreadyExists,
-          'Profiles already exist for this account.',
-        );
-      }
-
       final locationId = request.locationId.trim();
-      final locationSnapshot = await _firestore
-          .collection(FirestoreCollections.locations)
-          .doc(locationId)
-          .get();
-      if (locationId.isEmpty || locationSnapshot.data()?['isActive'] != true) {
+      if (locationId.isEmpty) {
         throw const ProfileServiceException(
           ProfileServiceError.invalidLocation,
           'The selected academy location is unavailable.',
         );
       }
+      final locationRef = _firestore
+          .collection(FirestoreCollections.locations)
+          .doc(locationId);
+      final existingUserTrace = PerformanceDiagnostics.start(
+        'profile_creation_existing_user_check',
+      );
+      final locationTrace = PerformanceDiagnostics.start(
+        'profile_creation_location_validation',
+      );
+      final existingUserFuture = userRef.get().then((snapshot) {
+        existingUserTrace.stage('complete');
+        return snapshot;
+      });
+      final locationFuture = locationRef.get().then((snapshot) {
+        locationTrace.stage('complete');
+        return snapshot;
+      });
+      final reads = await Future.wait([existingUserFuture, locationFuture]);
+      final existingUser = reads[0];
+      final locationSnapshot = reads[1];
+      if (existingUser.exists) {
+        throw const ProfileServiceException(
+          ProfileServiceError.alreadyExists,
+          'Profiles already exist for this account.',
+        );
+      }
+      if (locationSnapshot.data()?['isActive'] != true) {
+        throw const ProfileServiceException(
+          ProfileServiceError.invalidLocation,
+          'The selected academy location is unavailable.',
+        );
+      }
+      const LocationTimeService().cacheLocationSnapshot(
+        locationId,
+        locationSnapshot.data(),
+      );
 
       final profileCount = profileCountForRequest(request);
       final profileRefs = List.generate(
@@ -209,16 +237,23 @@ class FirestoreProfileService {
       for (final reference in profileRefs) {
         batch.set(reference, plan.profiles[reference.id]!);
       }
+      final batchTrace = PerformanceDiagnostics.start(
+        'profile_creation_batch_commit',
+      );
       await batch.commit();
+      batchTrace.stage('complete');
       return profileRefs.map((reference) => reference.id).toList();
     } on ProfileServiceException {
       rethrow;
     } on FirebaseException catch (error) {
       throw mapProfileFirebaseException(error);
+    } finally {
+      totalTrace.stage('complete');
     }
   }
 
   Future<List<AcademyLocation>> loadActiveLocations() async {
+    final trace = PerformanceDiagnostics.start('active_locations_load');
     try {
       final snapshot = await _firestore
           .collection(FirestoreCollections.locations)
@@ -226,7 +261,7 @@ class FirestoreProfileService {
           .get();
       final locations = snapshot.docs.map((document) {
         final data = document.data();
-        return AcademyLocation(
+        final location = AcademyLocation(
           id: document.id,
           name: _requiredString(data['name'], 'Location name'),
           timeZoneId: _requiredString(data['timeZoneId'], 'Location time zone'),
@@ -238,10 +273,14 @@ class FirestoreProfileService {
           postalCode: _optionalString(data['postalCode']),
           country: _optionalString(data['country']),
         );
+        const LocationTimeService().cacheLocation(location);
+        return location;
       }).toList()..sort((a, b) => a.name.compareTo(b.name));
       return locations;
     } on FirebaseException catch (error) {
       throw mapProfileFirebaseException(error);
+    } finally {
+      trace.stage('complete');
     }
   }
 
