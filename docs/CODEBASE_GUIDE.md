@@ -830,12 +830,12 @@ Crashlytics is intentionally not initialized on Web. Startup checkpoints remain 
 
 OS-level Web Push is also intentionally deferred. The Web app does not ask for notification permission, create a Web FCM token, or label the browser as Android. This does not affect the authenticated in-app notification center. iPhone Web Push would additionally require a Home Screen-installed web app on supported iOS versions, user-triggered permission, a service worker, a Web Push certificate/VAPID configuration, a `web` device schema accepted by Rules and Functions, and physical-device validation.
 
-### Required production Firebase Console setup
+### Production Firebase Console configuration
 
-The production project currently needs a Web app registration. An authorized operator must perform these steps without changing the Android or iOS registrations:
+The production project has a registered Web app. Use this checklist to verify or maintain its configuration without changing the Android or iOS registrations:
 
 1. Open Firebase Console, select project `ota-management-platform-e4847`, then open **Project settings > General > Your apps**.
-2. Choose **Add app > Web**, use an unambiguous nickname such as `OTA Cheshire Web`, and register the app. The default Hosting site already exists, so creating a second site is unnecessary.
+2. Verify the registered Web app has the intended identity, such as the unambiguous nickname `OTA Cheshire Web`. The default Hosting site already exists, so creating a second app or site is unnecessary.
 3. Copy the generated Web configuration values: `apiKey`, `appId`, `messagingSenderId`, `projectId`, `authDomain`, `storageBucket`, and optional `measurementId`. Confirm `projectId` is exactly `ota-management-platform-e4847`. Do not substitute Android/iOS app IDs.
 4. Under **Authentication > Settings > Authorized domains**, verify `ota-management-platform-e4847.web.app` and `ota-management-platform-e4847.firebaseapp.com`. Add each approved custom production domain before using it. Keep `localhost` only for deliberate local testing.
 5. Under **Authentication > Sign-in method**, verify Email/Password and Google are enabled and the Google provider has the intended support email and public-facing project name.
@@ -880,7 +880,7 @@ Automated narrow-screen widget tests do not prove Mobile Safari behavior. On at 
 - in-app notification center behavior with no browser notification prompt; and
 - privacy-policy and account-deletion links opening the exact published destinations.
 
-The existing privacy policy must be reviewed before launch to state that browser sessions can use local storage/IndexedDB, Firebase Hosting and upstream services can process technical request logs including IP/device/browser information, OAuth uses external redirects/popups, embedded YouTube can receive browser data under Google's policies, and Web error reporting is currently local/no-op unless a separately disclosed processor is later enabled. The app must continue linking to the published policy at `https://docs.google.com/document/d/e/2PACX-1vQNJ9fGPhLxG9lkE8RXoMwdOXIFh9wc19rJXgCqefbEnE-c3nFnK9VpVhRMK-SLR7sPFuWQl3ZDMQy-/pub`.
+The published privacy policy has been updated for the Web launch to cover browser local storage/IndexedDB, technical request logs processed by Firebase Hosting and upstream services (including IP/device/browser information), OAuth redirects/popups, browser data shared with embedded YouTube under Google's policies, and the current local/no-op Web error-reporting behavior. The app continues linking to the published policy at `https://docs.google.com/document/d/e/2PACX-1vQNJ9fGPhLxG9lkE8RXoMwdOXIFh9wc19rJXgCqefbEnE-c3nFnK9VpVhRMK-SLR7sPFuWQl3ZDMQy-/pub`. Adding a browser monitoring processor later would require a separate disclosure review.
 
 ## Continuous integration
 
