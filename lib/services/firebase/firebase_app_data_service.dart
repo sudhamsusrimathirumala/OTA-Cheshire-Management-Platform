@@ -220,6 +220,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _listeningLocationId = locationId;
     _listeningAsSuperAdmin = superAdmin;
     _sessionDataFingerprint = sessionFingerprint;
+    PerformanceDiagnostics.mark('app_data_eligible');
     _listenToFirestore(locationId: locationId, superAdmin: superAdmin);
   }
 
@@ -380,10 +381,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
     query = query.where('locationId', isEqualTo: locationId);
     if (publishedOnly) query = query.where('isActive', isEqualTo: true);
-    _scheduleSubscription = query.snapshots().listen(
-      _handleScheduleSnapshot,
-      onError: _handleScheduleError,
-    );
+    PerformanceDiagnostics.mark('schedule_listener_started');
+    _scheduleSubscription = query
+        .snapshots(includeMetadataChanges: PerformanceDiagnostics.enabled)
+        .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
   }
 
   void _listenToAnnouncements(
@@ -403,11 +404,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .orderBy('publishedAt', descending: true)
           .limit(memberAnnouncementLimit);
     }
+    PerformanceDiagnostics.mark('announcements_listener_started');
     _announcementsSubscription = query.snapshots().listen(
       _handleAnnouncementsSnapshot,
       onError: _handleAnnouncementsError,
     );
     if (publishedOnly && uid != null) {
+      PerformanceDiagnostics.mark('targeted_announcements_listener_started');
       _targetedAnnouncementsSubscription = firestore
           .collection(FirestoreCollections.users)
           .doc(uid)
@@ -444,6 +447,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .orderBy('endDateTime')
           .limit(memberEventLimit);
     }
+    PerformanceDiagnostics.mark('events_listener_started');
     _eventsSubscription = query.snapshots().listen(
       _handleEventsSnapshot,
       onError: _handleEventsError,
@@ -466,6 +470,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .where('resourceSection', isEqualTo: 'general')
           .limit(memberResourceLimit);
     }
+    PerformanceDiagnostics.mark('resources_listener_started');
     _resourcesSubscription = query.snapshots().listen(
       _handleResourcesSnapshot,
       onError: _handleResourcesError,
@@ -481,6 +486,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       FirestoreCollections.studentProfiles,
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    PerformanceDiagnostics.mark('admin_students_listener_started');
     _adminStudentsSubscription = query.snapshots().listen(
       _handleAdminStudentsSnapshot,
       onError: _handleAdminStudentsError,
@@ -496,6 +502,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       FirestoreCollections.users,
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
+    PerformanceDiagnostics.mark('admin_users_listener_started');
     _adminUsersSubscription = query.snapshots().listen(
       _handleAdminUsersSnapshot,
       onError: _handleAdminUsersError,
@@ -733,6 +740,18 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleScheduleSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    PerformanceDiagnostics.mark(
+      'schedule_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
+    PerformanceDiagnostics.mark('schedule_snapshot', once: true);
+    PerformanceDiagnostics.mark(
+      'schedule_callback',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+    );
     _loadTimeZonesForSnapshot(snapshot);
     _schedule = _scheduleFromSnapshot(snapshot);
     _isUsingFallbackData = false;
@@ -742,8 +761,13 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     }
     _isScheduleLoading = false;
     _scheduleErrorMessage = null;
+    PerformanceDiagnostics.mark('schedule_model_parsed');
+    if (!snapshot.metadata.isFromCache || snapshot.docs.isNotEmpty) {
+      PerformanceDiagnostics.mark('schedule_model_ready', once: true);
+    }
     _reportInitialSnapshot('schedule');
     notifyListeners();
+    PerformanceDiagnostics.mark('schedule_notified', once: true);
   }
 
   void _handleScheduleError(Object error) {
@@ -758,6 +782,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _handleAnnouncementsSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
+    PerformanceDiagnostics.mark(
+      'announcements_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _loadTimeZonesForSnapshot(snapshot);
     _latestAnnouncementsSnapshot = snapshot;
     _adminAnnouncements = firebaseSessionController.stage == SessionStage.admin
@@ -779,6 +809,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _handleTargetedAnnouncementsSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
+    PerformanceDiagnostics.mark(
+      'targeted_announcements_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _loadTimeZonesForSnapshot(snapshot);
     _latestTargetedAnnouncementsSnapshot = snapshot;
     _rebuildMemberNotifications();
@@ -828,6 +864,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _notificationReadsSubscription = null;
     _notificationReadIds = const <String>{};
     if (ids.isEmpty) return;
+    PerformanceDiagnostics.mark('notification_reads_listener_started');
     _notificationReadsSubscription = firestore
         .collection(FirestoreCollections.users)
         .doc(uid)
@@ -836,6 +873,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .snapshots()
         .listen(
           (snapshot) {
+            PerformanceDiagnostics.mark(
+              'notification_reads_first_snapshot',
+              fromCache: snapshot.metadata.isFromCache,
+              count: snapshot.docs.length,
+              once: true,
+            );
             _notificationReadIds = snapshot.docs.map((doc) => doc.id).toSet();
             _rebuildMemberNotifications();
             notifyListeners();
@@ -867,6 +910,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleEventsSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    PerformanceDiagnostics.mark(
+      'events_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _loadTimeZonesForSnapshot(snapshot);
     _events = _eventsFromSnapshot(snapshot);
     _isUsingFallbackData = false;
@@ -886,6 +935,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleResourcesSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    PerformanceDiagnostics.mark(
+      'resources_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _loadTimeZonesForSnapshot(snapshot);
     _resources = _resourcesFromSnapshot(snapshot);
     _isUsingFallbackData = false;
@@ -907,6 +962,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _handleAdminStudentsSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
+    PerformanceDiagnostics.mark(
+      'admin_students_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _adminStudentProfiles = _adminStudentsFromSnapshot(snapshot);
     _isUsingFallbackData = false;
     _isAdminStudentsLoading = false;
@@ -926,6 +987,12 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleAdminUsersSnapshot(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    PerformanceDiagnostics.mark(
+      'admin_users_first_snapshot',
+      fromCache: snapshot.metadata.isFromCache,
+      count: snapshot.docs.length,
+      once: true,
+    );
     _adminUserAccounts =
         snapshot.docs
             .map((document) {
@@ -958,7 +1025,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     if (!hasUsableInitialData) return;
     _initialDataTrace?.stage('usable_data_ready');
     PerformanceDiagnostics.webStartupStage('app_data_ready');
-    _initialDataTrace = null;
   }
 
   @visibleForTesting

@@ -1039,3 +1039,225 @@ Before merging a cross-layer change, answer these questions explicitly:
 7. Is the most security-relevant behavior covered by an emulator or backend test rather than only a UI mock?
 
 For product history, operator setup, build commands, release readiness, known limitations, and the current security model in narrative form, return to the [README](../README.md).
+
+
+## Physical iPhone Web performance investigation (2026-10-04)
+
+Performance is measured across the whole member journey, not just a schedule
+query. Safari was observed to spend more time creating profiles; Edge was
+observed to create profiles quickly and then spend approximately seven seconds
+loading app data. These observations are not controlled measurements and do not
+establish which browser is intrinsically faster. No physical iPhone was available
+for this local investigation, so browser-specific dominant stages remain unverified.
+
+### Structural timeline and listener ordering
+
+The startup path is `app_bootstrap.dart` -> Firebase initialization -> the first
+Auth state -> `FirebaseSessionController._replaceAuthUser` -> claims retrieval ->
+user document watch -> linked-profile watch/reconciliation -> selected-profile
+location watch/access verification -> `SessionStage.member` -> synchronous
+`notifyListeners` -> `FirebaseAppDataService._handleSessionChanged` ->
+`_listenToFirestore` -> `_listenToSchedule`. The schedule watch starts first,
+followed by announcements, targeted deliveries, notification-read setup, events,
+and resources. Location metadata loading is unawaited; the session location
+snapshot has already seeded the shared metadata/timezone cache for a member.
+
+Profile creation follows Create Profiles press -> concurrent existing-user and
+location validation -> batch commit/server acknowledgement -> existing user watch
+propagation -> linked-profile watch/reconciliation -> location access verification
+-> member -> schedule watch -> first snapshot -> model -> notifier -> completed
+Flutter dashboard/schedule frame. Local write snapshots can arrive before batch
+acknowledgement; the existing creation guard holds membership until the write
+finishes. Propagation and reconciliation therefore overlap the commit rather than
+forming strictly sequential durations. Claims and the Auth user are not replaced
+or fetched again after ordinary profile creation. Missing just-created profiles
+retain the existing deferred-recovery behavior.
+
+Schedule loading and errors are independent of announcements, notification reads,
+events, and resources. `hasUsableInitialData` is an aggregate diagnostic/testing
+property, not a UI gate. The dashboard next-class panel and schedule content use
+`isScheduleLoading` and `scheduleErrorMessage`. A valid empty schedule is a usable
+empty state. An initial empty cache snapshot must not be interpreted as proof that
+the server has no classes; record its source/count and check subsequent updates.
+
+There is no artificial wait between member eligibility and schedule watch creation.
+Prewarming before the location watch validates access would cross the current
+access boundary; no additional prewarm listener or fake network read was added.
+Before and after this change the required network sequence is the same: claims,
+account/profile/location watches, then location-scoped content watches. The change
+makes the waits observable, rather than claiming an unmeasured reduction.
+
+The shared `LocationTimeService` cache reuses location snapshots and deduplicates
+in-flight metadata loads. Content callbacks may call `loadLocation` repeatedly,
+but a populated cache returns immediately and concurrent requests share one
+future. No new location IDs/timezones or persistent IndexedDB cache were added.
+The profile query changes only when linked IDs change. Same-scope app-data updates
+retain the content graph. Profile reconciliation still re-evaluates its location
+watch; changing that access lifecycle requires separate correctness evidence.
+
+### Diagnostics and interpretation
+
+Debug builds enable `ota.performance` logs. For a release preview, add
+`--dart-define=OTA_PERFORMANCE_DIAGNOSTICS=true` to the existing production build
+command with its real `OTA_FIREBASE_WEB_*` definitions. Ordinary production release
+builds keep the diagnostics disabled. Release Web diagnostics explicitly write to
+the browser console because this SDK's dart2js `developer.log` implementation is a
+no-op. There is no telemetry upload or identity/document payload in these logs.
+
+Stages contain elapsed milliseconds, a fixed stage/flow label, optional cache/server
+source and document count, and coarse web/native classification. Record Safari,
+Edge, standalone mode, iOS version, network, and test condition separately; raw
+user agents and personal data are not logged. Never attach an unredacted general
+browser-console dump: export/filter only `ota.performance` lines.
+
+Startup records Flutter start, Firebase completion, and first resolved Auth state.
+Session diagnostics record authenticated user, claims start/end, user listener and
+first cache/server snapshot, post-create user/profile snapshots, reconciliation,
+account-state resolution, and member. Profile service diagnostics record each
+concurrent validation start/end and snapshot source, batch start/end, and
+acknowledgement. Content diagnostics record schedule, announcements, deliveries,
+notification reads, events, resources, and admin listener starts/first snapshots
+with cache source/count. Notification reads intentionally do not start while there
+are no visible announcement IDs. Location stages distinguish shared snapshots,
+memory-cache hits, shared in-flight requests, request completion/source, and timezone
+readiness. Errors/fallbacks must not be interpreted as successful readiness.
+
+Calculated totals include auth user to member, Create Profiles press to member,
+member to first schedule snapshot/model, member to dashboard frame, and Create
+Profiles press to dashboard frame. Schedule callback/model/notifier/frame stages
+separate data processing from Flutter work. With diagnostics enabled, the existing schedule listener also delivers metadata
+changes (no additional query or reads), so an empty cache followed by an empty
+server result can be distinguished. A provisional empty cache frame is excluded
+from the usable-frame total until schedule models have data or server confirmation.
+The per-callback parse duration is also logged separately from the initial-snapshot
+to-usable total. The completed frame is a rendering
+proxy; it does not prove compositor paint or physical screen visibility. Compare
+screen recordings with logs if frames appear fast but the screen remains delayed.
+The once-per-session initial milestones avoid counting every realtime update as
+another first load. Starting a different authenticated session resets them and
+invalidates queued frame callbacks.
+
+Interpret the observed browser difference as a hypothesis about connection/cache
+state and overlapping work until device traces exist. Firestore watches initially
+consult cache and concurrently contact the server. A slow Safari validation or batch
+may give existing account/profile watches more time to connect/propagate; Edge's
+faster write may expose a later watch delay. Auth restoration, cache contents,
+connection reuse, background suspension, and asset/service-worker state can also
+change where time appears. None is established as the cause, and no browser-specific
+hack has been introduced.
+
+### Queries, rendering, realtime, and persistence
+
+The member schedule query uses location equality plus `isActive == true`, with no
+ordering, limit, or server-read fallback. Firestore can merge single-field indexes
+for simple equality queries; absence of a dedicated composite is not evidence of
+a missing index. Announcements use a bounded location/status/audience/publication
+query; deliveries use a bounded publication query under the user; notification
+reads filter visible IDs; events use a bounded published/non-archived end-time
+window; resources use a bounded published/non-archived general-section query.
+The repository defines composites for announcements, events, and resources. A
+read-only production inspection on 2026-10-04 confirmed all three corresponding
+deployed definitions and no class-session field override; no index was deployed.
+Runtime snapshot counts now expose schedule volume; production payload sizes,
+query execution latency, and device CPU cost were not measured. No collection
+shape, security rules, query scope, or realtime subscription was weakened.
+
+The screens rebuild on app-data notifier changes and recommendations sort candidate
+sessions. These are potential CPU costs, not demonstrated causes of a seconds-long
+wait. Avoid speculative memoization until callback/model/frame timing shows a
+material cost. All existing realtime account/profile/content/admin/Super Admin
+watches remain intact. Background recovery retains the existing throttled Web
+`enableNetwork()` behavior; it does not recreate the session or manually fetch each
+collection. Actual background/lock catch-up still needs physical-device validation.
+
+Persistent IndexedDB is a separate product/security decision. Before considering
+it, test shared devices and account switching, isolation after sign-out, stale
+sensitive records, clearing storage, Safari/Edge/standalone behavior, multi-tab
+ownership, and continued realtime updates. Memory caching remains the current choice.
+
+### Controlled physical-device validation plan
+
+Use the same iPhone, iOS version, network, location, comparable test accounts/profile
+counts, and exact preview build for Safari and Edge. Test standalone separately.
+Record build identity and diagnostics-enabled status. A fresh preview deployment is
+recommended after separate authorization; this investigation does not deploy it.
+Use approved test accounts rather than deleting or rewriting production records to
+manufacture a cold run.
+
+For each browser/mode run these conditions at least three times, alternate browser
+order, and report every sample plus median/range. Keep first and repeat runs separate:
+
+| Condition | Setup and action | Evidence |
+| --- | --- | --- |
+| Cold | Close all OTA tabs/apps, reopen browser, signed out where practical, first load. Record whether site storage was cleared; closing a tab alone is not a clean storage test. | Startup/Auth, creation, member, first content snapshots, frame totals; source/count. |
+| Warm | Keep OTA open after establishing a Firebase connection; use a comparable approved new-account creation or sign-in action. | Same totals; identify already connected/cache-backed stages. |
+| Signed-in return | Persist Auth, close OTA, reopen; do not clear storage. | Auth restoration through member and schedule/dashboard. |
+| Background/resume | Background for 30 seconds and again for several minutes, change approved test data from another client, return. | Update arrives automatically, resume stages, no graph rebuild; retain final screenshot/time. |
+| Lock/unlock | Lock for 30 seconds and several minutes, change approved test data, unlock/return. | Catch-up without reload/sign-out; both short and long suspension. |
+| Standalone | Repeat cold/return/background/lock in the installed Home Screen app. | Keep results separate from Safari tabs and record installation/build freshness. |
+
+Change schedule, profile/progress, announcements/deliveries/read state, events,
+resources, and admin/Super Admin test content while each app is active, then repeat
+after suspension. Verify authorized updates arrive without reload or signing in
+again. For first-load independence, delay unrelated content in an emulator/network
+harness and verify schedule content/empty/error states still render. Capture only
+privacy-safe timings and counts, not document contents or personal screenshots.
+
+For each run assign the dominant stage only from evidence: claims/Auth, validation,
+batch acknowledgement, propagation/reconciliation/location access, listener-start
+gap, first snapshot/network/cache, model parsing/notifier work, or completed frame.
+Compare total action-to-usable time, not a faster isolated phase. If cache source
+and timing differ between browsers, repeat controlled cold/warm runs before drawing
+a browser conclusion. Asset/service-worker upgrades require confirming the same
+build is running; do not blame the service worker without evidence.
+
+### Automatic class recommendations
+
+The older-student branch previously accepted any class whose type/name looked like
+Teen/Adult, then any numbered level, without belt checks. A teenager could therefore
+be assigned a Black Belt class that explicitly excluded their belt. Automatic older
+recommendations now prefer an explicitly belt-eligible Teen/Adult class, then an
+explicitly belt-eligible numbered level, then another belt-eligible class, then an
+unspecified-eligibility placement fallback. If all candidates explicitly exclude
+the belt, there is no automatic recommendation. Publication and location filtering
+apply before preferences. Explicit saved preferred classes still override normal
+age/belt recommendations. Existing younger-student placement fallback is preserved. The schedule next-class
+banner now uses the same central recommendation function, avoiding its separate
+first-class fallback that could still select an excluded Black Belt class.
+
+An empty eligibility list is not silently interpreted as all belts: the model labels
+it `Instructor placement required`, admin creation permits it, and existing younger
+recommendations use it as placement fallback. Production documents were not read to
+infer this convention. Regression tests cover excluded beginner/Black Belt choices,
+older and younger preferred overrides, beginner/advanced eligibility, numbered-level
+fallback, empty eligibility, unpublished classes, and wrong locations.
+
+
+### Local validation and changed files
+
+On 2026-10-04, `flutter analyze --no-pub` passed without issues, the full Flutter
+suite passed 492 tests, and the final focused diagnostics/realtime/recommendation/
+session/signup/schedule suite passed 44 tests. `git diff --check` passed. Both an
+ordinary production Web release and an opt-in diagnostics production Web release
+built using SDK configuration retrieved read-only from the existing registered
+production Web app. The final `build/web` artifact has diagnostics enabled; do not
+publish it as an ordinary uninstrumented release. No physical-browser timing,
+production query payload measurement, or physical resume validation is claimed.
+No push, deployment, Rules/index change, or production data mutation occurred.
+The pre-existing untracked `.firebase/` directory was preserved.
+
+Changed files for this investigation:
+
+- `lib/services/performance_diagnostics.dart`
+- `lib/services/firebase/firebase_session_controller.dart`
+- `lib/services/firebase/profile_service.dart`
+- `lib/services/firebase/firebase_app_data_service.dart`
+- `lib/services/location_time_service.dart`
+- `lib/services/class_recommendation_service.dart`
+- `lib/screens/auth/profile_creation_screen.dart`
+- `lib/screens/student_dashboard_screen.dart`
+- `lib/screens/schedule_screen.dart`
+- `test/performance_diagnostics_test.dart`
+- `test/class_recommendation_test.dart`
+- `test/web_realtime_performance_test.dart`
+- `docs/CODEBASE_GUIDE.md`

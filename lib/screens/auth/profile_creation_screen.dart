@@ -4,6 +4,7 @@ import '../../data/sample_curriculum.dart';
 import '../../models/academy_location.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../../services/firebase/profile_service.dart';
+import '../../services/performance_diagnostics.dart';
 import '../../theme/ota_colors.dart';
 
 class ProfileCreationScreen extends StatefulWidget {
@@ -195,6 +196,7 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   }
 
   Future<void> _continue() async {
+    if (_step == 2) PerformanceDiagnostics.mark('create_profiles_pressed');
     if (!_validateStep()) return;
     if (_step < 2) {
       setState(() => _step++);

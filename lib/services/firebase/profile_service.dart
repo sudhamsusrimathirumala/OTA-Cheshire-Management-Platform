@@ -191,11 +191,21 @@ class FirestoreProfileService {
       final locationTrace = PerformanceDiagnostics.start(
         'profile_creation_location_validation',
       );
+      PerformanceDiagnostics.mark('existing_user_validation_start');
+      PerformanceDiagnostics.mark('location_validation_start');
       final existingUserFuture = userRef.get().then((snapshot) {
+        PerformanceDiagnostics.mark(
+          'existing_user_validation_end',
+          fromCache: snapshot.metadata.isFromCache,
+        );
         existingUserTrace.stage('complete');
         return snapshot;
       });
       final locationFuture = locationRef.get().then((snapshot) {
+        PerformanceDiagnostics.mark(
+          'location_validation_end',
+          fromCache: snapshot.metadata.isFromCache,
+        );
         locationTrace.stage('complete');
         return snapshot;
       });
@@ -240,7 +250,10 @@ class FirestoreProfileService {
       final batchTrace = PerformanceDiagnostics.start(
         'profile_creation_batch_commit',
       );
+      PerformanceDiagnostics.mark('batch_commit_start');
       await batch.commit();
+      PerformanceDiagnostics.mark('batch_commit_end');
+      PerformanceDiagnostics.mark('batch_acknowledged');
       batchTrace.stage('complete');
       return profileRefs.map((reference) => reference.id).toList();
     } on ProfileServiceException {

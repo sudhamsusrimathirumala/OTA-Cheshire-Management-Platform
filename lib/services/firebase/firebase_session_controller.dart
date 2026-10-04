@@ -311,6 +311,8 @@ class FirebaseSessionController extends ChangeNotifier {
   }
 
   Future<void> _replaceAuthUser(User? user) async {
+    PerformanceDiagnostics.resetJourney();
+    if (user != null) PerformanceDiagnostics.mark('auth_user');
     final generation = ++_sessionGeneration;
     _sessionLoadTrace = user == null
         ? null
@@ -338,15 +340,18 @@ class FirebaseSessionController extends ChangeNotifier {
     stage = SessionStage.loading;
     notifyListeners();
     try {
+      PerformanceDiagnostics.mark('claims_start');
       final claims = await authentication.authenticationClaims
           ?.currentUserClaims();
       _authenticatedGuestClaim = claims?['otaGuest'] == true;
+      PerformanceDiagnostics.mark('claims_end');
       _sessionLoadTrace?.stage('claims_fetch_complete');
     } catch (_) {
       _setError('Unable to verify this account authorization.');
       return;
     }
     if (!_isCurrentSession(generation, user.uid)) return;
+    PerformanceDiagnostics.mark('user_listener_started');
     _userSubscription = _database
         .collection(FirestoreCollections.users)
         .doc(user.uid)
@@ -369,7 +374,17 @@ class FirebaseSessionController extends ChangeNotifier {
     DocumentSnapshot<Map<String, dynamic>> snapshot,
     int sessionGeneration,
   ) {
+    if (PerformanceDiagnostics.creatingProfiles) {
+      PerformanceDiagnostics.mark(
+        'post_create_user_snapshot',
+        fromCache: snapshot.metadata.isFromCache,
+      );
+    }
     if (_firstUserSnapshotPending) {
+      PerformanceDiagnostics.mark(
+        'user_first_snapshot',
+        fromCache: snapshot.metadata.isFromCache,
+      );
       _firstUserSnapshotPending = false;
       _sessionLoadTrace?.stage(
         snapshot.metadata.isFromCache
@@ -515,6 +530,7 @@ class FirebaseSessionController extends ChangeNotifier {
       _setError('This administrator has no assigned academy location.');
       return;
     }
+    PerformanceDiagnostics.mark('location_access_listener_started');
     _firstLocationSnapshotPending = true;
     _locationSubscription = _database
         .collection(FirestoreCollections.locations)
@@ -531,6 +547,10 @@ class FirebaseSessionController extends ChangeNotifier {
             }
             final data = snapshot.data();
             if (_firstLocationSnapshotPending) {
+              PerformanceDiagnostics.mark(
+                'location_access_first_snapshot',
+                fromCache: snapshot.metadata.isFromCache,
+              );
               _firstLocationSnapshotPending = false;
               _sessionLoadTrace?.stage(
                 snapshot.metadata.isFromCache
@@ -651,8 +671,20 @@ class FirebaseSessionController extends ChangeNotifier {
     String linkedFingerprint,
   ) async {
     try {
+      if (PerformanceDiagnostics.creatingProfiles) {
+        PerformanceDiagnostics.mark(
+          'post_create_profile_snapshot',
+          fromCache: snapshot.metadata.isFromCache,
+          count: snapshot.docs.length,
+        );
+      }
       _latestProfilesSnapshot = snapshot;
       if (_firstProfilesSnapshotPending) {
+        PerformanceDiagnostics.mark(
+          'linked_profiles_first_snapshot',
+          fromCache: snapshot.metadata.isFromCache,
+          count: snapshot.docs.length,
+        );
         _firstProfilesSnapshotPending = false;
         _sessionLoadTrace?.stage(
           snapshot.metadata.isFromCache
@@ -696,6 +728,7 @@ class FirebaseSessionController extends ChangeNotifier {
       final reconciliationTrace = PerformanceDiagnostics.start(
         'linked_profile_reconciliation',
       );
+      PerformanceDiagnostics.mark('reconciliation_start');
       final resolution = await reconcileLinkedProfiles(
         expectedIds: linkedIds,
         snapshotProfiles: loaded,
@@ -703,6 +736,7 @@ class FirebaseSessionController extends ChangeNotifier {
         deferServerRecovery: deferCreatedRecovery,
         loadMissingFromServer: _loadProfilesFromServer,
       );
+      PerformanceDiagnostics.mark('reconciliation_end');
       reconciliationTrace.stage('complete_${resolution.status.name}');
       if (!_isCurrentProfiles(
         sessionGeneration,
@@ -846,6 +880,7 @@ class FirebaseSessionController extends ChangeNotifier {
       current: stage,
       established: SessionStage.member,
     );
+    PerformanceDiagnostics.mark('location_access_listener_started');
     _firstLocationSnapshotPending = true;
     _locationSubscription = _database
         .collection(FirestoreCollections.locations)
@@ -863,6 +898,10 @@ class FirebaseSessionController extends ChangeNotifier {
             }
             final data = snapshot.data();
             if (_firstLocationSnapshotPending) {
+              PerformanceDiagnostics.mark(
+                'location_access_first_snapshot',
+                fromCache: snapshot.metadata.isFromCache,
+              );
               _firstLocationSnapshotPending = false;
               _sessionLoadTrace?.stage(
                 snapshot.metadata.isFromCache
@@ -939,6 +978,10 @@ class FirebaseSessionController extends ChangeNotifier {
   }
 
   void _reportSessionLoaded(SessionStage loadedStage) {
+    PerformanceDiagnostics.mark('account_state_resolved');
+    if (loadedStage == SessionStage.member) {
+      PerformanceDiagnostics.mark('member', once: true);
+    }
     _diagnostics(
       AuthenticationDiagnostic(
         'SESSION_LOAD_SUCCEEDED',

@@ -9,6 +9,7 @@ import '../services/app_data_service_provider.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/location_time_service.dart';
+import '../services/performance_diagnostics.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -42,6 +43,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         final notifications = appDataService.notifications;
         final scheduleLoading = appDataService.isScheduleLoading;
         final scheduleError = appDataService.scheduleErrorMessage;
+        if (!scheduleLoading && scheduleError == null) {
+          PerformanceDiagnostics.usableFrame('dashboard_usable_frame');
+        }
         final hasSchedule = appDataService.schedule.values.any(
           (sessions) => sessions.isNotEmpty,
         );

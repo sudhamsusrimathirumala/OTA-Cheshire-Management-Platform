@@ -4,6 +4,7 @@ import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/academy_location.dart';
+import 'performance_diagnostics.dart';
 import '../models/student_profile.dart';
 import 'firestore/firestore_collections.dart';
 
@@ -48,7 +49,9 @@ class LocationTimeService {
 
   void cacheLocationSnapshot(String locationId, Map<String, dynamic>? data) {
     if (locationId.trim().isEmpty || data == null) return;
+    PerformanceDiagnostics.mark('location_shared_snapshot');
     cacheLocation(_locationFromData(locationId, data));
+    PerformanceDiagnostics.mark('timezone_ready');
   }
 
   Future<AcademyLocation> loadLocation(
@@ -57,9 +60,15 @@ class LocationTimeService {
   ) {
     initialize();
     final cached = _locations[locationId];
-    if (cached != null) return Future.value(cached);
+    if (cached != null) {
+      PerformanceDiagnostics.mark('location_metadata_cache');
+      return Future.value(cached);
+    }
     final pending = _locationLoads[locationId];
-    if (pending != null) return pending;
+    if (pending != null) {
+      PerformanceDiagnostics.mark('location_metadata_shared_request');
+      return pending;
+    }
     late Future<AcademyLocation> load;
     load = _loadLocation(firestore, locationId).whenComplete(() {
       if (identical(_locationLoads[locationId], load)) {
@@ -74,17 +83,24 @@ class LocationTimeService {
     FirebaseFirestore firestore,
     String locationId,
   ) async {
+    PerformanceDiagnostics.mark('location_metadata_request_start');
     try {
       final snapshot = await firestore
           .collection(FirestoreCollections.locations)
           .doc(locationId)
           .get();
+      PerformanceDiagnostics.mark(
+        'location_metadata_request_end',
+        fromCache: snapshot.metadata.isFromCache,
+      );
       final data = snapshot.data();
       if (data == null) return _fallbackLocation(locationId);
       final location = _locationFromData(locationId, data);
       cacheLocation(location);
+      PerformanceDiagnostics.mark('timezone_ready');
       return location;
     } catch (_) {
+      PerformanceDiagnostics.mark('location_metadata_request_failed');
       return _fallbackLocation(locationId);
     }
   }

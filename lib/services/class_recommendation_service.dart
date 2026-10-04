@@ -13,7 +13,10 @@ bool isTeenOrAdultClass(ClassSession session) {
 }
 
 bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
-  if (student.age >= otaOlderStudentAge) return isTeenOrAdultClass(session);
+  if (student.age >= otaOlderStudentAge) {
+    return isTeenOrAdultClass(session) &&
+        session.eligibleBelts.contains(student.belt);
+  }
   return isNumberedLevelClass(session) &&
       (session.eligibleBelts.isEmpty ||
           session.eligibleBelts.contains(student.belt));
@@ -78,10 +81,16 @@ ClassSession? nextRecommendedClassFromSchedule(
 
   if (student.age >= otaOlderStudentAge) {
     for (final session in candidates) {
-      if (isTeenOrAdultClass(session)) return session;
+      if (isTeenOrAdultClass(session) &&
+          session.eligibleBelts.contains(student.belt)) {
+        return session;
+      }
     }
     for (final session in candidates) {
-      if (isNumberedLevelClass(session)) return session;
+      if (isNumberedLevelClass(session) &&
+          session.eligibleBelts.contains(student.belt)) {
+        return session;
+      }
     }
   } else {
     for (final session in candidates) {
@@ -90,9 +99,15 @@ ClassSession? nextRecommendedClassFromSchedule(
         return session;
       }
     }
+    // Preserve existing younger-student placement fallback.
     for (final session in candidates) {
       if (isNumberedLevelClass(session)) return session;
     }
   }
-  return candidates.first;
+  // Empty eligibility means instructor placement, not universal eligibility.
+  // Keep a safe fallback without automatically selecting an excluded belt.
+  return candidates
+          .where((session) => session.eligibleBelts.contains(student.belt))
+          .firstOrNull ??
+      candidates.where((session) => session.eligibleBelts.isEmpty).firstOrNull;
 }

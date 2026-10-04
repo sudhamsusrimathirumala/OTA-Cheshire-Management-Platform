@@ -74,7 +74,7 @@ void main() {
         currentWeekday: DateTime.monday,
         currentMinutes: 0,
       ),
-      same(teen),
+      same(level),
     );
   });
 
@@ -106,6 +106,107 @@ void main() {
       same(level),
     );
   });
+
+  Student beginner({
+    String belt = 'No Belt',
+    List<String> preferred = const [],
+  }) => Student(
+    id: 'test',
+    name: 'Student',
+    locationId: 'cheshire',
+    belt: belt,
+    dateOfBirth: DateTime.now().subtract(const Duration(days: 17 * 366)),
+    stickerCount: 0,
+    stickersRequired: 0,
+    nextRank: 'White',
+    preferredClassGroupIds: preferred,
+  );
+  ClassSession? recommend(Student profile, List<ClassSession> classes) =>
+      nextRecommendedClassFromSchedule(
+        {DateTime.monday: classes},
+        profile,
+        currentWeekday: DateTime.monday,
+        currentMinutes: 0,
+      );
+
+  test(
+    'older beginner never automatically gets an excluded black belt class',
+    () {
+      expect(recommend(beginner(), [teen]), isNull);
+      expect(isTypicallyRecommendedFor(teen, beginner()), isFalse);
+    },
+  );
+  test(
+    'older beginner explicit black belt preference remains authoritative',
+    () {
+      expect(
+        recommend(beginner(preferred: ['teen-black-belt-standard']), [teen]),
+        same(teen),
+      );
+    },
+  );
+  test('eligible teen beginner and advanced classes are recommended', () {
+    final adultBeginner = session(
+      id: 'beginner',
+      name: 'Adult',
+      type: 'adult',
+      hour: 19,
+      belts: ['White'],
+    );
+    expect(
+      recommend(beginner(belt: 'White'), [teen, adultBeginner]),
+      same(adultBeginner),
+    );
+    expect(recommend(beginner(belt: 'Black'), [teen]), same(teen));
+  });
+  test('numbered belt match beats unspecified and excluded teen classes', () {
+    final beginnerLevel = session(
+      id: 'beginner',
+      name: 'Level 1',
+      type: 'level-1',
+      hour: 19,
+      belts: ['No Belt'],
+    );
+    final unspecified = session(
+      id: 'unspecified',
+      name: 'Adult',
+      type: 'adult',
+      hour: 15,
+    );
+    expect(
+      recommend(beginner(), [unspecified, teen, beginnerLevel]),
+      same(beginnerLevel),
+    );
+    expect(recommend(beginner(), [unspecified, teen]), same(unspecified));
+  });
+  test(
+    'inactive and wrong-location classes cannot override eligibility or preference',
+    () {
+      final inactive = session(
+        id: 'inactive',
+        name: 'Adult',
+        type: 'adult',
+        hour: 16,
+        belts: ['No Belt'],
+        published: false,
+      );
+      final wrongLocation = session(
+        id: 'wrong',
+        name: 'Adult',
+        type: 'adult',
+        hour: 16,
+        belts: ['No Belt'],
+        location: 'other',
+      );
+      expect(
+        recommend(beginner(preferred: ['adult-standard']), [
+          inactive,
+          wrongLocation,
+        ]),
+        isNull,
+      );
+    },
+  );
 
   test('guidance is advisory for nontraditional class choices', () {
     expect(

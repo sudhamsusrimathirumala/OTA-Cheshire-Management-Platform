@@ -7,6 +7,7 @@ import '../services/class_recommendation_service.dart';
 import '../services/firebase/firebase_session_controller.dart';
 import '../services/firebase/profile_service.dart';
 import '../services/location_time_service.dart';
+import '../services/performance_diagnostics.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
 
@@ -62,29 +63,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       appDataService.scheduleForWeekday(_selectedDate.weekday);
 
   ClassSession? get _nextEligibleClass {
-    final classes = _selectedDayClasses.where((session) {
-      if (!session.isPublished || session.locationId != _student.locationId) {
-        return false;
-      }
-      if (!_isViewingToday) return true;
-      final academyNow = _academyNow;
-      return session.endMinutes > academyNow.hour * 60 + academyNow.minute;
-    }).toList();
-
-    if (classes.isEmpty) {
-      return null;
-    }
-
-    classes.sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    return classes.firstWhere(
-      (session) => matchesResolvedPreferredClassGroup(
-        _student.preferredClassGroupIds,
-        session.bulkGroupId,
-      ),
-      orElse: () => classes.firstWhere(
-        (session) => isTypicallyRecommendedFor(session, _student),
-        orElse: () => classes.first,
-      ),
+    final academyNow = _academyNow;
+    return nextRecommendedClassFromSchedule(
+      {_selectedDate.weekday: _selectedDayClasses},
+      _student,
+      currentWeekday: _selectedDate.weekday,
+      currentMinutes: _isViewingToday
+          ? academyNow.hour * 60 + academyNow.minute
+          : 0,
     );
   }
 
@@ -546,6 +532,7 @@ class _ScheduleContent extends StatelessWidget {
       );
     }
 
+    PerformanceDiagnostics.usableFrame('schedule_usable_frame');
     final hasPublishedClasses = appDataService.schedule.values.any(
       (sessions) => sessions.isNotEmpty,
     );
