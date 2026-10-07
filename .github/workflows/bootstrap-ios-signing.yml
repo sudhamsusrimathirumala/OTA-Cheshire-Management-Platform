@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: "Type CREATE_SIGNING_ASSETS to continue"
+        description: "Type RECOVER_FAILED_BOOTSTRAP to continue"
         required: true
         type: string
 
@@ -14,7 +14,7 @@ permissions:
 jobs:
   bootstrap:
     name: Create iOS signing assets
-    if: ${{ inputs.confirmation == 'CREATE_SIGNING_ASSETS' }}
+    if: ${{ inputs.confirmation == 'RECOVER_FAILED_BOOTSTRAP' }}
     runs-on: macos-latest
     timeout-minutes: 30
 
@@ -98,6 +98,54 @@ jobs:
             echo "KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}"
           } >> "${GITHUB_ENV}"
 
+      - name: Remove stale assets from failed bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ruby <<'RUBY'
+          require "json"
+          require "spaceship"
+
+          api = JSON.parse(File.read(ENV.fetch("API_KEY_JSON")))
+          token = Spaceship::ConnectAPI::Token.create(
+            key_id: api.fetch("key_id"),
+            issuer_id: api.fetch("issuer_id"),
+            key: api.fetch("key"),
+            duration: 1200,
+            in_house: false
+          )
+          Spaceship::ConnectAPI.token = token
+
+          profiles = Spaceship::ConnectAPI::Profile.all.select do |profile|
+            profile.name.to_s.strip == ENV.fetch("PROFILE_NAME")
+          end
+
+          distribution_types = %w[DISTRIBUTION IOS_DISTRIBUTION]
+          certificates = Spaceship::ConnectAPI::Certificate.all.select do |certificate|
+            distribution_types.include?(certificate.certificate_type)
+          end
+
+          if profiles.length > 1
+            abort("Expected at most one stale OTA provisioning profile; found #{profiles.length}. Nothing was deleted.")
+          end
+
+          if certificates.length != 1
+            abort("Expected exactly one stale distribution certificate from the failed bootstrap; found #{certificates.length}. Nothing was deleted.")
+          end
+
+          profiles.each do |profile|
+            puts "Deleting stale provisioning profile: #{profile.name} (#{profile.id})"
+            profile.delete!
+          end
+
+          certificate = certificates.first
+          puts "Revoking stale distribution certificate: #{certificate.display_name} (#{certificate.id})"
+          certificate.delete!
+
+          puts "Stale bootstrap assets removed."
+          RUBY
+
       - name: Create Apple Distribution certificate
         shell: bash
         run: |
@@ -154,6 +202,7 @@ jobs:
           test -s "${SIGNING_DIR}/OTA_Distribution.p12"
 
           openssl pkcs12 \
+            -legacy \
             -in "${SIGNING_DIR}/OTA_Distribution.p12" \
             -passin env:IOS_SIGNING_PASSWORD \
             -clcerts \
