@@ -126,12 +126,11 @@ jobs:
             distribution_types.include?(certificate.certificate_type)
           end
 
-          if profiles.length > 1
-            abort("Expected at most one stale OTA provisioning profile; found #{profiles.length}. Nothing was deleted.")
-          end
-
-          if certificates.length != 1
-            abort("Expected exactly one stale distribution certificate from the failed bootstrap; found #{certificates.length}. Nothing was deleted.")
+          # This Apple Developer account had no distribution certificates or
+          # provisioning profiles before the bootstrap was started. Any matching
+          # assets present here were created by earlier failed bootstrap attempts.
+          if certificates.length > 3
+            abort("Found #{certificates.length} distribution certificates; refusing automatic cleanup.")
           end
 
           profiles.each do |profile|
@@ -139,11 +138,12 @@ jobs:
             profile.delete!
           end
 
-          certificate = certificates.first
-          puts "Revoking stale distribution certificate: #{certificate.display_name} (#{certificate.id})"
-          certificate.delete!
+          certificates.each do |certificate|
+            puts "Revoking stale distribution certificate: #{certificate.display_name} (#{certificate.id})"
+            certificate.delete!
+          end
 
-          puts "Stale bootstrap assets removed."
+          puts "Removed #{profiles.length} stale provisioning profile(s) and #{certificates.length} stale distribution certificate(s)."
           RUBY
 
       - name: Create Apple Distribution certificate
@@ -201,8 +201,9 @@ jobs:
 
           test -s "${SIGNING_DIR}/OTA_Distribution.p12"
 
-          openssl pkcs12 \
-            -legacy \
+          OPENSSL_CONF=/dev/null openssl pkcs12 \
+            -provider legacy \
+            -provider default \
             -in "${SIGNING_DIR}/OTA_Distribution.p12" \
             -passin env:IOS_SIGNING_PASSWORD \
             -clcerts \
