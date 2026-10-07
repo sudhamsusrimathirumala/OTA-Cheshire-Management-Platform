@@ -615,38 +615,39 @@
 		};
 		D00000000000000000000001 /* Debug-dev */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Debug-dev";
 		};
 		D00000000000000000000002 /* Release-dev */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Release-dev";
 		};
 		D00000000000000000000003 /* Profile-dev */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Profile-dev";
 		};
 		D00000000000000000000004 /* Debug-prod */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Debug-prod";
 		};
 		D00000000000000000000005 /* Release-prod */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Release-prod";
 		};
 		D00000000000000000000006 /* Profile-prod */ = {
 			isa = XCBuildConfiguration;
-			buildSettings = { IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
+			buildSettings = { CLANG_ENABLE_MODULES = YES; IPHONEOS_DEPLOYMENT_TARGET = 13.0; SDKROOT = iphoneos; };
 			name = "Profile-prod";
 		};
 		E00000000000000000000001 /* Debug-dev */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
 				APS_ENVIRONMENT = development;
@@ -664,6 +665,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
 				APS_ENVIRONMENT = production;
@@ -681,6 +683,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "OTA Dev";
 				APP_ENVIRONMENT = dev;
 				APS_ENVIRONMENT = production;
@@ -698,6 +701,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 9740EEB21CF90195004384FC /* Debug.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
 				APS_ENVIRONMENT = development;
@@ -715,6 +719,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
 				APS_ENVIRONMENT = production;
@@ -736,6 +741,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 7AFA3C8E1D35360C0083082E /* Release.xcconfig */;
 			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
 				APP_DISPLAY_NAME = "Olympic Taekwondo Academy";
 				APP_ENVIRONMENT = prod;
 				APS_ENVIRONMENT = production;
