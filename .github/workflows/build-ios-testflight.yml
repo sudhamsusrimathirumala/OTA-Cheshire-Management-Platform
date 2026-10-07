@@ -1,0 +1,86 @@
+name: Build iOS and Upload to TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type UPLOAD_TO_TESTFLIGHT to continue"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-upload:
+    name: Build and upload production iOS app
+    if: ${{ inputs.confirmation == 'UPLOAD_TO_TESTFLIGHT' }}
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Import Apple Distribution certificate
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.IOS_DISTRIBUTION_P12_BASE64 }}
+          p12-password: ${{ secrets.IOS_SIGNING_PASSWORD }}
+
+      - name: Download provisioning profile
+        uses: apple-actions/download-provisioning-profiles@v6
+        with:
+          bundle-id: com.otacheshire.app
+          profile-type: IOS_APP_STORE
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Build signed production IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build ipa \
+            --release \
+            --flavor prod \
+            -t lib/main_prod.dart \
+            --build-number "${GITHUB_RUN_NUMBER}" \
+            --export-options-plist ios/ExportOptions.plist
+
+          IPA_PATH="$(find build/ios/ipa -maxdepth 1 -type f -name '*.ipa' -print -quit)"
+          if [ -z "${IPA_PATH}" ] || [ ! -s "${IPA_PATH}" ]; then
+            echo "No IPA was produced." >&2
+            exit 1
+          fi
+          echo "IPA_PATH=${IPA_PATH}" >> "${GITHUB_ENV}"
+
+      - name: Save IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-ios-testflight-build-${{ github.run_number }}
+          path: ${{ env.IPA_PATH }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload app to TestFlight
+        uses: apple-actions/upload-testflight-build@v5
+        with:
+          app-path: ${{ env.IPA_PATH }}
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          uses-non-exempt-encryption: "false"
+          wait-for-processing: "false"
