@@ -1,0 +1,238 @@
+name: Bootstrap iOS Signing (One Time)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type CREATE_SIGNING_ASSETS to continue"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    name: Create iOS signing assets
+    if: ${{ inputs.confirmation == 'CREATE_SIGNING_ASSETS' }}
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    env:
+      APPLE_TEAM_ID: LR2JWWS769
+      BUNDLE_ID: com.otacheshire.app
+      PROFILE_NAME: OTA Cheshire App Store
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      IOS_SIGNING_PASSWORD: ${{ secrets.IOS_SIGNING_PASSWORD }}
+
+    steps:
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            APP_STORE_CONNECT_KEY_ID \
+            APP_STORE_CONNECT_ISSUER_ID \
+            APP_STORE_CONNECT_PRIVATE_KEY \
+            IOS_SIGNING_PASSWORD
+          do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+
+      - name: Install fastlane
+        shell: bash
+        run: gem install fastlane --no-document
+
+      - name: Prepare temporary credentials and keychain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SIGNING_DIR="${RUNNER_TEMP}/ota-ios-signing"
+          API_KEY_JSON="${RUNNER_TEMP}/app-store-connect-api-key.json"
+          KEYCHAIN_PATH="${RUNNER_TEMP}/ota-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 32)"
+
+          echo "::add-mask::${KEYCHAIN_PASSWORD}"
+          mkdir -p "${SIGNING_DIR}"
+
+          export API_KEY_JSON
+          python3 - <<'PY'
+          import json
+          import os
+
+          payload = {
+              "key_id": os.environ["APP_STORE_CONNECT_KEY_ID"],
+              "issuer_id": os.environ["APP_STORE_CONNECT_ISSUER_ID"],
+              "key": os.environ["APP_STORE_CONNECT_PRIVATE_KEY"],
+              "duration": 1200,
+              "in_house": False,
+          }
+
+          with open(os.environ["API_KEY_JSON"], "w", encoding="utf-8") as handle:
+              json.dump(payload, handle)
+          PY
+
+          chmod 600 "${API_KEY_JSON}"
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_PATH}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_PATH}"
+          security list-keychains -d user -s "${KEYCHAIN_PATH}"
+          security default-keychain -s "${KEYCHAIN_PATH}"
+
+          {
+            echo "SIGNING_DIR=${SIGNING_DIR}"
+            echo "API_KEY_JSON=${API_KEY_JSON}"
+            echo "KEYCHAIN_PATH=${KEYCHAIN_PATH}"
+            echo "KEYCHAIN_PASSWORD=${KEYCHAIN_PASSWORD}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Create Apple Distribution certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fastlane cert \
+            --api_key_path "${API_KEY_JSON}" \
+            --team_id "${APPLE_TEAM_ID}" \
+            --generate_apple_certs true \
+            --output_path "${SIGNING_DIR}" \
+            --keychain_path "${KEYCHAIN_PATH}" \
+            --keychain_password "${KEYCHAIN_PASSWORD}"
+
+          IDENTITY_COUNT="$(
+            security find-identity -v -p codesigning "${KEYCHAIN_PATH}" |
+            grep -c 'Apple Distribution:' || true
+          )"
+
+          if [ "${IDENTITY_COUNT}" -ne 1 ]; then
+            echo "Expected exactly one Apple Distribution signing identity; found ${IDENTITY_COUNT}." >&2
+            security find-identity -v -p codesigning "${KEYCHAIN_PATH}" || true
+            exit 1
+          fi
+
+      - name: Create App Store provisioning profile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          fastlane sigh \
+            --api_key_path "${API_KEY_JSON}" \
+            --team_id "${APPLE_TEAM_ID}" \
+            --app_identifier "${BUNDLE_ID}" \
+            --provisioning_name "${PROFILE_NAME}" \
+            --output_path "${SIGNING_DIR}" \
+            --filename "OTA_AppStore.mobileprovision" \
+            --force true \
+            --skip_install true
+
+          test -s "${SIGNING_DIR}/OTA_AppStore.mobileprovision"
+
+      - name: Export password-protected distribution identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          security export \
+            -k "${KEYCHAIN_PATH}" \
+            -t identities \
+            -f pkcs12 \
+            -P "${IOS_SIGNING_PASSWORD}" \
+            -o "${SIGNING_DIR}/OTA_Distribution.p12"
+
+          test -s "${SIGNING_DIR}/OTA_Distribution.p12"
+
+          openssl pkcs12 \
+            -in "${SIGNING_DIR}/OTA_Distribution.p12" \
+            -passin env:IOS_SIGNING_PASSWORD \
+            -clcerts \
+            -nokeys \
+            -noout
+
+      - name: Validate provisioning profile
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PROFILE_PLIST="${RUNNER_TEMP}/ota-profile.plist"
+
+          security cms -D \
+            -i "${SIGNING_DIR}/OTA_AppStore.mobileprovision" \
+            > "${PROFILE_PLIST}"
+
+          export PROFILE_PLIST
+          python3 - <<'PY'
+          import os
+          import plistlib
+
+          with open(os.environ["PROFILE_PLIST"], "rb") as handle:
+              profile = plistlib.load(handle)
+
+          entitlements = profile.get("Entitlements", {})
+          expected_app_id = f'{os.environ["APPLE_TEAM_ID"]}.{os.environ["BUNDLE_ID"]}'
+
+          if entitlements.get("application-identifier") != expected_app_id:
+              raise SystemExit("Provisioning profile application identifier does not match the OTA app.")
+
+          team_ids = profile.get("TeamIdentifier", [])
+          if os.environ["APPLE_TEAM_ID"] not in team_ids:
+              raise SystemExit("Provisioning profile Team ID does not match the OTA Apple team.")
+
+          if entitlements.get("aps-environment") != "production":
+              raise SystemExit("Provisioning profile does not contain the production APNs entitlement.")
+
+          if "com.apple.developer.applesignin" not in entitlements:
+              raise SystemExit("Provisioning profile does not contain the Sign in with Apple entitlement.")
+
+          print("Provisioning profile validation passed.")
+          PY
+
+      - name: Package signing assets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p "${RUNNER_TEMP}/ota-signing-export"
+          cp "${SIGNING_DIR}/OTA_Distribution.p12" "${RUNNER_TEMP}/ota-signing-export/"
+          cp "${SIGNING_DIR}/OTA_AppStore.mobileprovision" "${RUNNER_TEMP}/ota-signing-export/"
+
+          cat > "${RUNNER_TEMP}/ota-signing-export/README.txt" <<'EOF'
+          OTA iOS signing bootstrap output.
+
+          OTA_Distribution.p12:
+          - Apple Distribution certificate and private key.
+          - Protected by the IOS_SIGNING_PASSWORD GitHub Actions secret.
+
+          OTA_AppStore.mobileprovision:
+          - App Store provisioning profile for com.otacheshire.app.
+
+          Store these files securely. Do not commit them to the repository.
+          EOF
+
+      - name: Upload signing assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-ios-signing-assets
+          path: ${{ runner.temp }}/ota-signing-export/
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Clean temporary credentials
+        if: always()
+        shell: bash
+        run: |
+          rm -f "${API_KEY_JSON:-}"
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "${KEYCHAIN_PATH}" ]; then
+            security delete-keychain "${KEYCHAIN_PATH}" || true
+          fi
