@@ -388,14 +388,59 @@ class FirebaseAuthenticationService
 
   @override
   Future<String> reauthenticateWithApple(User user) async {
-    final request = await _appleAuthentication.createRequest();
-    await user.reauthenticateWithCredential(request.credential);
-    return request.authorizationCode;
+    _diagnostics(const AuthenticationDiagnostic('APPLE_REAUTH_STARTED'));
+    try {
+      final request = await _appleAuthentication.createRequest();
+      await user.reauthenticateWithCredential(request.credential);
+      _diagnostics(const AuthenticationDiagnostic('APPLE_REAUTH_SUCCEEDED'));
+      return request.authorizationCode;
+    } on AppleAuthorizationCancelled {
+      _diagnostics(
+        const AuthenticationDiagnostic(
+          'APPLE_REAUTH_FAILED',
+          exceptionType: 'AppleAuthorizationCancelled',
+          code: 'apple-cancelled',
+        ),
+      );
+      rethrow;
+    } on FirebaseAuthException catch (error) {
+      _diagnostics(
+        AuthenticationDiagnostic(
+          'APPLE_REAUTH_FAILED',
+          exceptionType: 'FirebaseAuthException',
+          code: sanitizedAuthenticationDiagnosticCode(error.code),
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      _diagnostics(
+        const AuthenticationDiagnostic(
+          'APPLE_REAUTH_FAILED',
+          exceptionType: 'Unknown',
+          code: 'apple-reauth-unknown',
+        ),
+      );
+      rethrow;
+    }
   }
 
   @override
-  Future<void> revokeAppleToken(String authorizationCode) =>
-      _auth.revokeTokenWithAuthorizationCode(authorizationCode);
+  Future<void> revokeAppleToken(String authorizationCode) async {
+    _diagnostics(const AuthenticationDiagnostic('APPLE_REVOKE_STARTED'));
+    try {
+      await _auth.revokeTokenWithAuthorizationCode(authorizationCode);
+      _diagnostics(const AuthenticationDiagnostic('APPLE_REVOKE_SUCCEEDED'));
+    } on FirebaseAuthException catch (error) {
+      _diagnostics(
+        AuthenticationDiagnostic(
+          'APPLE_REVOKE_FAILED',
+          exceptionType: 'FirebaseAuthException',
+          code: sanitizedAuthenticationDiagnosticCode(error.code),
+        ),
+      );
+      rethrow;
+    }
+  }
 
   @override
   Future<void> sendPasswordReset(String email) async {
