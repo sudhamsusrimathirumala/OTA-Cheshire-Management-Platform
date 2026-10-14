@@ -654,6 +654,10 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -672,6 +676,10 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -690,6 +698,10 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_dev.dart;
 				INFOPLIST_FILE = Runner/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.otaCheshireManagementPlatform;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -708,6 +720,10 @@
 				CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = "Runner/Info-Prod.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.otacheshire.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -730,6 +746,10 @@
 				DEVELOPMENT_TEAM = LR2JWWS769;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = "Runner/Info-Prod.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.otacheshire.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "OTA Cheshire App Store";
@@ -752,6 +772,10 @@
 				DEVELOPMENT_TEAM = LR2JWWS769;
 				FLUTTER_TARGET = lib/main_prod.dart;
 				INFOPLIST_FILE = "Runner/Info-Prod.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.otacheshire.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "OTA Cheshire App Store";
