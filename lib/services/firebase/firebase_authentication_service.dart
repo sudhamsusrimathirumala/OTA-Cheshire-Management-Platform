@@ -390,20 +390,34 @@ class FirebaseAuthenticationService
   Future<String> reauthenticateWithApple(User user) async {
     _diagnostics(const AuthenticationDiagnostic('APPLE_REAUTH_STARTED'));
     try {
-      final result = await user.reauthenticateWithProvider(AppleAuthProvider());
-      final authorizationCode =
-          result.additionalUserInfo?.authorizationCode?.trim();
-      if (authorizationCode == null || authorizationCode.isEmpty) {
-        throw FirebaseAuthException(code: 'missing-authorization-code');
-      }
+      final request = await _appleAuthentication.createRequest();
+      await user.reauthenticateWithCredential(request.credential);
       _diagnostics(const AuthenticationDiagnostic('APPLE_REAUTH_SUCCEEDED'));
-      return authorizationCode;
+      return request.authorizationCode;
+    } on AppleAuthorizationCancelled {
+      _diagnostics(
+        const AuthenticationDiagnostic(
+          'APPLE_REAUTH_FAILED',
+          exceptionType: 'AppleAuthorizationCancelled',
+          code: 'apple-cancelled',
+        ),
+      );
+      rethrow;
     } on FirebaseAuthException catch (error) {
       _diagnostics(
         AuthenticationDiagnostic(
           'APPLE_REAUTH_FAILED',
           exceptionType: 'FirebaseAuthException',
           code: sanitizedAuthenticationDiagnosticCode(error.code),
+        ),
+      );
+      rethrow;
+    } catch (_) {
+      _diagnostics(
+        const AuthenticationDiagnostic(
+          'APPLE_REAUTH_FAILED',
+          exceptionType: 'Unknown',
+          code: 'apple-reauth-unknown',
         ),
       );
       rethrow;
