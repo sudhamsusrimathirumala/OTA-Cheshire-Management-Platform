@@ -15,6 +15,7 @@ import '../models/notification_item.dart';
 import '../models/student_profile.dart';
 import '../models/user_account.dart';
 import 'app_data_service.dart';
+import 'location_time_service.dart';
 
 class MockAppDataService extends ChangeNotifier implements AppDataService {
   MockAppDataService({this.accountOverride});
@@ -111,13 +112,16 @@ class MockAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   ClassSession? nextClassForDashboard() {
-    for (final session in schedule[DateTime.monday] ?? const <ClassSession>[]) {
-      if (session.className == 'Teen & Black Belt') {
-        return session;
-      }
-    }
-
-    return null;
+    final now = const LocationTimeService().toLocationTime(
+      DateTime.now(),
+      selectedStudentProfile.locationId,
+    );
+    return nextEligibleClassFromSchedule(
+      schedule,
+      selectedStudentProfile,
+      currentWeekday: now.weekday,
+      currentMinutes: now.hour * 60 + now.minute,
+    );
   }
 
   @override

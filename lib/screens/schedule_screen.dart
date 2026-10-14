@@ -68,6 +68,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
       {_selectedDate.weekday: _selectedDayClasses},
       _student,
       currentWeekday: _selectedDate.weekday,
+      currentDate: _selectedDate,
       currentMinutes: _isViewingToday
           ? academyNow.hour * 60 + academyNow.minute
           : 0,
@@ -683,7 +684,10 @@ class _NextEligibleBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (nextClass == null) {
-      return const SizedBox.shrink();
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: Text('Ask an instructor for help choosing the right class.'),
+      );
     }
 
     return Container(

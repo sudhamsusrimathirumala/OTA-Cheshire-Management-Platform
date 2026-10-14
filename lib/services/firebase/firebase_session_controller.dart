@@ -169,9 +169,29 @@ class FirebaseSessionController extends ChangeNotifier {
       _profileCreationInProgress = false;
       onPhaseChanged?.call(ProfileCreationPhase.finishingAccountSetup);
       notifyListeners();
+      final postCreateWait = PerformanceDiagnostics.start('post_create_wait');
+      PerformanceDiagnostics.mark('post_create_wait_started');
       _scheduleCreatedProfileRecovery(generation);
+      final resumeTrace = PerformanceDiagnostics.start(
+        'profile_transition_resume',
+      );
+      PerformanceDiagnostics.mark('profile_transition_resume_started');
       await _resumeProfileTransitionAfterWrite(generation);
+      PerformanceDiagnostics.mark(
+        'profile_transition_resume_finished',
+        durationMilliseconds: resumeTrace.elapsedMilliseconds,
+      );
+      final memberWait = PerformanceDiagnostics.start('member_transition_wait');
+      PerformanceDiagnostics.mark('member_transition_wait_started');
       await _waitForProfileCreationTransition(generation);
+      PerformanceDiagnostics.mark(
+        'member_transition_wait_finished',
+        durationMilliseconds: memberWait.elapsedMilliseconds,
+      );
+      PerformanceDiagnostics.mark(
+        'post_create_wait_finished',
+        durationMilliseconds: postCreateWait.elapsedMilliseconds,
+      );
       trace.stage('session_transition_complete');
     } finally {
       _profileCreationInProgress = false;
@@ -230,8 +250,16 @@ class FirebaseSessionController extends ChangeNotifier {
 
   void _scheduleCreatedProfileRecovery(int sessionGeneration) {
     _createdProfileRecoveryTimer?.cancel();
+    final graceTrace = PerformanceDiagnostics.start(
+      'created_profile_recovery_grace',
+    );
+    PerformanceDiagnostics.mark('recovery_grace_started');
     _createdProfileRecoveryTimer = Timer(const Duration(seconds: 2), () {
       if (_disposed || sessionGeneration != _sessionGeneration) return;
+      PerformanceDiagnostics.mark(
+        'recovery_grace_finished',
+        durationMilliseconds: graceTrace.elapsedMilliseconds,
+      );
       _deferCreatedProfileRecovery = false;
       final snapshot = _latestProfilesSnapshot;
       final fingerprint = _profilesLinkedFingerprint;
@@ -618,10 +646,18 @@ class FirebaseSessionController extends ChangeNotifier {
     _profileRecoveryFingerprint = null;
     _latestProfilesSnapshot = null;
     _locationSubscription = null;
+    final cancellationTrace = PerformanceDiagnostics.start(
+      'profile_subscription_cancel',
+    );
+    PerformanceDiagnostics.mark('profile_subscription_cancel_started');
     await Future.wait<void>([
       if (previousProfiles != null) previousProfiles.cancel(),
       if (previousLocation != null) previousLocation.cancel(),
     ]);
+    PerformanceDiagnostics.mark(
+      'profile_subscription_cancel_finished',
+      durationMilliseconds: cancellationTrace.elapsedMilliseconds,
+    );
     if (_disposed ||
         sessionGeneration != _sessionGeneration ||
         generation != _profilesGeneration ||
@@ -630,6 +666,7 @@ class FirebaseSessionController extends ChangeNotifier {
     }
     final linkedFingerprint = linkedIds.join('\u0000');
     _profilesLinkedFingerprint = linkedFingerprint;
+    PerformanceDiagnostics.mark('profiles_listener_started');
     _firstProfilesSnapshotPending = true;
     _profilesSubscription = _database
         .collection(FirestoreCollections.studentProfiles)
@@ -642,6 +679,13 @@ class FirebaseSessionController extends ChangeNotifier {
               generation,
               linkedFingerprint,
             )) {
+              if (PerformanceDiagnostics.creatingProfiles) {
+                PerformanceDiagnostics.mark(
+                  'post_create_profile_snapshot',
+                  fromCache: snapshot.metadata.isFromCache,
+                  count: snapshot.docs.length,
+                );
+              }
               unawaited(
                 _handleProfilesSnapshot(
                   snapshot,
@@ -671,13 +715,6 @@ class FirebaseSessionController extends ChangeNotifier {
     String linkedFingerprint,
   ) async {
     try {
-      if (PerformanceDiagnostics.creatingProfiles) {
-        PerformanceDiagnostics.mark(
-          'post_create_profile_snapshot',
-          fromCache: snapshot.metadata.isFromCache,
-          count: snapshot.docs.length,
-        );
-      }
       _latestProfilesSnapshot = snapshot;
       if (_firstProfilesSnapshotPending) {
         PerformanceDiagnostics.mark(
@@ -736,7 +773,10 @@ class FirebaseSessionController extends ChangeNotifier {
         deferServerRecovery: deferCreatedRecovery,
         loadMissingFromServer: _loadProfilesFromServer,
       );
-      PerformanceDiagnostics.mark('reconciliation_end');
+      PerformanceDiagnostics.mark(
+        'reconciliation_end',
+        durationMilliseconds: reconciliationTrace.elapsedMilliseconds,
+      );
       reconciliationTrace.stage('complete_${resolution.status.name}');
       if (!_isCurrentProfiles(
         sessionGeneration,
@@ -824,6 +864,7 @@ class FirebaseSessionController extends ChangeNotifier {
     final trace = PerformanceDiagnostics.start(
       'linked_profile_server_recovery',
     );
+    PerformanceDiagnostics.mark('server_recovery_started');
     final snapshots = await Future.wait(
       profileIds.map(
         (id) => _database
@@ -840,6 +881,12 @@ class FirebaseSessionController extends ChangeNotifier {
         )
         .whereType<StudentProfile>()
         .toList(growable: false);
+    PerformanceDiagnostics.mark(
+      'server_recovery_finished',
+      durationMilliseconds: trace.elapsedMilliseconds,
+      fromCache: false,
+      count: loaded.length,
+    );
     trace.stage('complete');
     return loaded;
   }
@@ -853,7 +900,15 @@ class FirebaseSessionController extends ChangeNotifier {
     final generation = ++_locationGeneration;
     final previous = _locationSubscription;
     _locationSubscription = null;
+    final cancellationTrace = PerformanceDiagnostics.start(
+      'location_subscription_cancel',
+    );
+    PerformanceDiagnostics.mark('location_subscription_cancel_started');
     await previous?.cancel();
+    PerformanceDiagnostics.mark(
+      'location_subscription_cancel_finished',
+      durationMilliseconds: cancellationTrace.elapsedMilliseconds,
+    );
     if (!_isCurrentProfiles(
           sessionGeneration,
           profilesGeneration,
@@ -917,6 +972,10 @@ class FirebaseSessionController extends ChangeNotifier {
               selectedProfile: selectedProfile,
               locationActive: locationActive,
             )) {
+              PerformanceDiagnostics.mark(
+                'location_access_ready',
+                fromCache: snapshot.metadata.isFromCache,
+              );
               stage = SessionStage.member;
               errorMessage = null;
               _reportSessionLoaded(stage);

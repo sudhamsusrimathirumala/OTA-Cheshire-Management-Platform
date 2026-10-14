@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/academy_event.dart';
 import '../models/academy_resource.dart';
+import '../models/event_schedule.dart';
 import '../routes.dart';
 import '../services/app_data_service.dart';
 import '../services/app_data_service_provider.dart';
@@ -15,12 +16,14 @@ class EventsScreen extends StatefulWidget {
     this.dataService,
     this.now,
     this.initialEventId,
+    this.initialOccurrenceId,
     super.key,
   });
 
   final AppDataService? dataService;
   final DateTime? now;
   final String? initialEventId;
+  final String? initialOccurrenceId;
 
   @override
   State<EventsScreen> createState() => _EventsScreenState();
@@ -82,9 +85,12 @@ class _EventsScreenState extends State<EventsScreen> {
           _handledInitialEvent = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
-            final event = events
-                .where((item) => item.id == initialEventId)
-                .firstOrNull;
+            final event = visibleStudentEventById(
+              events,
+              eventId: initialEventId,
+              locationId: locationId,
+              occurrenceId: widget.initialOccurrenceId,
+            );
             if (event == null) {
               showModalBottomSheet<void>(
                 context: context,
@@ -526,6 +532,7 @@ void _showEventDetails(
             dataService.events,
             eventId: event.id,
             locationId: locationId,
+            occurrenceId: event.occurrenceId,
           );
           if (liveEvent == null) {
             return _UnavailableEventDetails(
@@ -574,6 +581,8 @@ void _showEventDetails(
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Text(displayedEvent.recurrenceLabel),
                   const SizedBox(height: 14),
                   Text(
                     displayedEvent.description,
@@ -914,9 +923,9 @@ DateTime eventAcademyLocalEndDate(AcademyEvent event) {
 
 bool eventOccursOnAcademyDate(AcademyEvent event, DateTime date) {
   final calendarDate = DateTime(date.year, date.month, date.day);
-  final startDate = eventAcademyLocalStartDate(event);
-  final endDate = eventAcademyLocalEndDate(event);
-  return !calendarDate.isBefore(startDate) && !calendarDate.isAfter(endDate);
+  return event.occurrences.any(
+    (o) => !o.canceled && _occurrenceOnDate(o, event.locationId, calendarDate),
+  );
 }
 
 List<AcademyEvent> visibleStudentCalendarEvents(
@@ -939,29 +948,55 @@ AcademyEvent? visibleStudentEventById(
   Iterable<AcademyEvent> events, {
   required String eventId,
   required String locationId,
+  String? occurrenceId,
 }) {
-  return visibleStudentCalendarEvents(
+  final series = visibleStudentCalendarEvents(
     events,
     locationId: locationId,
   ).where((event) => event.id == eventId).firstOrNull;
+  if (series == null || occurrenceId == null) return series;
+  final occurrence = series.occurrences
+      .where((o) => o.id == occurrenceId && !o.canceled)
+      .firstOrNull;
+  return occurrence == null ? null : series.forOccurrence(occurrence);
 }
 
 List<AcademyEvent> eventsForAcademyDate(
   Iterable<AcademyEvent> events, {
   required DateTime date,
 }) {
-  return events.where((event) => eventOccursOnAcademyDate(event, date)).toList()
-    ..sort((a, b) {
-      final aLocal = const LocationTimeService().toLocationTime(
-        a.startDateTime,
-        a.locationId,
-      );
-      final bLocal = const LocationTimeService().toLocationTime(
-        b.startDateTime,
-        b.locationId,
-      );
-      return aLocal.compareTo(bLocal);
-    });
+  return [
+    for (final event in events)
+      for (final occurrence in event.occurrences)
+        if (!occurrence.canceled &&
+            _occurrenceOnDate(occurrence, event.locationId, date))
+          event.forOccurrence(occurrence),
+  ]..sort((a, b) {
+    final aLocal = const LocationTimeService().toLocationTime(
+      a.startDateTime,
+      a.locationId,
+    );
+    final bLocal = const LocationTimeService().toLocationTime(
+      b.startDateTime,
+      b.locationId,
+    );
+    return aLocal.compareTo(bLocal);
+  });
+}
+
+bool _occurrenceOnDate(
+  EventOccurrence occurrence,
+  String locationId,
+  DateTime date,
+) {
+  final day = DateTime(date.year, date.month, date.day);
+  final start = academyLocalDate(occurrence.start, locationId);
+  // An end exactly at midnight belongs to the previous calendar day.
+  final end = academyLocalDate(
+    occurrence.end.subtract(const Duration(microseconds: 1)),
+    locationId,
+  );
+  return !day.isBefore(start) && !day.isAfter(end);
 }
 
 List<DateTime?> monthGridDates(DateTime month) {

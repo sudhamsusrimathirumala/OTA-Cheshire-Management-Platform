@@ -114,6 +114,7 @@ class _AdminGeneralResourcesScreenState
                 errorMessage: appDataService.resourcesErrorMessage,
                 onOpen: _openResourceDetail,
                 onEdit: _openResourceSheet,
+                onDuplicate: (source) => _openResourceSheet(source, true),
                 onArchive: _confirmArchive,
                 onDelete: _confirmDelete,
               ),
@@ -124,7 +125,10 @@ class _AdminGeneralResourcesScreenState
     );
   }
 
-  Future<void> _openResourceSheet([AcademyResource? resource]) async {
+  Future<void> _openResourceSheet([
+    AcademyResource? resource,
+    bool duplicate = false,
+  ]) async {
     final result = await showModalBottomSheet<_ResourceFormResult>(
       context: context,
       isScrollControlled: true,
@@ -135,7 +139,8 @@ class _AdminGeneralResourcesScreenState
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) => _ResourceFormSheet(resource: resource),
+      builder: (context) =>
+          _ResourceFormSheet(resource: resource, duplicate: duplicate),
     );
 
     if (!mounted || result == null) {
@@ -356,6 +361,7 @@ class _ResourcesPanel extends StatelessWidget {
     required this.errorMessage,
     required this.onOpen,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onArchive,
     required this.onDelete,
   });
@@ -365,6 +371,7 @@ class _ResourcesPanel extends StatelessWidget {
   final String? errorMessage;
   final ValueChanged<AcademyResource> onOpen;
   final ValueChanged<AcademyResource> onEdit;
+  final ValueChanged<AcademyResource> onDuplicate;
   final ValueChanged<AcademyResource> onArchive;
   final ValueChanged<AcademyResource> onDelete;
 
@@ -394,6 +401,7 @@ class _ResourcesPanel extends StatelessWidget {
                 presentation: ResourcesPresentation.admin,
                 onOpen: onOpen,
                 onEdit: onEdit,
+                onDuplicate: onDuplicate,
                 onArchive: onArchive,
                 onDelete: onDelete,
               ),
@@ -410,12 +418,14 @@ class _ResourceRow extends StatelessWidget {
   const _ResourceRow({
     required this.resource,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onArchive,
     required this.onDelete,
   });
 
   final AcademyResource resource;
   final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
 
@@ -443,6 +453,7 @@ class _ResourceRow extends StatelessWidget {
           final actions = Wrap(
             children: [
               _ActionLink(label: 'Edit', onPressed: onEdit),
+              _ActionLink(label: 'Duplicate', onPressed: onDuplicate),
               _ActionLink(label: 'Archive', onPressed: onArchive),
               _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
             ],
@@ -511,9 +522,10 @@ class _ResourceRow extends StatelessWidget {
 }
 
 class _ResourceFormSheet extends StatefulWidget {
-  const _ResourceFormSheet({this.resource});
+  const _ResourceFormSheet({this.resource, this.duplicate = false});
 
   final AcademyResource? resource;
+  final bool duplicate;
 
   @override
   State<_ResourceFormSheet> createState() => _ResourceFormSheetState();
@@ -557,7 +569,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.resource != null;
+    final isEditing = widget.resource != null && !widget.duplicate;
     final isEditingPublished = isEditing && widget.resource!.isPublished;
     final publishLabel = isEditingPublished
         ? 'Update Published Resource'
@@ -578,7 +590,11 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _SheetHeader(
-                title: isEditing ? 'Edit Resource' : 'Create Resource',
+                title: widget.duplicate
+                    ? 'Duplicate Resource'
+                    : isEditing
+                    ? 'Edit Resource'
+                    : 'Create Resource',
                 subtitle: isGuestDemoActive
                     ? 'Demo drafts and publications stay on this device.'
                     : 'Drafts and published resources write to Firestore.',
@@ -640,17 +656,18 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
                       ),
                       child: const Text('Save Draft'),
                     ),
-                  FilledButton(
-                    onPressed: () => _submit(_ResourceSaveAction.publish),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: OtaColors.maroon,
-                      foregroundColor: OtaColors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+                  if (!widget.duplicate)
+                    FilledButton(
+                      onPressed: () => _submit(_ResourceSaveAction.publish),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OtaColors.maroon,
+                        foregroundColor: OtaColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
+                      child: Text(publishLabel),
                     ),
-                    child: Text(publishLabel),
-                  ),
                 ],
               ),
             ],
@@ -676,7 +693,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
       return;
     }
 
-    final resource = widget.resource;
+    final resource = widget.duplicate ? null : widget.resource;
     final isPublished = action == _ResourceSaveAction.publish;
     final data = resource == null
         ? ResourceWriteData(
@@ -715,7 +732,7 @@ class _ResourceFormSheetState extends State<_ResourceFormSheet> {
   ].join('\u0000');
 
   String _adminLocationId() {
-    return adminWriteLocationId();
+    return widget.resource?.locationId ?? adminWriteLocationId();
   }
 }
 

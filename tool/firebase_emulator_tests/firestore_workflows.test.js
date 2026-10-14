@@ -1273,3 +1273,57 @@ test('disabled admin and inactive assigned location are denied', async () => {
   await assertFails(getDoc(doc(auth('disabled-admin'), 'users', 'member')));
   await assertFails(getDoc(doc(auth('inactive-admin'), 'users', 'member')));
 });
+
+
+test('event recurrence/reminders remain admin-only, location scoped and server queue private', async () => {
+  for (const [uid, role, locationId] of [['admin', 'admin', 'cheshire'], ['super', 'superAdmin', 'cheshire'],
+    ['parent', 'parent', 'cheshire'], ['student', 'student', 'cheshire'], ['guest', 'guest', 'cheshire'], ['other-admin', 'admin', 'other']]) {
+    await seedAccount({uid, role, locationId, profileIds: ['parent', 'student'].includes(role) ? [`${uid}-profile`] : []});
+  }
+  const start = new Date('2027-01-04T14:00:00Z');
+  const eventSchedule = {version: 1, timeZoneId: 'America/New_York', firstOccurrenceId: 'd20270104',
+    rule: {frequency: 'daily', startDate: '2027-01-04', endDate: '2027-01-05', startMinutes: 540,
+      endMinutes: 900, endDayOffset: 0, intervalWeeks: 1, weekdays: [], customDates: [], weekdayTimes: {}, maxOccurrences: 180},
+    occurrences: [{id: 'd20270104', startMillis: start.getTime(), endMillis: start.getTime() + 3600000, canceled: false}]};
+  const data = {title: 'Camp', description: 'Sessions', locationId: 'cheshire', eventType: 'summerCamp',
+    startDateTime: start, endDateTime: new Date(start.getTime() + 3600000), linkedResourceIds: [],
+    isPublished: false, isArchived: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    eventSchedule, reminders: {mode: 'first', offsetsMinutes: [1440, 60]}};
+  await assertSucceeds(setDoc(doc(auth('admin'), 'events', 'series'), data));
+  for (const uid of ['parent', 'student', 'guest', 'other-admin']) {
+    await assertFails(setDoc(doc(auth(uid), 'events', `copy-${uid}`), data));
+    await assertFails(updateDoc(doc(auth(uid), 'events', 'series'), {reminders: {mode: 'every', offsetsMinutes: [60]}}));
+  }
+  await assertSucceeds(setDoc(doc(auth('super'), 'events', 'independent-copy'), data));
+  const admin = auth('admin');
+  await assertFails(updateDoc(doc(admin, 'events', 'series'), {reminders: {mode: 'first', offsetsMinutes: [-1]}}));
+  await assertFails(updateDoc(doc(admin, 'events', 'series'), {eventSchedule: {...eventSchedule, occurrences: Array(181).fill(eventSchedule.occurrences[0])}}));
+  await assertFails(updateDoc(doc(admin, 'events', 'series'), {eventSchedule: {...eventSchedule, timeZoneId: 'America/Chicago'}}));
+  await assertFails(updateDoc(doc(admin, 'events', 'series'), {reminders: {mode: 'first', offsetsMinutes: [60], sendNow: true}}));
+  for (const uid of ['admin', 'super', 'parent', 'guest']) {
+    await assertFails(setDoc(doc(auth(uid), 'eventReminders', 'forged'), {status: 'pending'}));
+    await assertFails(getDoc(doc(auth(uid), 'eventReminders', 'forged')));
+    await assertFails(setDoc(doc(auth(uid), 'eventReminders', 'forged', 'targets', 'token'), {status: 'sent'}));
+  }
+});
+
+test('event resource references are revalidated on duplication/publication', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  const db = auth('admin');
+  const resource = {title: 'Form', description: '', resourceSection: 'general', category: 'registration',
+    locationId: 'cheshire', isPublished: false, isArchived: false, createdAt: serverTimestamp(), updatedAt: serverTimestamp()};
+  await assertSucceeds(setDoc(doc(db, 'resources', 'form'), resource));
+  const event = {title: 'Seminar', description: 'Details', eventType: 'seminar', locationId: 'cheshire',
+    startDateTime: new Date('2027-01-01T15:00:00Z'), endDateTime: new Date('2027-01-01T16:00:00Z'),
+    linkedResourceIds: ['form'], primaryRegistrationResourceId: 'form', isPublished: false, isArchived: false,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp()};
+  await assertSucceeds(setDoc(doc(db, 'events', 'draft-copy'), event));
+  await assertFails(updateDoc(doc(db, 'events', 'draft-copy'), {isPublished: true, updatedAt: serverTimestamp()}));
+  await assertSucceeds(updateDoc(doc(db, 'resources', 'form'), {isPublished: true, updatedAt: serverTimestamp()}));
+  await assertSucceeds(updateDoc(doc(db, 'events', 'draft-copy'), {isPublished: true, updatedAt: serverTimestamp()}));
+  await assertFails(setDoc(doc(db, 'events', 'invalid-copy'), {...event, linkedResourceIds: ['missing'], primaryRegistrationResourceId: 'missing'}));
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), 'resources', 'other-form'), {...resource, locationId: 'other', isPublished: true});
+  });
+  await assertFails(setDoc(doc(db, 'events', 'cross-location-copy'), {...event, linkedResourceIds: ['other-form'], primaryRegistrationResourceId: 'other-form'}));
+});

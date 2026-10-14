@@ -32,6 +32,7 @@ import 'services/debug_view_controller.dart';
 import 'services/guest/guest_experience_controller.dart';
 import 'services/push_runtime.dart';
 import 'theme/ota_colors.dart';
+import 'widgets/performance_diagnostics_panel.dart';
 
 class OTAApp extends StatefulWidget {
   const OTAApp({super.key});
@@ -126,6 +127,9 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
       ),
       home: Firebase.apps.isNotEmpty ? const AuthGate() : const WelcomeScreen(),
       onGenerateRoute: _buildAuthorizedRoute,
+      builder: (context, child) => PerformanceDiagnosticsOverlay(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

@@ -201,7 +201,10 @@ class PushNavigationCoordinator {
       case PushContentType.event:
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) => EventsScreen(initialEventId: destination.contentId),
+            builder: (_) => EventsScreen(
+              initialEventId: destination.contentId,
+              initialOccurrenceId: destination.occurrenceId,
+            ),
           ),
         );
       case PushContentType.resource:
@@ -250,7 +253,7 @@ int foregroundNotificationId({
   }
   if (destination != null) {
     return _stableNotificationId(
-      '${destination.type.name}:${destination.contentId}:${destination.locationId}',
+      '${destination.type.name}:${destination.contentId}:${destination.locationId}:${destination.occurrenceId ?? ''}:${destination.reminderId ?? ''}',
     );
   }
   return (now ?? DateTime.now()).millisecondsSinceEpoch & 0x7fffffff;

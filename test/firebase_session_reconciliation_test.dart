@@ -51,6 +51,22 @@ void main() {
   });
 
   test(
+    'complete cached profiles are accepted without a server recovery read',
+    () async {
+      final result = await reconcileLinkedProfiles(
+        expectedIds: const ['existing', 'new-child'],
+        snapshotProfiles: const [_existingProfile, _newChildProfile],
+        isFromCache: true,
+        loadMissingFromServer: (_) async {
+          fail('A complete cache snapshot must not require server recovery.');
+        },
+      );
+      expect(result.status, LinkedProfileResolutionStatus.complete);
+      expect(result.profiles, hasLength(2));
+    },
+  );
+
+  test(
     'cache partial snapshot preserves an established member session',
     () async {
       var serverLoads = 0;

@@ -191,11 +191,14 @@ class FirestoreProfileService {
       final locationTrace = PerformanceDiagnostics.start(
         'profile_creation_location_validation',
       );
+      final validationWave = PerformanceDiagnostics.start('validation_wave');
+      PerformanceDiagnostics.mark('validation_wave_started');
       PerformanceDiagnostics.mark('existing_user_validation_start');
       PerformanceDiagnostics.mark('location_validation_start');
       final existingUserFuture = userRef.get().then((snapshot) {
         PerformanceDiagnostics.mark(
           'existing_user_validation_end',
+          durationMilliseconds: existingUserTrace.elapsedMilliseconds,
           fromCache: snapshot.metadata.isFromCache,
         );
         existingUserTrace.stage('complete');
@@ -204,12 +207,17 @@ class FirestoreProfileService {
       final locationFuture = locationRef.get().then((snapshot) {
         PerformanceDiagnostics.mark(
           'location_validation_end',
+          durationMilliseconds: locationTrace.elapsedMilliseconds,
           fromCache: snapshot.metadata.isFromCache,
         );
         locationTrace.stage('complete');
         return snapshot;
       });
       final reads = await Future.wait([existingUserFuture, locationFuture]);
+      PerformanceDiagnostics.mark(
+        'validation_wave_finished',
+        durationMilliseconds: validationWave.elapsedMilliseconds,
+      );
       final existingUser = reads[0];
       final locationSnapshot = reads[1];
       if (existingUser.exists) {
@@ -252,7 +260,10 @@ class FirestoreProfileService {
       );
       PerformanceDiagnostics.mark('batch_commit_start');
       await batch.commit();
-      PerformanceDiagnostics.mark('batch_commit_end');
+      PerformanceDiagnostics.mark(
+        'batch_commit_end',
+        durationMilliseconds: batchTrace.elapsedMilliseconds,
+      );
       PerformanceDiagnostics.mark('batch_acknowledged');
       batchTrace.stage('complete');
       return profileRefs.map((reference) => reference.id).toList();

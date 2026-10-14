@@ -110,8 +110,16 @@ String resolvedPreferredClassGroupId(String className, String? storedGroupId) {
   if (stored.isEmpty || stored == legacyAmbiguousTeenAdultGroupId) {
     return preferredClassGroupIdForClassName(className);
   }
-  return stored;
+  return _canonicalPreferredGroup(stored);
 }
+
+String _canonicalPreferredGroup(String value) => switch (value) {
+  'little-tigers' => 'little-tiger-standard',
+  'level-1' || 'level-2' || 'level-3' || 'level-4' => '$value-standard',
+  'teen-adult-sparring' => 'teen-adult-sparring-standard',
+  'sparring-class' || 'level-1-2-sparring' => 'level-1-2-sparring-standard',
+  _ => value,
+};
 
 bool matchesResolvedPreferredClassGroup(
   Iterable<String> savedGroupIds,
@@ -119,7 +127,9 @@ bool matchesResolvedPreferredClassGroup(
 ) {
   return savedGroupIds.any(
     (groupId) =>
-        groupId != legacyAmbiguousTeenAdultGroupId && groupId == classGroupId,
+        groupId != legacyAmbiguousTeenAdultGroupId &&
+        _canonicalPreferredGroup(groupId) ==
+            _canonicalPreferredGroup(classGroupId),
   );
 }
 
@@ -130,6 +140,7 @@ List<String> resolvedSavedPreferredClassGroupIds(Iterable<String> groupIds) {
             groupId.trim().isNotEmpty &&
             groupId != legacyAmbiguousTeenAdultGroupId,
       )
+      .map(_canonicalPreferredGroup)
       .toList(growable: false);
 }
 

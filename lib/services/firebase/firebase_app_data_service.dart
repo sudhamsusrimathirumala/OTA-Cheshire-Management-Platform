@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
+import '../../models/event_schedule.dart';
 import '../../models/academy_resource.dart';
 import '../../models/class_session.dart';
 import '../../models/curriculum_requirement.dart';
@@ -1808,6 +1809,8 @@ AcademyEvent? academyEventFromFirestoreData(
       startDateTime.add(const Duration(hours: 1));
   final createdAt = _dateTimeValue(data['createdAt']) ?? startDateTime;
   final updatedAt = _dateTimeValue(data['updatedAt']) ?? createdAt;
+  final eventSchedule = EventSchedule.tryParse(data['eventSchedule']);
+  if (data['eventSchedule'] != null && eventSchedule == null) return null;
   // TODO: Remove this compatibility note after approved event documents have
   // been updated. Legacy registrationUrl and showInResources are ignored.
   return AcademyEvent(
@@ -1818,6 +1821,8 @@ AcademyEvent? academyEventFromFirestoreData(
     eventType: _stringValue(data['eventType']) ?? 'specialEvent',
     startDateTime: startDateTime,
     endDateTime: endDateTime,
+    schedule: eventSchedule,
+    reminders: EventReminders.fromMap(data['reminders']),
     registrationDeadline: _dateTimeValue(data['registrationDeadline'])?.toUtc(),
     isPublished: _boolValue(data['isPublished']) ?? false,
     isArchived: _boolValue(data['isArchived']) ?? false,

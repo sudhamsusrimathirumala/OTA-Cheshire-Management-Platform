@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/academy_announcement.dart';
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
+import '../../models/event_schedule.dart';
 import '../../models/class_session.dart';
 import '../../data/sample_curriculum.dart';
 import '../firestore/firestore_collections.dart';
@@ -36,10 +37,13 @@ class FirebaseAdminWriteService implements AdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    await document.set(
-      announcementWriteFields(data, now: now),
-      SetOptions(merge: true),
-    );
+    await document.set({
+      ...announcementWriteFields(data, now: now),
+      if (data.id == null) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      if (data.status == 'published' && data.publishedAt == null)
+        'publishedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -68,10 +72,25 @@ class FirebaseAdminWriteService implements AdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    await document.set(
-      eventWriteFields(data, now: now),
-      SetOptions(merge: true),
-    );
+    final fields = {
+      ...eventWriteFields(data, now: now),
+      if (data.id == null) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    if (data.id == null) {
+      await document.set(fields);
+    } else {
+      await _database.runTransaction((transaction) async {
+        final current = await transaction.get(document);
+        if (!current.exists ||
+            (data.expectedUpdatedAt != null &&
+                (current.data()?['updatedAt'] as Timestamp?)?.toDate() !=
+                    data.expectedUpdatedAt)) {
+          throw StateError('The event changed. Reload it before saving.');
+        }
+        transaction.set(document, fields, SetOptions(merge: true));
+      });
+    }
   }
 
   @override
@@ -118,10 +137,11 @@ class FirebaseAdminWriteService implements AdminWriteService {
         ? collection.doc()
         : collection.doc(data.id);
     final now = DateTime.now();
-    await document.set(
-      resourceWriteFields(data, now: now),
-      SetOptions(merge: true),
-    );
+    await document.set({
+      ...resourceWriteFields(data, now: now),
+      if (data.id == null) 'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -335,6 +355,11 @@ Map<String, Object?> eventWriteFields(
       'primaryRegistrationResourceId': FieldValue.delete(),
     'isPublished': data.isPublished,
     'isArchived': data.isArchived,
+    'reminders': data.reminders.toMap(),
+    if (data.schedule != null)
+      'eventSchedule': data.schedule!.toMap()
+    else if (data.id != null)
+      'eventSchedule': FieldValue.delete(),
     'createdAt': Timestamp.fromDate(data.createdAt ?? now),
     'updatedAt': Timestamp.fromDate(now),
   };
@@ -458,6 +483,9 @@ class EventWriteData {
     this.primaryRegistrationResourceId,
     this.isArchived = false,
     this.createdAt,
+    this.schedule,
+    this.reminders = const EventReminders.disabled(),
+    this.expectedUpdatedAt,
   });
 
   factory EventWriteData.fromEvent(
@@ -472,6 +500,9 @@ class EventWriteData {
     DateTime? registrationDeadline,
     List<String>? linkedResourceIds,
     String? primaryRegistrationResourceId,
+    EventSchedule? schedule,
+    bool replaceSchedule = false,
+    EventReminders? reminders,
   }) {
     final synchronizedResourceIds = <String>{
       ...(linkedResourceIds ?? event.linkedResourceIds),
@@ -494,6 +525,9 @@ class EventWriteData {
       isPublished: isPublished,
       isArchived: event.isArchived,
       createdAt: event.createdAt,
+      schedule: replaceSchedule ? schedule : schedule ?? event.schedule,
+      reminders: reminders ?? event.reminders,
+      expectedUpdatedAt: event.updatedAt,
     );
   }
 
@@ -510,6 +544,9 @@ class EventWriteData {
   final bool isPublished;
   final bool isArchived;
   final DateTime? createdAt;
+  final EventSchedule? schedule;
+  final EventReminders reminders;
+  final DateTime? expectedUpdatedAt;
 }
 
 class ResourceWriteData {

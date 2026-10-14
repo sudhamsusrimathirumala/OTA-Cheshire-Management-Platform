@@ -104,6 +104,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
                 isLoading: appDataService.isAnnouncementsLoading,
                 errorMessage: appDataService.announcementsErrorMessage,
                 onEdit: _openAnnouncementSheet,
+                onDuplicate: (source) => _openAnnouncementSheet(source, true),
                 onPreview: _previewAnnouncement,
                 onArchive: _confirmArchive,
                 onDelete: _confirmDelete,
@@ -117,6 +118,7 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
 
   Future<void> _openAnnouncementSheet([
     _AdminAnnouncement? announcement,
+    bool duplicate = false,
   ]) async {
     final result = await showModalBottomSheet<_AnnouncementFormResult>(
       context: context,
@@ -129,7 +131,10 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
       builder: (context) {
-        return _AnnouncementFormSheet(announcement: announcement);
+        return _AnnouncementFormSheet(
+          announcement: announcement,
+          duplicate: duplicate,
+        );
       },
     );
 
@@ -448,6 +453,7 @@ class _AnnouncementsPanel extends StatelessWidget {
     required this.isLoading,
     required this.errorMessage,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onPreview,
     required this.onArchive,
     required this.onDelete,
@@ -457,6 +463,7 @@ class _AnnouncementsPanel extends StatelessWidget {
   final bool isLoading;
   final String? errorMessage;
   final ValueChanged<_AdminAnnouncement> onEdit;
+  final ValueChanged<_AdminAnnouncement> onDuplicate;
   final ValueChanged<_AdminAnnouncement> onPreview;
   final ValueChanged<_AdminAnnouncement> onArchive;
   final ValueChanged<_AdminAnnouncement> onDelete;
@@ -488,6 +495,7 @@ class _AnnouncementsPanel extends StatelessWidget {
               _AnnouncementRow(
                 announcement: announcement,
                 onEdit: () => onEdit(announcement),
+                onDuplicate: () => onDuplicate(announcement),
                 onPreview: () => onPreview(announcement),
                 onArchive: () => onArchive(announcement),
                 onDelete: () => onDelete(announcement),
@@ -505,6 +513,7 @@ class _AnnouncementRow extends StatelessWidget {
   const _AnnouncementRow({
     required this.announcement,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onPreview,
     required this.onArchive,
     required this.onDelete,
@@ -512,6 +521,7 @@ class _AnnouncementRow extends StatelessWidget {
 
   final _AdminAnnouncement announcement;
   final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
   final VoidCallback onPreview;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
@@ -555,6 +565,7 @@ class _AnnouncementRow extends StatelessWidget {
           final actions = Wrap(
             children: [
               _ActionLink(label: 'Edit', onPressed: onEdit),
+              _ActionLink(label: 'Duplicate', onPressed: onDuplicate),
               _ActionLink(label: 'Preview', onPressed: onPreview),
               _ActionLink(label: 'Archive', onPressed: onArchive),
               _ActionLink(label: 'Delete', onPressed: onDelete, isDanger: true),
@@ -626,9 +637,10 @@ class _AnnouncementRow extends StatelessWidget {
 }
 
 class _AnnouncementFormSheet extends StatefulWidget {
-  const _AnnouncementFormSheet({this.announcement});
+  const _AnnouncementFormSheet({this.announcement, this.duplicate = false});
 
   final _AdminAnnouncement? announcement;
+  final bool duplicate;
 
   @override
   State<_AnnouncementFormSheet> createState() => _AnnouncementFormSheetState();
@@ -690,7 +702,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.announcement != null;
+    final isEditing = widget.announcement != null && !widget.duplicate;
     final announcementStatus = widget.announcement?.status;
     final canSaveDraft =
         !isEditing || announcementStatus == _AnnouncementStatus.draft;
@@ -714,7 +726,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _SheetHeader(
-                title: isEditing ? 'Edit Announcement' : 'Create Announcement',
+                title: widget.duplicate
+                    ? 'Duplicate Announcement'
+                    : isEditing
+                    ? 'Edit Announcement'
+                    : 'Create Announcement',
                 subtitle: isGuestDemoActive
                     ? 'Demo drafts and publications stay on this device.'
                     : 'Drafts and published announcements write to Firestore.',
@@ -793,7 +809,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                 initialValue: _audience,
                 decoration: _fieldDecoration('Audience'),
                 items: [
-                  for (final audience in _Audience.values)
+                  for (final audience in _Audience.values.where(
+                    (a) =>
+                        a != _Audience.preserved ||
+                        _audience == _Audience.preserved,
+                  ))
                     DropdownMenuItem<_Audience>(
                       value: audience,
                       child: Text(audience.label),
@@ -855,17 +875,18 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                       ),
                       child: const Text('Save Draft'),
                     ),
-                  FilledButton(
-                    onPressed: () => _submit(_AnnouncementSaveAction.publish),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: OtaColors.maroon,
-                      foregroundColor: OtaColors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+                  if (!widget.duplicate)
+                    FilledButton(
+                      onPressed: () => _submit(_AnnouncementSaveAction.publish),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OtaColors.maroon,
+                        foregroundColor: OtaColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
+                      child: Text(publishButtonLabel),
                     ),
-                    child: Text(publishButtonLabel),
-                  ),
                 ],
               ),
             ],
@@ -883,6 +904,10 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       _Audience.belt => _buildBeltTargeting(),
       _Audience.classType => _buildClassTypeTargeting(),
       _Audience.students => _buildStudentTargeting(),
+      _Audience.preserved => _AudienceHint(
+        message:
+            'Keeps the original ${widget.announcement!.source.audienceType} audience. Choose another audience to replace these settings.',
+      ),
     };
   }
 
@@ -1031,14 +1056,14 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   List<StudentProfile> _studentOptions() {
     return [
       for (final profile in appDataService.adminStudentProfiles)
-        if (adminLocationController.includesLocation(profile.locationId))
+        if (profile.locationId == _adminLocationId() && profile.isActive)
           profile,
     ]..sort((a, b) => a.name.compareTo(b.name));
   }
 
   String? _targetingValidationMessage() {
     return switch (_audience) {
-      _Audience.everyone => null,
+      _Audience.everyone || _Audience.preserved => null,
       _Audience.belt =>
         _targetBelts.isEmpty ? 'Select at least one belt level.' : null,
       _Audience.classType =>
@@ -1051,7 +1076,7 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
   }
 
   String _adminLocationId() {
-    return adminWriteLocationId();
+    return widget.announcement?.locationId ?? adminWriteLocationId();
   }
 
   void _submit(_AnnouncementSaveAction action) {
@@ -1075,26 +1100,54 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
       return;
     }
 
+    final availableProfiles = _studentOptions().map((p) => p.id).toSet();
+    if (_targetStudentProfileIds.any((id) => !availableProfiles.contains(id))) {
+      setState(
+        () => _validationMessage =
+            'Review targeting: a selected student is no longer active at this location.',
+      );
+      return;
+    }
     final targetingMessage = _targetingValidationMessage();
     if (targetingMessage != null) {
       setState(() => _validationMessage = targetingMessage);
       return;
     }
 
-    final targetBelts = _audience == _Audience.belt
+    final preserveAudience = _audience == _Audience.preserved;
+    final targetUserIds = preserveAudience
+        ? widget.announcement!.source.targetUserIds
+        : <String>[];
+    final availableAccounts = appDataService.adminUserAccounts
+        .where((a) => a.isActive && a.locationId == _adminLocationId())
+        .map((a) => a.id)
+        .toSet();
+    if (targetUserIds.any((id) => !availableAccounts.contains(id))) {
+      setState(
+        () => _validationMessage =
+            'Review targeting: a selected account is unavailable at this location. Choose a new audience.',
+      );
+      return;
+    }
+    final audienceType = preserveAudience
+        ? widget.announcement!.source.audienceType
+        : _audience.firestoreValue;
+    final targetBelts = _audience == _Audience.belt || preserveAudience
         ? orderedBeltRanks(_targetBelts)
         : <String>[];
-    final targetClassTypeIds = _audience == _Audience.classType
+    final targetClassTypeIds =
+        _audience == _Audience.classType || preserveAudience
         ? _sortedValues(_targetClassTypeIds)
         : <String>[];
-    final targetStudentProfileIds = _audience == _Audience.students
+    final targetStudentProfileIds =
+        _audience == _Audience.students || preserveAudience
         ? _sortedValues(_targetStudentProfileIds)
         : <String>[];
     final status = action == _AnnouncementSaveAction.publish
         ? 'published'
         : 'draft';
-    final announcement = widget.announcement;
-    final locationId = announcement?.locationId ?? _adminLocationId();
+    final announcement = widget.duplicate ? null : widget.announcement;
+    final locationId = widget.announcement?.locationId ?? _adminLocationId();
 
     final data = announcement == null
         ? AnnouncementWriteData(
@@ -1106,11 +1159,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             status: status,
             locationId: locationId,
             requiresAction: _requiresAction,
-            audienceType: _audience.firestoreValue,
+            audienceType: audienceType,
             targetBelts: targetBelts,
             targetClassTypeIds: targetClassTypeIds,
             targetStudentProfileIds: targetStudentProfileIds,
-            targetUserIds: const <String>[],
+            targetUserIds: targetUserIds,
           )
         : AnnouncementWriteData.fromAnnouncement(
             announcement.source,
@@ -1122,11 +1175,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
             status: status,
             locationId: locationId,
             requiresAction: _requiresAction,
-            audienceType: _audience.firestoreValue,
+            audienceType: audienceType,
             targetBelts: targetBelts,
             targetClassTypeIds: targetClassTypeIds,
             targetStudentProfileIds: targetStudentProfileIds,
-            targetUserIds: const <String>[],
+            targetUserIds: targetUserIds,
           );
 
     _submitting = true;
@@ -1595,7 +1648,8 @@ enum _Audience {
   everyone('Everyone', 'everyone'),
   belt('Specific belt', 'belt'),
   classType('Specific class group', 'classType'),
-  students('Specific student', 'students');
+  students('Specific student', 'students'),
+  preserved('Existing audience settings', 'preserved');
 
   const _Audience(this.label, this.firestoreValue);
 
@@ -1638,6 +1692,7 @@ _Audience _audienceForFirestoreValue(String? audienceType) {
     'belt' => _Audience.belt,
     'classType' => _Audience.classType,
     'students' => _Audience.students,
+    'parents' || 'specificUsers' || 'mixed' => _Audience.preserved,
     _ => _Audience.everyone,
   };
 }

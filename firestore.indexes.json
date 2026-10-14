@@ -32,6 +32,7 @@
     }
   ],
   "fieldOverrides": [
+    {"collectionGroup": "events", "fieldPath": "eventSchedule", "indexes": []},
     {
       "collectionGroup": "announcementDeliveries",
       "fieldPath": "announcementId",

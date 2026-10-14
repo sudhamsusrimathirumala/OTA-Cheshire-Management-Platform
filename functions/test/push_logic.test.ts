@@ -121,6 +121,8 @@ test("dispatch claims are idempotent and expired leases retry", () => {
 test("invalid-device errors and platform-safe payloads are classified", () => {
   assert.equal(isPermanentMessagingError("messaging/registration-token-not-registered"), true);
   assert.equal(isPermanentMessagingError("messaging/internal-error"), false);
+  // A malformed payload must never delete an otherwise valid registration.
+  assert.equal(isPermanentMessagingError("messaging/invalid-argument"), false);
   const payload = notificationPayload("resource", "r1", {title: "Guide", locationId: "cheshire"});
   assert.equal(payload.body, "New academy resource available");
   assert.deepEqual(payload.data, {contentType: "resource", contentId: "r1", locationId: "cheshire"});

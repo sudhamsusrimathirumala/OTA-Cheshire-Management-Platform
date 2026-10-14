@@ -342,16 +342,22 @@ class PushDestination {
     required this.type,
     required this.contentId,
     required this.locationId,
+    this.occurrenceId,
+    this.reminderId,
   });
 
   final PushContentType type;
   final String contentId;
   final String locationId;
+  final String? occurrenceId;
+  final String? reminderId;
 
   String encode() => jsonEncode({
     'contentType': type.name,
     'contentId': contentId,
     'locationId': locationId,
+    if (occurrenceId != null) 'occurrenceId': occurrenceId,
+    if (reminderId != null) 'reminderId': reminderId,
   });
 
   static PushDestination? tryParse(Map<String, dynamic> data) {
@@ -373,6 +379,12 @@ class PushDestination {
       type: type,
       contentId: contentId.trim(),
       locationId: locationId.trim(),
+      occurrenceId: data['occurrenceId'] is String
+          ? data['occurrenceId'] as String
+          : null,
+      reminderId: data['reminderId'] is String
+          ? data['reminderId'] as String
+          : null,
     );
   }
 
@@ -408,7 +420,7 @@ class PendingPushDestination {
       return null;
     }
     final key =
-        '${pending.type.name}:${pending.contentId}:${pending.locationId}';
+        '${pending.type.name}:${pending.contentId}:${pending.locationId}:${pending.occurrenceId ?? ''}:${pending.reminderId ?? ''}';
     _pending = null;
     if (_lastOpenedKey == key) return null;
     _lastOpenedKey = key;

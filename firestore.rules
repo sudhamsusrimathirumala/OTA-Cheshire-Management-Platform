@@ -754,6 +754,53 @@ service cloud.firestore {
           validClassSessionData(request.resource.data);
     }
 
+    function validEventReminders(data) {
+      let settings = data.get('reminders', {'mode': 'none', 'offsetsMinutes': []});
+      return settings is map && settings.keys().hasOnly(['mode', 'offsetsMinutes']) &&
+          settings.mode in ['first', 'every', 'none'] && settings.offsetsMinutes is list &&
+          settings.offsetsMinutes.size() <= 5 &&
+          settings.offsetsMinutes.hasOnly([10080, 4320, 1440, 120, 60]);
+    }
+
+    function validEventSchedule(data) {
+      let schedule = data.get('eventSchedule', null);
+      return schedule == null || (schedule is map &&
+          schedule.keys().hasOnly(['version', 'timeZoneId', 'rule', 'occurrences', 'firstOccurrenceId']) &&
+          schedule.version == 1 && schedule.timeZoneId is string &&
+          schedule.timeZoneId == get(locationPath(data.locationId)).data.timeZoneId &&
+          schedule.firstOccurrenceId is string && schedule.firstOccurrenceId.size() > 0 &&
+          schedule.firstOccurrenceId.size() <= 64 &&
+          schedule.occurrences is list && schedule.occurrences.size() > 0 &&
+          schedule.occurrences.size() <= 180 && schedule.rule is map &&
+          schedule.rule.keys().hasOnly(['frequency', 'startDate', 'endDate', 'startMinutes',
+            'endMinutes', 'endDayOffset', 'intervalWeeks', 'weekdays', 'customDates',
+            'weekdayTimes', 'maxOccurrences']) &&
+          schedule.rule.frequency in ['daily', 'weekly', 'custom'] &&
+          schedule.rule.startDate is string && schedule.rule.endDate is string &&
+          schedule.rule.startDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+          schedule.rule.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') &&
+          schedule.rule.startMinutes is int && schedule.rule.startMinutes >= 0 && schedule.rule.startMinutes < 1440 &&
+          schedule.rule.endMinutes is int && schedule.rule.endMinutes >= 0 && schedule.rule.endMinutes < 1440 &&
+          schedule.rule.endDayOffset in [0, 1] && schedule.rule.intervalWeeks is int &&
+          schedule.rule.intervalWeeks >= 1 && schedule.rule.intervalWeeks <= 52 &&
+          schedule.rule.weekdays is list && schedule.rule.weekdays.size() <= 7 &&
+          schedule.rule.weekdays.hasOnly([1, 2, 3, 4, 5, 6, 7]) &&
+          schedule.rule.customDates is list && schedule.rule.customDates.size() <= 180 &&
+          schedule.rule.weekdayTimes is map && schedule.rule.weekdayTimes.size() <= 7 &&
+          schedule.rule.maxOccurrences is int && schedule.rule.maxOccurrences >= 1 &&
+          schedule.rule.maxOccurrences <= 180);
+    }
+
+    function validEventResource(data) {
+      let resourceId = data.get('primaryRegistrationResourceId', '');
+      let path = /databases/$(database)/documents/resources/$(resourceId);
+      return resourceId == '' || (exists(path) &&
+          get(path).data.locationId == data.locationId &&
+          get(path).data.resourceSection == 'general' &&
+          get(path).data.get('isArchived', false) == false &&
+          (!data.isPublished || get(path).data.isPublished == true));
+    }
+
     function validEventData(data) {
       return data.title is string && data.title.size() > 0 &&
           data.description is string &&
@@ -773,7 +820,8 @@ service cloud.firestore {
           data.isPublished is bool && data.isArchived is bool &&
           data.createdAt is timestamp && data.updatedAt is timestamp &&
           (!data.keys().hasAny(['registrationDeadline']) ||
-           data.registrationDeadline is timestamp);
+           data.registrationDeadline is timestamp) && validEventReminders(data) &&
+          validEventSchedule(data) && validEventResource(data);
     }
 
     function validEventCreate(data) {
@@ -781,7 +829,7 @@ service cloud.firestore {
             'title', 'description', 'locationId', 'eventType', 'startDateTime',
             'endDateTime', 'registrationDeadline', 'linkedResourceIds',
             'primaryRegistrationResourceId', 'isPublished', 'isArchived',
-            'createdAt', 'updatedAt'
+            'createdAt', 'updatedAt', 'eventSchedule', 'reminders'
           ]) &&
           data.keys().hasAll([
             'title', 'description', 'locationId', 'eventType', 'startDateTime',
@@ -798,7 +846,7 @@ service cloud.firestore {
             'title', 'description', 'eventType', 'startDateTime', 'endDateTime',
             'registrationDeadline', 'linkedResourceIds',
             'primaryRegistrationResourceId', 'isPublished', 'isArchived',
-            'updatedAt'
+            'updatedAt', 'eventSchedule', 'reminders'
           ]) &&
           validEventData(request.resource.data);
     }
@@ -952,6 +1000,11 @@ service cloud.firestore {
         allow delete: if memberDeletingOwnAccount(uid);
         allow create, update: if false;
       }
+    }
+
+    match /eventReminders/{reminderId} {
+      allow read, write: if false;
+      match /targets/{targetId} { allow read, write: if false; }
     }
 
     match /pushDispatches/{dispatchId} {

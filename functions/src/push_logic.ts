@@ -188,7 +188,6 @@ export function isPermanentMessagingError(code: string): boolean {
   return [
     "messaging/invalid-registration-token",
     "messaging/registration-token-not-registered",
-    "messaging/invalid-argument",
   ].includes(code);
 }
 

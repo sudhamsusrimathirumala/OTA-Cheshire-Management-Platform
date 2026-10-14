@@ -2,8 +2,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/class_session.dart';
 import 'package:ota_cheshire_management_platform/models/student.dart';
 import 'package:ota_cheshire_management_platform/services/class_recommendation_service.dart';
+import 'package:ota_cheshire_management_platform/services/app_data_service.dart';
 
 void main() {
+  Student child(
+    int age, {
+    String belt = 'Black',
+    List<String> preferred = const [],
+  }) => Student(
+    id: 'child-$age',
+    name: 'Child',
+    locationId: 'cheshire',
+    belt: belt,
+    legacyAge: age,
+    stickerCount: 0,
+    stickersRequired: 0,
+    nextRank: belt,
+    preferredClassGroupIds: preferred,
+  );
   ClassSession session({
     required String id,
     required String name,
@@ -129,6 +145,78 @@ void main() {
         currentMinutes: 0,
       );
 
+  for (final age in [7, 10]) {
+    test('age $age Black Belt has no beginner or placement fallback', () {
+      final white = session(
+        id: 'white',
+        name: 'Level 1',
+        type: 'level-1',
+        hour: 16,
+        belts: ['White'],
+      );
+      final placement = session(
+        id: 'placement',
+        name: 'Level 4',
+        type: 'level-4',
+        hour: 18,
+      );
+      expect(recommend(child(age), [white, placement]), isNull);
+      expect(isTypicallyRecommendedFor(placement, child(age)), isFalse);
+      expect(recommend(child(age), [white, teen]), same(teen));
+      expect(
+        recommend(child(age, preferred: ['level-1-standard']), [white, teen]),
+        same(white),
+      );
+    });
+  }
+  test('canonical belt spelling and selected siblings stay independent', () {
+    final white = session(
+      id: 'white',
+      name: 'Level 1',
+      type: 'level-1',
+      hour: 16,
+      belts: ['White'],
+    );
+    expect(
+      recommend(child(7, belt: ' black belt '), [white, teen]),
+      same(teen),
+    );
+    expect(recommend(child(10, belt: 'Black-Belt'), [white, teen]), same(teen));
+    expect(recommend(child(10, belt: 'White'), [white, teen]), same(white));
+    expect(recommend(child(7), [white, teen]), same(teen));
+  });
+  test('dashboard wrapper and schedule use the same selected-child policy', () {
+    final schedule = {
+      DateTime.monday: [level, teen],
+    };
+    for (final profile in [
+      child(7),
+      child(10, belt: 'Blue'),
+      child(7, preferred: ['level-3']),
+    ]) {
+      expect(
+        nextEligibleClassFromSchedule(
+          schedule,
+          profile,
+          currentWeekday: DateTime.monday,
+          currentMinutes: 0,
+        ),
+        same(
+          nextRecommendedClassFromSchedule(
+            schedule,
+            profile,
+            currentWeekday: DateTime.monday,
+            currentMinutes: 0,
+          ),
+        ),
+      );
+    }
+    expect(
+      recommend(child(7, preferred: ['level-3']), [level, teen]),
+      same(level),
+    );
+  });
+
   test(
     'older beginner never automatically gets an excluded black belt class',
     () {
@@ -177,7 +265,7 @@ void main() {
       recommend(beginner(), [unspecified, teen, beginnerLevel]),
       same(beginnerLevel),
     );
-    expect(recommend(beginner(), [unspecified, teen]), same(unspecified));
+    expect(recommend(beginner(), [unspecified, teen]), isNull);
   });
   test(
     'inactive and wrong-location classes cannot override eligibility or preference',

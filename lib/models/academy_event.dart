@@ -1,3 +1,5 @@
+import 'event_schedule.dart';
+
 class AcademyEvent {
   const AcademyEvent({
     required this.id,
@@ -14,6 +16,9 @@ class AcademyEvent {
     this.isArchived = false,
     this.linkedResourceIds = const <String>[],
     this.primaryRegistrationResourceId,
+    this.schedule,
+    this.reminders = const EventReminders.disabled(),
+    this.occurrenceId,
   });
 
   final String id;
@@ -30,6 +35,38 @@ class AcademyEvent {
   final bool isArchived;
   final List<String> linkedResourceIds;
   final String? primaryRegistrationResourceId;
+  final EventSchedule? schedule;
+  final EventReminders reminders;
+  final String? occurrenceId;
+
+  List<EventOccurrence> get occurrences =>
+      schedule?.occurrences ??
+      [EventOccurrence(id: 'once', start: startDateTime, end: endDateTime)];
+  DateTime get lastOccurrenceEnd =>
+      occurrences.map((o) => o.end).reduce((a, b) => a.isAfter(b) ? a : b);
+  String get recurrenceLabel => schedule == null
+      ? 'Does not repeat'
+      : '${schedule!.rule.frequency[0].toUpperCase()}${schedule!.rule.frequency.substring(1)} • ${occurrences.length} sessions';
+
+  AcademyEvent forOccurrence(EventOccurrence occurrence) => AcademyEvent(
+    id: id,
+    title: title,
+    description: description,
+    locationId: locationId,
+    eventType: eventType,
+    startDateTime: occurrence.start,
+    endDateTime: occurrence.end,
+    isPublished: isPublished,
+    isArchived: isArchived,
+    createdAt: createdAt,
+    updatedAt: updatedAt,
+    registrationDeadline: registrationDeadline,
+    linkedResourceIds: linkedResourceIds,
+    primaryRegistrationResourceId: primaryRegistrationResourceId,
+    schedule: schedule,
+    reminders: reminders,
+    occurrenceId: occurrence.id,
+  );
 
   bool get isRegistrationOpen {
     if (primaryRegistrationResourceId == null) {

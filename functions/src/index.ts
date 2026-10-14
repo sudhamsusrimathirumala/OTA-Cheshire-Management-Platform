@@ -7,13 +7,14 @@ import {
   WriteBatch,
   getFirestore,
 } from "firebase-admin/firestore";
-import {getMessaging} from "firebase-admin/messaging";
+import {loadAudienceInputs, loadDevices, deleteInvalidDevices, sendPushBatch} from "./push_delivery";
+import {onSchedule} from "firebase-functions/v2/scheduler";
+import {defineBoolean} from "firebase-functions/params";
+import {EventReminderBackend} from "./event_reminders";
 import {onDocumentWritten} from "firebase-functions/v2/firestore";
 import {logger} from "firebase-functions";
 import {
-  AccountRecord,
   ContentType,
-  ProfileRecord,
   announcementDeliveryData,
   canClaimDispatch,
   chunkTargets,
@@ -29,6 +30,7 @@ if (getApps().length === 0) initializeApp();
 const db = getFirestore();
 export const pushFunctionRegion = "us-east1";
 const triggerOptions = {region: pushFunctionRegion, maxInstances: 2, retry: true};
+const eventRemindersEnabled = defineBoolean("EVENT_REMINDERS_ENABLED", {default: false});
 
 export const pushPublishedAnnouncement = onDocumentWritten(
   {...triggerOptions, document: "announcements/{contentId}"},
@@ -43,8 +45,11 @@ export const pushPublishedAnnouncement = onDocumentWritten(
 
 export const pushPublishedEvent = onDocumentWritten(
   {...triggerOptions, document: "events/{contentId}"},
-  (event) => dispatchPublication("event", event.params.contentId,
-    event.data?.before.data(), event.data?.after.data()),
+  async (event) => {
+    await new EventReminderBackend(db).sync(event.params.contentId);
+    await dispatchPublication("event", event.params.contentId,
+      event.data?.before.data(), event.data?.after.data());
+  },
 );
 
 export const pushPublishedResource = onDocumentWritten(
@@ -66,28 +71,15 @@ async function dispatchPublication(
   let failureCount = 0;
   let targetCount = 0;
   try {
-    const {accounts, profiles} = await loadAudienceInputs(String(after.locationId));
+    const {accounts, profiles} = await loadAudienceInputs(db, String(after.locationId));
     const accountIds = eligibleAccountIds(type, after, accounts, profiles);
-    const devices = await loadDevices(accountIds);
+    const devices = await loadDevices(db, accountIds);
     const payload = notificationPayload(type, contentId, after);
-    targetCount = devices.length;
+    targetCount = new Set(devices.map((device) => device.token)).size;
     let temporaryFailureCount = 0;
     const invalidRefs: DocumentReference[] = [];
     for (const tokenBatch of chunkTargets(devices.map((device) => device.token))) {
-      const result = await getMessaging().sendEachForMulticast({
-        tokens: tokenBatch,
-        notification: {title: payload.title, body: payload.body},
-        data: payload.data,
-        android: {
-          priority: payload.important ? "high" : "normal",
-          collapseKey: `${type}_${contentId}`,
-          notification: {channelId: "ota_updates", sound: "default"},
-        },
-        apns: {
-          headers: {"apns-collapse-id": `${type}_${contentId}`},
-          payload: {aps: {sound: "default", threadId: `${type}_${contentId}`}},
-        },
-      });
+      const result = await sendPushBatch(tokenBatch, payload, dispatchId);
       successCount += result.successCount;
       failureCount += result.failureCount;
       result.responses.forEach((response, index) => {
@@ -101,7 +93,7 @@ async function dispatchPublication(
         }
       });
     }
-    await deleteInvalidDevices(invalidRefs);
+    await deleteInvalidDevices(db, invalidRefs);
     if (temporaryFailureCount > 0) {
       throw Object.assign(new Error("Temporary FCM delivery failure"), {
         code: "messaging/temporary-delivery-failure",
@@ -112,10 +104,10 @@ async function dispatchPublication(
       completedAt: FieldValue.serverTimestamp(),
       successCount,
       failureCount,
-      targetCount: devices.length,
+      targetCount,
       leaseUntil: FieldValue.delete(),
     });
-    logger.info("push_dispatch_completed", {dispatchId, successCount, failureCount, targetCount: devices.length});
+    logger.info("push_dispatch_completed", {dispatchId, successCount, failureCount, targetCount});
   } catch (error) {
     await db.collection("pushDispatches").doc(dispatchId).set({
       status: "failed",
@@ -142,7 +134,7 @@ async function syncTargetedAnnouncementDeliveries(
   ]));
   let recipientIds: string[] = [];
   if (isTargetedPublishedAnnouncement(after)) {
-    const {accounts, profiles} = await loadAudienceInputs(String(after?.locationId));
+    const {accounts, profiles} = await loadAudienceInputs(db, String(after?.locationId));
     recipientIds = eligibleAccountIds("announcement", after!, accounts, profiles);
   }
   const plan = targetedDeliveryPlan([...existingByUid.keys()], recipientIds);
@@ -194,64 +186,16 @@ async function claimDispatch(
   });
 }
 
-async function loadAudienceInputs(locationId: string): Promise<{
-  accounts: AccountRecord[]; profiles: ProfileRecord[];
-}> {
-  const snapshot = await db.collection("users")
-    .where("locationId", "==", locationId)
-    .where("isActive", "==", true)
-    .where("role", "in", ["parent", "student"]).get();
-  const accounts: AccountRecord[] = snapshot.docs.map((document) => ({
-    id: document.id,
-    role: String(document.get("role")),
-    isActive: document.get("isActive") === true,
-    locationId: String(document.get("locationId")),
-    linkedStudentProfileIds: Array.isArray(document.get("linkedStudentProfileIds")) ?
-      document.get("linkedStudentProfileIds").filter((id: unknown) => typeof id === "string") : [],
-  }));
-  const profileIds = [...new Set(accounts.flatMap((account) => account.linkedStudentProfileIds))];
-  const profileSnapshots = profileIds.length === 0 ? [] :
-    await db.getAll(...profileIds.map((id) => db.collection("studentProfiles").doc(id)));
-  const profiles: ProfileRecord[] = profileSnapshots.filter((item) => item.exists).map((item) => ({
-    id: item.id,
-    isActive: item.get("isActive") === true,
-    locationId: String(item.get("locationId")),
-    linkedUserId: typeof item.get("linkedUserId") === "string" ? item.get("linkedUserId") : undefined,
-    guardianUserIds: Array.isArray(item.get("guardianUserIds")) ?
-      item.get("guardianUserIds").filter((id: unknown) => typeof id === "string") : [],
-    beltRank: typeof item.get("beltRank") === "string" ? item.get("beltRank") : undefined,
-    preferredClassGroupIds: Array.isArray(item.get("preferredClassGroupIds")) ?
-      item.get("preferredClassGroupIds").filter((id: unknown) => typeof id === "string") : [],
-  }));
-  return {accounts, profiles};
-}
-
-async function loadDevices(accountIds: string[]): Promise<Array<{
-  token: string; reference: DocumentReference;
-}>> {
-  const snapshots = await Promise.all(accountIds.map((id) =>
-    db.collection("users").doc(id).collection("pushDevices")
-      .where("enabled", "==", true).get()));
-  const byToken = new Map<string, DocumentReference>();
-  for (const document of snapshots.flatMap((snapshot) => snapshot.docs)) {
-    const token = document.get("fcmToken");
-    if (typeof token === "string" && token) byToken.set(token, document.ref);
-  }
-  return [...byToken].map(([token, reference]) => ({token, reference}));
-}
-
-async function deleteInvalidDevices(references: DocumentReference[]): Promise<void> {
-  const unique = [...new Map(references.map((reference) => [reference.path, reference])).values()];
-  for (const refs of chunkTargets(unique.map((reference) => reference.path), 450)) {
-    const batch = db.batch();
-    refs.forEach((path) => batch.delete(db.doc(path)));
-    await batch.commit();
-  }
-}
-
 function safeErrorCode(error: unknown): string {
   if (typeof error === "object" && error !== null && "code" in error) {
     return String((error as {code: unknown}).code).slice(0, 100);
   }
   return "unknown";
 }
+
+// UTC polling operates on stored instants, independently of open apps.
+export const dispatchEventReminders = onSchedule({region: pushFunctionRegion,
+  schedule: "every 1 minutes", timeZone: "UTC", maxInstances: 2, timeoutSeconds: 540,
+  retryCount: 3}, async () => {
+    if (eventRemindersEnabled.value()) await new EventReminderBackend(db).runDue();
+  });

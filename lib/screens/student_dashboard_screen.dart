@@ -359,7 +359,7 @@ class _NextClassCard extends StatelessWidget {
       DashboardNextClassState.noSchedule =>
         'The academy has not published a class schedule yet.',
       DashboardNextClassState.noEligibleClass =>
-        'No upcoming class currently matches this student profile.',
+        'Ask an instructor for help choosing the right class.',
       DashboardNextClassState.found => nextClass!.eligibilityLabel,
     };
 

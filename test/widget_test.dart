@@ -652,7 +652,11 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: AdminEventsScreen()));
     await tester.tap(find.text('Create Event'));
     await tester.pumpAndSettle();
-    final resourceDropdown = find.byType(DropdownButtonFormField<String>);
+    final resourceDropdown = find.byWidgetPredicate(
+      (widget) =>
+          widget is DropdownButtonFormField<String> &&
+          widget.decoration.labelText == 'Primary linked resource',
+    );
     await tester.ensureVisible(resourceDropdown);
     await tester.tap(resourceDropdown);
     await tester.pumpAndSettle();
@@ -1735,38 +1739,41 @@ void main() {
     expect(visible.map((resource) => resource.id), ['published']);
   });
 
-  test('dashboard class recommendation remains advisory', () {
-    final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
-    final ineligibleClass = mondayClasses.firstWhere(
-      (session) => session.className == 'Little Tiger (Age 3-5)',
-    );
-    final eligibleClass = mondayClasses.firstWhere(
-      (session) => session.className == 'Teen & Black Belt',
-    );
+  test(
+    'dashboard automatic recommendation has no belt-ineligible fallback',
+    () {
+      final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
+      final ineligibleClass = mondayClasses.firstWhere(
+        (session) => session.className == 'Little Tiger (Age 3-5)',
+      );
+      final eligibleClass = mondayClasses.firstWhere(
+        (session) => session.className == 'Teen & Black Belt',
+      );
 
-    expect(
-      nextEligibleClassFromSchedule(
-        {
-          DateTime.monday: [ineligibleClass],
-        },
-        appDataService.selectedStudentProfile,
-        currentWeekday: DateTime.sunday,
-        currentMinutes: 0,
-      ),
-      same(ineligibleClass),
-    );
-    expect(
-      nextEligibleClassFromSchedule(
-        {
-          DateTime.monday: [ineligibleClass, eligibleClass],
-        },
-        appDataService.selectedStudentProfile,
-        currentWeekday: DateTime.sunday,
-        currentMinutes: 0,
-      ),
-      same(eligibleClass),
-    );
-  });
+      expect(
+        nextEligibleClassFromSchedule(
+          {
+            DateTime.monday: [ineligibleClass],
+          },
+          appDataService.selectedStudentProfile,
+          currentWeekday: DateTime.sunday,
+          currentMinutes: 0,
+        ),
+        isNull,
+      );
+      expect(
+        nextEligibleClassFromSchedule(
+          {
+            DateTime.monday: [ineligibleClass, eligibleClass],
+          },
+          appDataService.selectedStudentProfile,
+          currentWeekday: DateTime.sunday,
+          currentMinutes: 0,
+        ),
+        same(eligibleClass),
+      );
+    },
+  );
 
   test('dashboard next class prioritizes preference then falls back', () {
     final student = Student(

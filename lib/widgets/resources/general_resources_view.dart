@@ -11,6 +11,7 @@ class GeneralResourcesView extends StatelessWidget {
     required this.presentation,
     this.onOpen,
     this.onEdit,
+    this.onDuplicate,
     this.onArchive,
     this.onDelete,
     super.key,
@@ -20,6 +21,7 @@ class GeneralResourcesView extends StatelessWidget {
   final ResourcesPresentation presentation;
   final ValueChanged<AcademyResource>? onOpen;
   final ValueChanged<AcademyResource>? onEdit;
+  final ValueChanged<AcademyResource>? onDuplicate;
   final ValueChanged<AcademyResource>? onArchive;
   final ValueChanged<AcademyResource>? onDelete;
 
@@ -33,6 +35,9 @@ class GeneralResourcesView extends StatelessWidget {
             presentation: presentation,
             onOpen: onOpen == null ? null : () => onOpen!(resources[index]),
             onEdit: onEdit == null ? null : () => onEdit!(resources[index]),
+            onDuplicate: onDuplicate == null
+                ? null
+                : () => onDuplicate!(resources[index]),
             onArchive: onArchive == null
                 ? null
                 : () => onArchive!(resources[index]),
@@ -53,6 +58,7 @@ class GeneralResourceCard extends StatelessWidget {
     required this.presentation,
     this.onOpen,
     this.onEdit,
+    this.onDuplicate,
     this.onArchive,
     this.onDelete,
     super.key,
@@ -62,6 +68,7 @@ class GeneralResourceCard extends StatelessWidget {
   final ResourcesPresentation presentation;
   final VoidCallback? onOpen;
   final VoidCallback? onEdit;
+  final VoidCallback? onDuplicate;
   final VoidCallback? onArchive;
   final VoidCallback? onDelete;
 
@@ -114,14 +121,23 @@ class GeneralResourceCard extends StatelessWidget {
                       icon: const Icon(Icons.edit_outlined),
                       color: OtaColors.maroon,
                     ),
-                  if (isAdmin && (onArchive != null || onDelete != null))
+                  if (isAdmin &&
+                      (onArchive != null ||
+                          onDelete != null ||
+                          onDuplicate != null))
                     PopupMenuButton<String>(
                       tooltip: 'Resource actions',
                       onSelected: (value) {
+                        if (value == 'duplicate') onDuplicate?.call();
                         if (value == 'archive') onArchive?.call();
                         if (value == 'delete') onDelete?.call();
                       },
                       itemBuilder: (context) => [
+                        if (onDuplicate != null)
+                          const PopupMenuItem(
+                            value: 'duplicate',
+                            child: Text('Duplicate'),
+                          ),
                         if (onArchive != null)
                           const PopupMenuItem(
                             value: 'archive',

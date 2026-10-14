@@ -3,12 +3,22 @@ import 'dart:developer' as developer;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
+import 'performance_event_buffer.dart';
+
 /// Privacy-safe development timing diagnostics for asynchronous app flows.
 ///
 /// Callers must use fixed stage names. Identity, document IDs, tokens, and
 /// other user-provided values are intentionally unsupported.
 class PerformanceDiagnostics {
   PerformanceDiagnostics._();
+
+  static const diagnosticsRequested = bool.fromEnvironment(
+    'OTA_PERFORMANCE_DIAGNOSTICS',
+    defaultValue: false,
+  );
+  static const viewerEnabled = kIsWeb && diagnosticsRequested;
+  static final viewerBuffer = PerformanceEventBuffer();
+  static int get journeyElapsedMilliseconds => _journey.elapsedMilliseconds;
 
   static final Stopwatch _journey = Stopwatch()..start();
   static final Map<String, int> _marks = {};
@@ -20,6 +30,7 @@ class PerformanceDiagnostics {
     if (!_enabled) return;
     _generation++;
     _marks.clear();
+    if (diagnosticsRequested) viewerBuffer.clear();
     _framesPending.clear();
     _journey
       ..reset()
@@ -31,10 +42,33 @@ class PerformanceDiagnostics {
     bool? fromCache,
     int? count,
     bool once = false,
+    int? durationMilliseconds,
   }) {
     if (!_enabled || (once && _marks.containsKey(stage))) return;
     final elapsed = _journey.elapsedMilliseconds;
+    final operationOrigin = switch (stage) {
+      'claims_end' => 'claims_start',
+      'location_access_ready' => 'location_access_listener_started',
+      'schedule_first_snapshot' => 'schedule_listener_started',
+      'schedule_model_parsed' => 'schedule_callback',
+      'user_first_snapshot' => 'user_listener_started',
+      'post_create_profile_snapshot' => 'profiles_listener_started',
+      _ => null,
+    };
+    final operationStart = _marks[operationOrigin];
+    final operationDuration =
+        durationMilliseconds ??
+        (operationStart == null ? null : elapsed - operationStart);
     _marks[stage] = elapsed;
+    if (diagnosticsRequested) {
+      viewerBuffer.record(
+        stage,
+        elapsed,
+        durationMilliseconds: operationDuration,
+        fromCache: fromCache,
+        count: count,
+      );
+    }
     _write(
       'stage=${_safeStage(stage)} elapsed_ms=$elapsed '
       'platform=${kIsWeb ? 'web' : 'native'}'
@@ -58,6 +92,13 @@ class PerformanceDiagnostics {
       final start = _marks[origin];
       if (start != null) {
         _write('stage=${origin}_to_$stage elapsed_ms=${elapsed - start}');
+        if (diagnosticsRequested) {
+          viewerBuffer.record(
+            '${origin}_to_$stage',
+            elapsed,
+            durationMilliseconds: elapsed - start,
+          );
+        }
       }
     }
   }
@@ -142,6 +183,8 @@ class PerformanceTrace {
   final String _flow;
   final Stopwatch _watch = Stopwatch();
   int _lastElapsedMilliseconds = 0;
+
+  int get elapsedMilliseconds => _watch.elapsedMilliseconds;
 
   void stage(String stage) {
     if (!PerformanceDiagnostics._enabled) return;

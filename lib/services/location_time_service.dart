@@ -35,7 +35,7 @@ class LocationTimeService {
   void cacheTimeZone(String locationId, String timeZoneId) {
     initialize();
     if (locationId.trim().isEmpty) return;
-    tz.getLocation(timeZoneId);
+    if (timeZoneId != neutralTimeZoneId) tz.getLocation(timeZoneId);
     _timeZoneIds[locationId] = timeZoneId;
   }
 
@@ -110,7 +110,9 @@ class LocationTimeService {
     Map<String, dynamic> data,
   ) {
     final timeZoneId = _stringValue(data['timeZoneId']);
-    if (timeZoneId != null) tz.getLocation(timeZoneId);
+    if (timeZoneId != null && timeZoneId != neutralTimeZoneId) {
+      tz.getLocation(timeZoneId);
+    }
     return AcademyLocation(
       id: locationId,
       name: _stringValue(data['name']) ?? 'Academy location',
@@ -145,7 +147,8 @@ class LocationTimeService {
 
   tz.Location locationFor(String locationId) {
     initialize();
-    return tz.getLocation(timeZoneIdFor(locationId));
+    final id = timeZoneIdFor(locationId);
+    return id == neutralTimeZoneId ? tz.UTC : tz.getLocation(id);
   }
 
   DateTime combineDateAndTime({

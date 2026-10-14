@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../models/academy_event.dart';
 import '../../models/academy_resource.dart';
+import '../../models/event_schedule.dart';
+import '../../widgets/admin/event_schedule_editor.dart';
+import '../../widgets/admin/event_occurrence_editor.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
 import '../../services/event_resource_rules.dart';
@@ -112,7 +115,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
                 isLoading: appDataService.isEventsLoading,
                 errorMessage: appDataService.eventsErrorMessage,
                 onEdit: _openEventSheet,
+                onDuplicate: (source) => _openEventSheet(source, true),
                 onPreview: _previewEvent,
+                onSessions: _manageSessions,
                 onArchive: _confirmArchive,
                 onDelete: _confirmDelete,
               ),
@@ -123,7 +128,10 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     );
   }
 
-  Future<void> _openEventSheet([AcademyEvent? event]) async {
+  Future<void> _openEventSheet([
+    AcademyEvent? event,
+    bool duplicate = false,
+  ]) async {
     final result = await showModalBottomSheet<_EventFormResult>(
       context: context,
       isScrollControlled: true,
@@ -134,7 +142,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(10)),
       ),
-      builder: (context) => _EventFormSheet(event: event),
+      builder: (context) => _EventFormSheet(event: event, duplicate: duplicate),
     );
 
     if (!mounted || result == null) {
@@ -181,6 +189,46 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     }
   }
 
+  Future<void> _manageSessions(AcademyEvent event) async {
+    final schedule = await editEventOccurrences(context, event);
+    if (schedule == null) return;
+    try {
+      await _writeService.saveEvent(
+        EventWriteData.fromEvent(
+          event,
+          title: event.title,
+          description: event.description,
+          locationId: event.locationId,
+          eventType: event.eventType,
+          startDateTime: schedule.occurrences.first.start,
+          endDateTime: schedule.occurrences
+              .map((o) => o.end)
+              .reduce((a, b) => a.isAfter(b) ? a : b),
+          isPublished: event.isPublished,
+          registrationDeadline: event.registrationDeadline,
+          linkedResourceIds: event.linkedResourceIds,
+          primaryRegistrationResourceId: event.primaryRegistrationResourceId,
+          schedule: schedule,
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Series sessions updated.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to save sessions. Reload the event and try again.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _previewEvent(AcademyEvent event) async {
     await showDialog<void>(
       context: context,
@@ -202,6 +250,7 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
               _PreviewLine(label: 'When', value: _formatEventDateTime(event)),
               _PreviewLine(label: 'Type', value: event.eventTypeLabel),
               _PreviewLine(label: 'Location', value: event.locationId),
+              _PreviewLine(label: 'Repeat', value: event.recurrenceLabel),
               _PreviewLine(
                 label: 'Registration',
                 value: event.primaryRegistrationResourceId == null
@@ -412,7 +461,9 @@ class _EventsPanel extends StatelessWidget {
     required this.isLoading,
     required this.errorMessage,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onPreview,
+    required this.onSessions,
     required this.onArchive,
     required this.onDelete,
   });
@@ -421,7 +472,9 @@ class _EventsPanel extends StatelessWidget {
   final bool isLoading;
   final String? errorMessage;
   final ValueChanged<AcademyEvent> onEdit;
+  final ValueChanged<AcademyEvent> onDuplicate;
   final ValueChanged<AcademyEvent> onPreview;
+  final ValueChanged<AcademyEvent> onSessions;
   final ValueChanged<AcademyEvent> onArchive;
   final ValueChanged<AcademyEvent> onDelete;
 
@@ -452,7 +505,9 @@ class _EventsPanel extends StatelessWidget {
                 _EventRow(
                   event: event,
                   onEdit: () => onEdit(event),
+                  onDuplicate: () => onDuplicate(event),
                   onPreview: () => onPreview(event),
+                  onSessions: () => onSessions(event),
                   onArchive: () => onArchive(event),
                   onDelete: () => onDelete(event),
                 ),
@@ -492,14 +547,18 @@ class _EventRow extends StatelessWidget {
   const _EventRow({
     required this.event,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onPreview,
+    required this.onSessions,
     required this.onArchive,
     required this.onDelete,
   });
 
   final AcademyEvent event;
   final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
   final VoidCallback onPreview;
+  final VoidCallback onSessions;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
 
@@ -515,6 +574,8 @@ class _EventRow extends StatelessWidget {
             runSpacing: 6,
             children: [
               _Badge(label: event.eventTypeLabel, tone: _BadgeTone.navy),
+              if (event.schedule != null)
+                _Badge(label: event.recurrenceLabel, tone: _BadgeTone.neutral),
               _Badge(
                 label: event.isPublished ? 'Published' : 'Draft',
                 tone: event.isPublished
@@ -534,7 +595,10 @@ class _EventRow extends StatelessWidget {
           final actions = Wrap(
             children: [
               _ActionLink(label: 'Edit', onPressed: onEdit),
+              _ActionLink(label: 'Duplicate', onPressed: onDuplicate),
               _ActionLink(label: 'Preview', onPressed: onPreview),
+              if (event.schedule != null)
+                _ActionLink(label: 'Sessions', onPressed: onSessions),
               _ActionLink(
                 label: 'Archive',
                 onPressed: onArchive,
@@ -606,9 +670,10 @@ class _EventRow extends StatelessWidget {
 }
 
 class _EventFormSheet extends StatefulWidget {
-  const _EventFormSheet({this.event});
+  const _EventFormSheet({this.event, this.duplicate = false});
 
   final AcademyEvent? event;
+  final bool duplicate;
 
   @override
   State<_EventFormSheet> createState() => _EventFormSheetState();
@@ -664,6 +729,9 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   late final String _initialFingerprint;
   final _closeController = UnsavedChangesController();
   bool _submitting = false;
+  final _scheduleKey = GlobalKey<EventScheduleEditorState>();
+  String _repeatFingerprint = '';
+  late EventReminders _reminders;
 
   @override
   void initState() {
@@ -673,15 +741,44 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _descriptionController = TextEditingController(
       text: event?.description ?? '',
     );
-    _startDateTime = event?.startDateTime;
-    _endDateTime = event?.endDateTime;
-    _registrationDeadline = event?.registrationDeadline;
+    _startDateTime = widget.duplicate
+        ? null
+        : (event?.schedule?.occurrences.firstOrNull?.start ??
+              event?.startDateTime);
+    _endDateTime = widget.duplicate
+        ? null
+        : (event?.schedule?.occurrences.firstOrNull?.end ?? event?.endDateTime);
+    final rule = event?.schedule?.rule;
+    if (rule != null && !widget.duplicate) {
+      final service = const LocationTimeService();
+      final date = parseEventDate(rule.startDate);
+      _startDateTime = service.combineDateAndTime(
+        locationId: event!.locationId,
+        date: date,
+        time: TimeOfDay(
+          hour: rule.startMinutes ~/ 60,
+          minute: rule.startMinutes % 60,
+        ),
+      );
+      _endDateTime = service.combineDateAndTime(
+        locationId: event.locationId,
+        date: DateTime(date.year, date.month, date.day + rule.endDayOffset),
+        time: TimeOfDay(
+          hour: rule.endMinutes ~/ 60,
+          minute: rule.endMinutes % 60,
+        ),
+      );
+    }
+    _registrationDeadline = widget.duplicate
+        ? null
+        : event?.registrationDeadline;
     _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
     _primaryRegistrationResourceId = initialEventResourceId(
       event,
       _resourceOptions(),
     );
+    _reminders = event?.reminders ?? const EventReminders();
     _initialFingerprint = _formFingerprint;
   }
 
@@ -695,7 +792,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.event != null;
+    final isEditing = widget.event != null && !widget.duplicate;
     final isEditingPublished = isEditing && widget.event!.isPublished;
     final publishButtonLabel = isEditing && widget.event!.isPublished
         ? 'Update Published Event'
@@ -716,7 +813,11 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _SheetHeader(
-                title: isEditing ? 'Edit Event' : 'Create Event',
+                title: widget.duplicate
+                    ? 'Duplicate Event'
+                    : isEditing
+                    ? 'Edit Event'
+                    : 'Create Event',
                 subtitle: isGuestDemoActive
                     ? 'Demo drafts and publications stay on this device.'
                     : 'Drafts and published events write to Firestore.',
@@ -731,6 +832,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<_EventType>(
+                isExpanded: true,
                 initialValue: _eventType,
                 decoration: _fieldDecoration('Event type'),
                 items: [
@@ -768,6 +870,21 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                     setState(() => _registrationDeadline = value),
               ),
               const SizedBox(height: 10),
+              EventScheduleEditor(
+                key: _scheduleKey,
+                locationId: _adminLocationId(),
+                start: _startDateTime,
+                end: _endDateTime,
+                initial: widget.event?.schedule,
+                duplicate: widget.duplicate,
+                onChanged: (value) => _repeatFingerprint = value,
+              ),
+              const SizedBox(height: 16),
+              EventRemindersEditor(
+                value: _reminders,
+                onChanged: (value) => setState(() => _reminders = value),
+              ),
+              const SizedBox(height: 16),
               _buildResourceLinkingSection(),
               const SizedBox(height: 10),
               _AdminTextField(
@@ -801,17 +918,18 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                       ),
                       child: const Text('Save Draft'),
                     ),
-                  FilledButton(
-                    onPressed: () => _submit(_EventSaveAction.publish),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: OtaColors.maroon,
-                      foregroundColor: OtaColors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(4),
+                  if (!widget.duplicate)
+                    FilledButton(
+                      onPressed: () => _submit(_EventSaveAction.publish),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: OtaColors.maroon,
+                        foregroundColor: OtaColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
+                      child: Text(publishButtonLabel),
                     ),
-                    child: Text(publishButtonLabel),
-                  ),
                 ],
               ),
             ],
@@ -864,6 +982,13 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                 (resource) => resource.id == _primaryRegistrationResourceId,
               )
               .firstOrNull;
+    if (_primaryRegistrationResourceId != null && selectedResource == null) {
+      setState(
+        () => _validationMessage =
+            'The linked resource is unavailable. Select another resource or remove the link.',
+      );
+      return;
+    }
     if (action == _EventSaveAction.publish &&
         validatePublishedEventResource(
               selectedResource,
@@ -879,7 +1004,36 @@ class _EventFormSheetState extends State<_EventFormSheet> {
       return;
     }
 
-    final event = widget.event;
+    EventSchedule? schedule;
+    try {
+      schedule = _scheduleKey.currentState?.buildSchedule();
+    } catch (error) {
+      setState(
+        () => _validationMessage = error is ArgumentError
+            ? '${error.message}'
+            : 'Check the repeat settings.',
+      );
+      return;
+    }
+    if (widget.event?.schedule != null &&
+        !widget.duplicate &&
+        schedule == null) {
+      setState(
+        () => _validationMessage =
+            'Archive the series and create a one-time event to keep session history.',
+      );
+      return;
+    }
+    if (action == _EventSaveAction.publish &&
+        (schedule?.occurrences.every((o) => o.end.isBefore(DateTime.now())) ??
+            endDateTime.isBefore(DateTime.now()))) {
+      setState(
+        () => _validationMessage =
+            'Review dates: a published event needs a future session.',
+      );
+      return;
+    }
+    final event = widget.duplicate ? null : widget.event;
     final isPublished = action == _EventSaveAction.publish;
     final data = event == null
         ? EventWriteData(
@@ -887,8 +1041,14 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             description: description,
             locationId: locationId,
             eventType: _eventType.id,
-            startDateTime: startDateTime,
-            endDateTime: endDateTime,
+            startDateTime: schedule?.occurrences.first.start ?? startDateTime,
+            endDateTime:
+                schedule?.occurrences
+                    .map((o) => o.end)
+                    .reduce((a, b) => a.isAfter(b) ? a : b) ??
+                endDateTime,
+            schedule: schedule,
+            reminders: _reminders,
             registrationDeadline: registrationDeadline,
             linkedResourceIds: _primaryRegistrationResourceId == null
                 ? const <String>[]
@@ -898,12 +1058,19 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           )
         : EventWriteData.fromEvent(
             event,
+            replaceSchedule: true,
             title: title,
             description: description,
             locationId: locationId,
             eventType: _eventType.id,
-            startDateTime: startDateTime,
-            endDateTime: endDateTime,
+            startDateTime: schedule?.occurrences.first.start ?? startDateTime,
+            endDateTime:
+                schedule?.occurrences
+                    .map((o) => o.end)
+                    .reduce((a, b) => a.isAfter(b) ? a : b) ??
+                endDateTime,
+            schedule: schedule,
+            reminders: _reminders,
             registrationDeadline: registrationDeadline,
             linkedResourceIds: _primaryRegistrationResourceId == null
                 ? const <String>[]
@@ -927,10 +1094,12 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _endDateTime?.toIso8601String() ?? '',
     _registrationDeadline?.toIso8601String() ?? '',
     _primaryRegistrationResourceId ?? '',
+    _repeatFingerprint,
+    _reminders.toMap().toString(),
   ].join('\u0000');
 
   String _adminLocationId() {
-    return adminWriteLocationId();
+    return widget.event?.locationId ?? adminWriteLocationId();
   }
 
   Widget _buildResourceLinkingSection() {
@@ -956,6 +1125,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
           ),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
+            isExpanded: true,
             key: ValueKey(_primaryRegistrationResourceId),
             initialValue:
                 resources.any(

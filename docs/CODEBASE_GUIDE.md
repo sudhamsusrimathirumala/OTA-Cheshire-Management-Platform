@@ -1261,3 +1261,228 @@ Changed files for this investigation:
 - `test/class_recommendation_test.dart`
 - `test/web_realtime_performance_test.dart`
 - `docs/CODEBASE_GUIDE.md`
+## Temporary physical-iPhone profile timing viewer (October 4, 2026)
+
+The physical Safari report of approximately 40 seconds remains unexplained. This change adds observation only: no timeouts, Firestore sources, authorization checks, retry policy, or session completion rules were changed.
+
+`PerformanceDiagnosticsOverlay`, installed through `MaterialApp.builder`, exposes a small **Timings** launcher only when both `kIsWeb` and the compile-time `OTA_PERFORMANCE_DIAGNOSTICS=true` flag are true. Debug mode alone does not enable it. The scrollable panel remains available during profile setup and after route transitions, supports Copy diagnostics and selectable-text fallback, and provides Clear / reset. Clearing affects only the viewer. Every Create Profiles press starts a fresh capture automatically.
+
+The browser-memory buffer retains the latest 300 events. Its strict allowlist accepts fixed stage labels, journey-relative milliseconds, milliseconds since Create Profiles, individual operation durations, known cache/server metadata, and already-collected document counts. It accepts no identity fields, arbitrary messages, document data, tokens, names, emails, or IDs. It uses no browser persistence, Firebase writes, Analytics, Crashlytics, or external upload. Copying explicitly places this safe text on the tester's clipboard. A one-second timer updates the open panel's clock only.
+
+### Exposed profile journey
+
+Ordered events include `create_profiles_pressed` (button press); `user_validation_started` / `user_validation_finished`; `location_validation_started` / `location_validation_finished`; `validation_wave_started` / `validation_wave_finished`; `batch_commit_started` / `batch_commit_finished`; `batch_acknowledged`; `post_create_wait_started` / `post_create_wait_finished`; `user_snapshot_received` and `profile_snapshot_received` with their known `source=cache` or `source=server`; `profile_reconciliation_started` / `profile_reconciliation_finished`; `location_access_ready`; `session_member_reached`; `app_data_service_started`; `schedule_listener_started`; `schedule_first_snapshot`; `schedule_model_ready`; and `dashboard_frame_ready`.
+
+Additional boundaries expose profile/location subscription cancellation, profile listener registration, profile transition replay/resume, the member-transition completer wait, location listener/first snapshot, recovery grace, and explicit server recovery. Existing schedule parsing and notification marks are also retained. Replays are not labeled as newly received profile snapshots. A canceled grace timer need not have a finish event; failed/interrupted operations may have a start without a finish.
+
+Each event displays `+N ms` since Create Profiles and `journey=N ms` since the diagnostics journey began. Finished operations show `duration=N ms`; unknown source/count values are omitted. The two total events are `TOTAL_create_profiles_to_member` and `TOTAL_create_profiles_to_dashboard_usable`. The dashboard marker measures a completed Flutter frame after schedule readiness; it is a rendering proxy, not proof that Safari painted the screen or every optional dashboard dataset arrived.
+
+### Wait and timeout audit
+
+| Operation | Wait/protection | Relevance to the observed delay |
+| --- | --- | --- |
+| User and location validation | Concurrent default-source Firestore gets; no app timeout or retry loop | Either read can delay the validation wave; the panel measures each separately. |
+| Atomic profile batch | Awaited `batch.commit()`; no app timeout | Completion requires backend write acknowledgement. Local pending-write events alone cannot complete setup while this write is pending. |
+| Profile/location listener replacement | Awaited subscription cancellation; no app timeout | New cancellation boundaries expose any delay before listener registration. |
+| Post-write replay/reconciliation | Awaited replay of the latest profile snapshot | Can include recovery reads; measured separately from the final completer wait. |
+| Final profile transition | Unbounded listener-driven completer until member, error, disabled, signed-out, auth loss, or generation change | A missing accepted account/profile/location transition can keep this wait open indefinitely. |
+| Recently created profile recovery | Two-second grace timer after write acknowledgement | Avoids redundant server recovery while listeners settle. Complete profiles proceed immediately; this is not an unconditional two-second gate. |
+| Missing profiles after an incomplete server snapshot | Explicit `Source.server` gets, deduplicated by reconciliation fingerprint; no app timeout | Server-only recovery can delay reconciliation and intentionally does not accept a cache substitute on failure. Partial cache snapshots remain transitional until sufficient data arrives. |
+| Signup session adoption | 15-second timeout on stage-change completer after auth replacement | Protects initial email-signup transition, normally before Create Profiles. Auth replacement work itself precedes this timeout. |
+| Web resume | Three-second minimum interval between `enableNetwork()` requests | A throttle, not a sleep. No app-owned exponential backoff or disable/enable loop in normal creation. |
+| Selected-profile fallback transaction | Unawaited by reconciliation; FlutterFire Web applies a 30-second timeout and defaults to at most five transaction attempts | Protects the fallback selected-profile update against a stalled/conflicted transaction. Does not directly gate the current member transition. |
+| Schedule first usable model | Listener-driven; provisional empty cache is not marked usable | A populated cache or a server result can mark readiness. No fixed timeout. |
+
+No app-owned 10-, 20-, 30-, or 40-second timer was found in the audited profile/session/app-data/location path. The 15-second signup timeout must not be mistaken for a profile-creation timeout.
+
+The 30-second transaction limit is dependency-owned and actually applied with `.timeout(timeout)` by the resolved `cloud_firestore_web` 5.6.0 `runTransaction` implementation. The application does not override it. It is suspicious by numerical similarity, but the fallback call is unawaited; it cannot by itself explain a mandatory 30-second member gate.
+
+The resolved FlutterFire Web runtime uses Firebase JS SDK 12.15.0 by default. Its [persistent-stream source](https://raw.githubusercontent.com/firebase/firebase-js-sdk/firebase@12.15.0/packages/firestore/src/remote/persistent_stream.ts) has a ten-second healthy-stream classification timer and 60-second idle close; neither imposes a ten-second delay on delivering messages. Its [online-state tracker](https://raw.githubusercontent.com/firebase/firebase-js-sdk/firebase@12.15.0/packages/firestore/src/remote/online_state_tracker.ts) uses a ten-second no-response threshold for offline classification. [Error retry backoff](https://raw.githubusercontent.com/firebase/firebase-js-sdk/firebase@12.15.0/packages/firestore/src/remote/backoff.ts) starts with a zero-delay retry, then a one-second base multiplied by 1.5, capped at a 60-second base and jittered by 50%. Repeated errors could accumulate tens of seconds, but there is no physical-device evidence of that yet.
+
+The SDK [WebChannel source](https://raw.githubusercontent.com/firebase/firebase-js-sdk/firebase@12.15.0/packages/firestore/src/platform/browser/webchannel_connection.ts) overrides the transport's nominal randomized 10–20-second forward timeout with 600,000 ms, so that nominal timeout is not an app-level explanation. It also forwards an optional long-poll timeout; this app does not set one. A separate unary-XHR path defines `XHR_TIMEOUT_SECS = 15` and passes it directly to the wrapper; this is not the normal batch-write stream or an app-owned 15-second profile timer. Browser and transport failures remain candidates, not established causes. No SDK setting was changed.
+
+When long polling is active, the SDK's [long-poll options contract](https://raw.githubusercontent.com/firebase/firebase-js-sdk/firebase@12.15.0/packages/firestore/src/api/long_polling_options.ts) specifies a default 30-second hanging-GET response timeout. This protects the transport request lifecycle; it is not a mandatory delay before delivering available data. Buffering or retries could matter on Safari, but the application timeline cannot prove the transport mechanism by numerical similarity alone.
+
+### Is a server-confirmed snapshot required?
+
+**There is no blanket server-snapshot gate, but the batch must be acknowledged first.** `reconcileLinkedProfiles` accepts a complete valid cached set before testing `isFromCache`. Account and active-location handlers do not reject valid snapshots merely because they are cached. An explicit regression test covers complete cached profiles without server recovery. However, newly created records use server timestamps and the parser requires valid timestamps: an unresolved local record is not automatically a valid record. Invalid pending account snapshots are retained as transitional rather than granting access. Incomplete profile sets remain transitional or take the explicit server recovery path described above. These consistency and authorization rules remain intact.
+
+### Next physical Safari capture
+
+Build with the genuine registered Web configuration (the ignored local defines file is not committed):
+
+```powershell
+flutter build web --release --no-pub -t lib/main_prod.dart --dart-define-from-file=build/web_firebase_defines.json --dart-define=OTA_PERFORMANCE_DIAGNOSTICS=true
+```
+
+This task does not publish or deploy that artifact. The device test requires this exact build to be served at an approved HTTPS test URL in a separately authorized hosting step; an older production build will not contain the viewer. On physical iPhone Safari, confirm the **Timings** launcher exists. Use a test account still awaiting profile creation, open Timings, Clear / reset, close it, and press Create Profiles once. Leave Safari foregrounded and wait until the dashboard is usable. Open Timings and Copy diagnostics; if copying is unavailable, select the text. Preserve the full timeline including both totals, and separately note iPhone/iOS version, Safari versus standalone PWA, Wi-Fi versus cellular, approximate wall-clock delay, and any background/resume interruption. Do not paste personal account details. If setup stalls, open Timings while stalled and capture the live elapsed clock and unfinished stage. Capture Safari and standalone PWA separately with suitable fresh test accounts; do not delete real profiles to recreate the flow.
+
+The largest gap between ordered events, together with that operation's duration, determines the next investigation: validation, batch acknowledgement, recovery/reconciliation, location access, or schedule/frame readiness. No additional performance fix should precede that physical-device evidence.
+
+### Local validation of this viewer
+
+`flutter analyze --no-pub` passed without issues. `flutter test --no-pub` passed 500 tests, with one Web-only navigation/selection test skipped on the native runner. The focused profile-service, profile-form, profile-management, reconciliation, signup/session, Web performance, and diagnostics suite passed 67 tests with the same skip. The diagnostics-panel suite with the explicit define enabled passed seven native tests with that Web-only skip. `git diff --check` passed. The diagnostics-enabled production Web build above passed, including the Wasm dry run; its compiled JavaScript contains the launcher, panel, approved stages, and totals. A Chrome-targeted panel run stalled at loading and was stopped, so browser navigation/selection is unverified. No physical-iPhone timing capture has been performed with this viewer yet. No commit, push, or deployment was performed for this change.
+
+
+## Class recommendations, content duplication, event series and reminders (local implementation)
+
+This implementation is local and uncommitted. No production documents, configuration, migrations, notifications or deployments were changed. Existing Web diagnostics and the temporary Timings panel remain in place. Deployment and physical-device acceptance are separate gates.
+
+### Recommendation policy and the reported issue
+
+`lib/services/class_recommendation_service.dart` is the policy shared by the Firebase Dashboard path, Schedule screen, guest demo and mock data. The younger branch previously returned the first numbered class after failing to find a belt match. A seven- or ten-year-old Black Belt could therefore receive Level 1 even when its explicit `eligibleBelts` excluded Black. An additional inconsistency let an empty eligibility list qualify as a typical younger-student recommendation and as a final recommendation fallback, although `ClassSession.eligibilityLabel` calls this instructor placement. The older branch already checked belt eligibility in this checkout.
+
+The production family's exact affected child, saved preferences and stored data were not read or inferred. This is a reproduced code-level cause, not confirmation of that individual production record. The mapper reads canonical `beltRank` with legacy belt support; the recommender uses `student.beltRank` and normalizes case, surrounding whitespace, belt suffixes and rank separators without converting unknown ranks to No Belt. Academy-local age is used for the age category.
+
+The resulting priority is an available explicit preferred group, then an explicitly belt-compatible class in the usual age category, then any explicitly belt-compatible class. Otherwise the result is null and the screens show instructor-placement guidance. Empty eligibility is never a definitive automatic recommendation. Preference matching retains canonical and unambiguous legacy group aliases. The ambiguous `teen-adult-standard` saved preference is still not guessed or deleted. Publication/active mapping, location, ended sessions and a class's resumption date remain availability gates even for a preference. Explicit preferences can override age and belt. Neither recommendation function retains a child-specific cache; both screens read the current selected profile on each service notification.
+
+### Duplicating content
+
+Announcements and events have a Duplicate action beside the existing row actions. General Resource cards expose Duplicate in their actions menu. Each action opens the existing editor with copied editable content and the source location. The initial duplicate editor offers Save Draft; publication happens by opening that independently saved draft later. Saving creates a fresh Firestore document with server-generated created/updated timestamps. New announcement publication timestamps are also server generated.
+
+Titles, summaries/descriptions, bodies, types/categories, priority/action settings, valid audience settings and links are retained. Publication, archive state, timestamps, IDs, reads, recipient deliveries, reminder receipts and audit ownership are regenerated or omitted. Existing parent/direct/mixed announcement audiences have a visible keep-existing option so duplication does not widen them to everyone. Student/account targets are validated against active records at the source location. Links use the existing URL validation, and event resource references must exist at that location, be General Resources and be unarchived; publication additionally requires the resource to be published. No external file is uploaded again.
+
+Event dates, session times and registration deadlines are cleared in the duplicate editor for explicit review. Recurrence frequency, interval, weekdays, date configuration, weekday times, occurrence cap and reminder settings are copied as editor inputs. Occurrences are regenerated, rather than copied with overrides/cancellations/history. An occurrence's full identity is `(new event document ID, generated local-date ID)`, so a duplicate has an independent series lifecycle even if it deliberately reuses the same dates. Firestore Rules continue to enforce administrator role and location for the new document. The UI preserves the source location; it does not provide a cross-location move shortcut.
+
+### Event series schema and time semantics
+
+Legacy nonrecurring documents require no migration and keep their single-event behavior. Missing reminder settings mean disabled; existing events do not silently acquire reminders.
+
+New optional event fields:
+
+| Field | Meaning |
+| --- | --- |
+| `eventSchedule.version` | Schema version 1 |
+| `eventSchedule.timeZoneId` | The location's configured IANA timezone |
+| `eventSchedule.rule` | Frequency (`daily`, `weekly`, `custom`), date range (`YYYY-MM-DD`), weekday selection, interval weeks, custom dates, local start/end minutes, overnight end-day offset, weekday time overrides and occurrence limit |
+| `eventSchedule.firstOccurrenceId` | Original first-session anchor, retained during editing |
+| `eventSchedule.occurrences` | At most 180 entries with `id`, UTC epoch `startMillis`/`endMillis`, `canceled`, and `overridden` |
+| `reminders.mode` | `first`, `every`, or `none` |
+| `reminders.offsetsMinutes` | Independently selected presets: 10080, 4320, 1440, 120, 60 |
+
+`lib/models/event_schedule.dart` generates each occurrence using calendar dates and timezone wall-clock construction. It does not add 24 hours to UTC timestamps. The date range is limited to 366 calendar days and the occurrence cap is 180, including preserved history. Every-N-weeks rules are anchored to the Monday of the starting calendar week. Custom dates are validated and deduplicated. Day-specific times may cross midnight by one day. Nonexistent times in a spring-forward gap are rejected. Repeated fall-back wall times use the timezone library's deterministic resolution and represent one session, not both repeated clock instants. Tests cover both DST transitions and distinct location zones.
+
+The editor shows Repeat, repeat end date, optional practical cap, weekly weekday/interval controls, custom date chips, an expandable weekday-time section and the calculated session preview. Changing unrelated form fields does not regenerate the series. The one parent event carries the bounded occurrence array through the existing location-scoped snapshot listener; there are no per-occurrence listeners or occurrence collection reads. Top-level event start/end fields describe the series bounds for existing lists; member calendar cards and details use the individual session times. A camp's intervening nights do not appear as continuous attendance. Exact-midnight end times belong to the previous day.
+
+### Editing and cancellation
+
+The ordinary Edit action changes the entire series and its content. The Sessions action allows changing a single future occurrence or this and following occurrences, including rescheduling across calendar dates. Following-session changes preserve local wall-clock times across DST. Started/completed sessions are retained as history and cannot be rewritten from the Sessions UI. Whole-series rule regeneration preserves that history and explicit occurrence overrides/cancellations until deliberately changed. Removing a future generated date removes its future reminder eligibility. The series cannot be changed to a one-time event by discarding its history: archive it and create an independent event instead.
+
+Cancellation of one or following sessions requires confirmation. Series archive and deletion retain their existing confirmations. Member cards exclude canceled occurrences, and an already-open detail view resolves its current series and occurrence on every realtime update, so cancellation/unpublication/location loss replaces stale details with the unavailable state. Event writes compare the editor's original `updatedAt` in a Firestore transaction and reject a stale edit instead of overwriting another administrator's changes. Registration and its deadline belong to the series, not separately to every session; existing linked-resource navigation is preserved.
+
+### Reminder settings and first-session semantics
+
+New Event forms default to enabled, `first`, with one-day and one-hour offsets visibly selected. All five presets can be independently selected/removed. `every` explicitly opts into reminders for each eligible occurrence; `none` disables them. No custom offsets or separate registration-deadline reminders are exposed. Payloads carry `reminderKind: event-start` so a later opt-in registration-deadline feature can have a separate identity and settings.
+
+The initial anchor is the chronologically earliest generated occurrence. It is not recomputed as the next upcoming occurrence. Passing, canceling or removing that anchor never transfers reminders to a later session. Rescheduling retains the anchor ID and updates unsent offsets. A deliberate whole-series edit also retains the original anchor, even if an added/rescheduled session is chronologically earlier; the administrator must deliberately select Every occurrence or create a new series to change that scope. This avoids accidental resending or silent promotion of another session. Sent offsets remain sent across time/configuration changes, disable/re-enable, archive and edits.
+
+### Backend scheduling and delivery
+
+`pushPublishedEvent` still handles the ordinary initial publication notification. It now also synchronizes the reminder queue from the latest event document on every write, including deletion. `dispatchEventReminders` is a second-generation scheduled Function in the existing `us-east1` region, invoked every minute in UTC by Cloud Scheduler. It works independently of open clients. The rollout parameter `EVENT_REMINDERS_ENABLED` defaults to false; scheduling records can be validated before native push dispatch is explicitly enabled.
+
+Server-private `eventReminders/{sha256 identity}` documents contain the event/occurrence/offset, kind, start/due instants, location, revision, wake time, status, lease owner, attempts and lifecycle timestamps. The SHA-256 identity covers schema/kind, event ID, stable occurrence ID and offset. Titles and dates do not enter the identity: edits update pending work rather than create a new sent-history identity. Each reminder has private `targets/{sha256 token}` receipts for sent/permanently-invalid tokens. Raw tokens are not placed in queue logs or receipt identities.
+
+Queue synchronization reads the current event and checks its update version transactionally, so reordered trigger deliveries cannot restore an old schedule. Completed records are not rewritten. Removed, disabled, draft, archived, canceled and deleted content invalidates unsent records. Newly past offsets are never created/backfilled. Existing due work has a 15-minute lateness allowance, capped by occurrence start, so recovery does not send old historical reminders after a long outage.
+
+The worker reads an indexed `wakeAt` queue, capped at 100 records per invocation. A transaction claims each record with a five-minute lease and unique owner, validates the current occurrence/configuration, and advances the wake time to the lease deadline. Expired leases are recoverable. Failures use bounded exponential retry delay (up to five minutes). Before every multicast batch it reloads current event data, checks its owner/status and schedule, renews the lease and formats the current title/date/time/location. A stale worker cannot complete or revive a newer/canceled claim. Messages are concise, contain no student information, and include event ID, occurrence ID, offset, reminder ID/kind and location for the existing notification navigation.
+
+`functions/src/push_delivery.ts` extracts the original audience-input/device loading, invalid-token cleanup and Android/APNs multicast settings for both publication and reminder dispatch. `eligibleAccountIds` in `push_logic.ts` still validates role, active profile ownership and location and deduplicates a parent's linked children. Only enabled native-device registrations are considered. Distinct registrations sharing a token receive one multicast target; permanently invalid tokens remove all matching device records. Transient partial failures retry only tokens without a durable sent/invalid receipt. The existing Android channel, sound, APNs threading and collapse settings are retained. Browser Web Push is unchanged and remains outside this task.
+
+FCM acceptance is not proof of device display or absolute exactly-once delivery. A process can crash after FCM accepts a send and before its Firestore receipt is durable; a retry can then repeat it. Cancellation cannot recall an already accepted/in-flight message. There is also a small event-edit race between the final state check and the external FCM call. Leases, per-token receipts and collapse IDs reduce unintended duplicates, but cannot remove these distributed-system limits. No physical Android/iPhone push was sent or verified during local validation.
+
+### Rules, indexes and infrastructure prerequisites
+
+`firestore.rules` accepts only the new optional wrapper/rule/reminder fields with bounded counts, approved modes/offsets and a location-matching timezone. Deep occurrence leaf validation is performed by the backend before it schedules or sends; malformed arrays fail closed there. Existing role, publication, ownership and location read/write conditions remain. All reminder/receipt documents are inaccessible to clients, including administrators and guests. Event links are now validated against current resource documents before writing/publishing. Emulator tests cover legitimate same-location/super-admin writes, member/guest/wrong-location rejection, invalid settings, oversize schedules, unavailable references and private queue access.
+
+`firestore.indexes.json` disables indexing of the nested `events.eventSchedule` map to avoid unnecessary write amplification. The queue's `wakeAt` range/order and `eventId` equality queries use automatic single-field indexes. No new composite client query or startup read was added. Ensure those single-field indexes are not separately exempted in the deployed database before enabling the scheduler.
+
+Before any separately authorized deployment, verify the production project's billing/Blaze eligibility and Cloud Scheduler API, along with the existing Functions v2, Cloud Run, Cloud Build, Artifact Registry, Eventarc/Firestore trigger and FCM v1 prerequisites and service-account IAM. Confirm every relevant location has an active configuration and correct IANA timezone. Confirm Android notification permission/channel and iOS APNs credentials, signing capabilities and notification permission using test accounts/devices. This task did not inspect/change the live Console or assume those prerequisites are enabled.
+
+Firebase's [scheduled Functions documentation](https://firebase.google.com/docs/functions/schedule-functions) describes the managed Scheduler/HTTP Function deployment and Scheduler billing. The published Scheduler job price is US$0.10/month, with an allowance of three jobs per Google account. There are also Functions/Cloud Run execution and Firestore reads/writes/storage costs. A minute schedule has roughly 43,200 runs per 30-day month even when there is no due reminder; recipient/device reads and receipt writes add costs when sending. Check the project's current pricing and budget alerts before rollout. Large academies need queue/backlog monitoring: the 100-per-run limit and 15-minute lateness policy deliberately bound work and can suppress overdue work during sustained overload.
+
+### Local validation and Master Jang's acceptance checklist
+
+Automated results for this working tree are recorded after the final validation run below. They demonstrate local behavior and emulator access controls; they do not establish production deployment, OS push delivery or physical-iPhone Web timing.
+
+Master Jang should validate these workflows on an approved test environment after deployment is separately authorized:
+
+1. Switch repeatedly between seven- and ten-year-old linked children with different belts and preferences. Check Dashboard and Schedule, including a Black Belt with only beginner classes, an older No Belt beginner, and explicit cross-age/cross-belt preferences.
+2. Duplicate a published and historical announcement, resource and event. Confirm copied fields/targeting/location, reviewed event dates, a new draft ID and unchanged source. Confirm no push until deliberately publishing the saved draft.
+3. Preview a two-week Monday–Friday camp, six weeks of Tuesday/Thursday training, every-other-week sessions, custom dates, differing Friday hours and an overnight seminar at each test location.
+4. Edit one session, following sessions and the series. Check historical sessions, calendar dates, linked registration and realtime member details. Cancel the first session and confirm First occurrence only does not transfer to the second.
+5. With isolated test recipients/devices, verify default one-day/one-hour reminders for only the original first session; explicitly test Every occurrence and disabled mode. Use shortened test fixtures in the emulator for fast iterations, without adding unsupported production offsets.
+6. Reschedule before delivery, remove/add future sessions, unpublish, archive and delete. Confirm old pending work cannot dispatch and sent-history identities remain intact.
+7. Check real Android and iOS notification display/taps with the app closed, running and signed out; then cancel/unpublish the target and try the old notification. Verify unavailable/wrong-location handling and a parent with two children receives one account-level reminder per token.
+8. Exercise Safari, iPhone Edge and standalone PWA with the diagnostics build. Compare Timings captures and realtime session/event/profile changes on a physical iPhone; desktop builds and unit tests do not prove that timing.
+
+### Deployment and rollback plan (not executed)
+
+Deploy/test on an explicitly approved nonproduction project first, with `EVENT_REMINDERS_ENABLED=false`. Deploy the updated Rules/index exemption and Functions together; keep the existing three publication triggers. Firebase deploy manages the Cloud Scheduler job for the scheduled Function—do not hand-create a second job. Review the function invoker service-account/IAM, queue states and malformed-document logs. Publish the updated client before allowing administrators to publish series, because old clients cannot interpret the new occurrence array correctly.
+
+After emulator and test-device acceptance, obtain separate authorization for production deployment, configuration and controlled push testing. Use the explicit project `ota-management-platform-e4847`, confirm location zones, verify indexes and Scheduler status, configure `EVENT_REMINDERS_ENABLED` deliberately and deploy the parameter change. Enable only after an isolated controlled test confirms physical-device delivery/navigation. No bulk enablement or migration of legacy events is required.
+
+For rollback, disable/pause the managed Scheduler job first, or redeploy the scheduled Function with the rollout flag false. Keep sent receipts and queue history. Restore the previous Functions implementation if needed while retaining schema-compatible Rules; do not blindly remove new fields or restore an old client after published series exist. Fix forward, or use separately authorized admin archival of affected series before withdrawing recurrence support. Pending work must be rechecked on re-enable, and the lateness limit intentionally suppresses old due work. Data export/deletion/migration and recalling delivered messages are not part of rollback automation here.
+
+
+### Files in this local feature change
+
+The following 38 files belong to this feature work. The guide also had pre-existing diagnostics documentation, which was retained. Pre-existing edits in `lib/app.dart`, session/profile/performance services and diagnostics tests/widgets are outside this feature change and were preserved.
+
+- `docs/CODEBASE_GUIDE.md`
+- `firestore.rules`
+- `firestore.indexes.json`
+- `functions/src/index.ts`
+- `functions/src/push_logic.ts`
+- `functions/src/push_delivery.ts`
+- `functions/src/event_reminder_logic.ts`
+- `functions/src/event_reminders.ts`
+- `functions/test/push_logic.test.ts`
+- `functions/test/event_reminder_logic.test.ts`
+- `functions/test/event_reminders_emulator.test.ts`
+- `lib/models/academy_event.dart`
+- `lib/models/class_session.dart`
+- `lib/models/event_schedule.dart`
+- `lib/services/class_recommendation_service.dart`
+- `lib/services/event_occurrence_changes.dart`
+- `lib/services/location_time_service.dart`
+- `lib/services/mock_app_data_service.dart`
+- `lib/services/firebase/firebase_admin_write_service.dart`
+- `lib/services/firebase/firebase_app_data_service.dart`
+- `lib/services/guest/guest_demo_app_data_service.dart`
+- `lib/services/push_notification_service.dart`
+- `lib/services/push_navigation_coordinator.dart`
+- `lib/screens/admin/admin_announcements_screen.dart`
+- `lib/screens/admin/admin_events_screen.dart`
+- `lib/screens/admin/admin_resources_screen.dart`
+- `lib/screens/events_screen.dart`
+- `lib/screens/schedule_screen.dart`
+- `lib/screens/student_dashboard_screen.dart`
+- `lib/widgets/admin/event_schedule_editor.dart`
+- `lib/widgets/admin/event_occurrence_editor.dart`
+- `lib/widgets/resources/general_resources_view.dart`
+- `test/class_recommendation_test.dart`
+- `test/content_duplication_test.dart`
+- `test/event_schedule_test.dart`
+- `test/recommendation_profile_switch_test.dart`
+- `test/widget_test.dart`
+- `tool/firebase_emulator_tests/firestore_workflows.test.js`
+
+
+### Final local validation results
+
+| Check | Result |
+| --- | --- |
+| `flutter analyze --no-pub` | Passed, no issues |
+| `flutter test --no-pub` | 523 passed; one existing Web-only test skipped on the native runner |
+| Diagnostics-enabled panel/realtime focused suite | 11 passed; the same Web-only test skipped |
+| Functions TypeScript build and full tests with local Firestore emulator | 30 passed, no skips; all FCM sends mocked |
+| Full Firestore Rules/workflow Emulator Suite | 61 passed, no skips |
+| `git diff --check` | Passed |
+| Diagnostics-enabled production Flutter Web release build | Passed, including Wasm dry run; used the existing ignored `build/web_firebase_defines.json` |
+| Production Android release APK | Passed; `build/app/outputs/flutter-apk/app-prod-release.apk`, 57.8 MB, existing version/signing configuration |
+
+The Android build emitted the existing `file_picker` Kotlin Gradle Plugin forward-compatibility warning. No dependency upgrade or production configuration change was made to suppress it. iOS compilation/signing, physical-device push display/navigation, Cloud Scheduler execution in a deployed project, and physical-iPhone Safari/Edge/PWA performance were not validated on this Windows host. Local emulator scheduling tests invoke the backend implementation directly with a controllable clock and mocked FCM; they do not claim to emulate Google's managed Scheduler delivery.
+
+All four requested software features are implemented and locally validated. Actual scheduled push operation remains pending separately authorized Firebase deployment/configuration and controlled Android/iOS end-to-end testing. Optional custom offsets and separate registration-deadline reminders are not implemented. Browser Web Push is not implemented, as requested. Recurrence intentionally has the documented one-year generation range and 180-session cap. No new package dependencies, mandatory legacy migration, commits, pushes, deployments, production data changes or production push sends occurred.
+
+Additional reliability checks cover reminder navigation after a prior publication tap and between different offsets/occurrences, transport exceptions, all preset offsets, canceled anchors and added/removed sessions. Reminder Android TTL and APNs expiry are bounded by the occurrence start to reduce stale queued delivery to offline devices. Invalid-argument payload errors no longer delete device registrations; only actual invalid/unregistered-token codes trigger token cleanup.

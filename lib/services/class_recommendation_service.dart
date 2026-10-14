@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart' show TimeOfDay;
 import '../models/class_session.dart';
 import '../models/student_profile.dart';
+import 'location_time_service.dart';
 
 const int otaOlderStudentAge = 13;
 
@@ -13,14 +15,29 @@ bool isTeenOrAdultClass(ClassSession session) {
 }
 
 bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
-  if (student.age >= otaOlderStudentAge) {
-    return isTeenOrAdultClass(session) &&
-        session.eligibleBelts.contains(student.belt);
+  if (!session.isPublished ||
+      session.locationId != student.locationId ||
+      !acceptsStudentBelt(session, student)) {
+    return false;
   }
-  return isNumberedLevelClass(session) &&
-      (session.eligibleBelts.isEmpty ||
-          session.eligibleBelts.contains(student.belt));
+  return const LocationTimeService().ageForStudent(student) >=
+          otaOlderStudentAge
+      ? isTeenOrAdultClass(session)
+      : isNumberedLevelClass(session);
 }
+
+// Normalize spelling only; unknown ranks do not become beginner ranks.
+String _beltKey(String belt) => belt
+    .trim()
+    .toLowerCase()
+    .replaceAll(RegExp(r'[\s_\-/]+'), '-')
+    .replaceAll(RegExp(r'-belt$'), '');
+
+bool acceptsStudentBelt(ClassSession session, StudentProfile student) =>
+    session.eligibleBelts.isNotEmpty &&
+    session.eligibleBelts.any(
+      (belt) => _beltKey(belt) == _beltKey(student.beltRank),
+    );
 
 String classGuidanceFor(ClassSession session, StudentProfile student) {
   if (isTeenOrAdultClass(session)) {
@@ -50,8 +67,15 @@ ClassSession? nextRecommendedClassFromSchedule(
   StudentProfile student, {
   required int currentWeekday,
   required int currentMinutes,
+  DateTime? currentDate,
 }) {
   final candidates = <ClassSession>[];
+  final academyDate =
+      currentDate ??
+      const LocationTimeService().toLocationTime(
+        DateTime.now(),
+        student.locationId,
+      );
   for (var offset = 0; offset < DateTime.daysPerWeek; offset++) {
     final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
     final sessions = [...schedule[weekday] ?? const <ClassSession>[]]
@@ -59,6 +83,21 @@ ClassSession? nextRecommendedClassFromSchedule(
     for (final session in sessions) {
       if (!session.isPublished ||
           session.locationId != student.locationId ||
+          (session.resumesOn != null &&
+              session.resumesOn!.isAfter(
+                const LocationTimeService().combineDateAndTime(
+                  locationId: student.locationId,
+                  date: DateTime(
+                    academyDate.year,
+                    academyDate.month,
+                    academyDate.day + offset,
+                  ),
+                  time: TimeOfDay(
+                    hour: session.startMinutes ~/ 60,
+                    minute: session.startMinutes % 60,
+                  ),
+                ),
+              )) ||
           (offset == 0 && session.endMinutes <= currentMinutes)) {
         continue;
       }
@@ -79,35 +118,10 @@ ClassSession? nextRecommendedClassFromSchedule(
     }
   }
 
-  if (student.age >= otaOlderStudentAge) {
-    for (final session in candidates) {
-      if (isTeenOrAdultClass(session) &&
-          session.eligibleBelts.contains(student.belt)) {
-        return session;
-      }
-    }
-    for (final session in candidates) {
-      if (isNumberedLevelClass(session) &&
-          session.eligibleBelts.contains(student.belt)) {
-        return session;
-      }
-    }
-  } else {
-    for (final session in candidates) {
-      if (isNumberedLevelClass(session) &&
-          session.eligibleBelts.contains(student.belt)) {
-        return session;
-      }
-    }
-    // Preserve existing younger-student placement fallback.
-    for (final session in candidates) {
-      if (isNumberedLevelClass(session)) return session;
-    }
-  }
-  // Empty eligibility means instructor placement, not universal eligibility.
-  // Keep a safe fallback without automatically selecting an excluded belt.
   return candidates
-          .where((session) => session.eligibleBelts.contains(student.belt))
+          .where((session) => isTypicallyRecommendedFor(session, student))
           .firstOrNull ??
-      candidates.where((session) => session.eligibleBelts.isEmpty).firstOrNull;
+      candidates
+          .where((session) => acceptsStudentBelt(session, student))
+          .firstOrNull;
 }
