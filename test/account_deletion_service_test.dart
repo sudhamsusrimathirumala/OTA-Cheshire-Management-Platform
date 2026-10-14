@@ -215,6 +215,39 @@ void main() {
     expect(authentication.deletedUser, isNull);
   });
 
+  test('Apple reauthentication errors include a safe stage reference', () {
+    final error = mapAppleDeletionAuthException(
+      FirebaseAuthException(code: 'invalid-credential'),
+      stage: 'apple-reauth',
+    );
+
+    expect(error.error, AccountDeletionError.deletionFailed);
+    expect(error.message, contains('Reference: apple-reauth-invalid-credential.'));
+    expect(error.message, isNot(contains('@')));
+  });
+
+  test('Apple revocation errors identify the revocation stage', () {
+    final error = mapAppleDeletionAuthException(
+      FirebaseAuthException(code: 'invalid-credential'),
+      stage: 'apple-revoke',
+    );
+
+    expect(error.error, AccountDeletionError.deletionFailed);
+    expect(error.message, contains('Apple authorization could not be revoked.'));
+    expect(error.message, contains('Reference: apple-revoke-invalid-credential.'));
+  });
+
+  test('Apple cancellation remains non-destructive and identifiable', () {
+    final error = mapAppleDeletionAuthException(
+      FirebaseAuthException(code: 'web-context-cancelled'),
+      stage: 'apple-reauth',
+    );
+
+    expect(error.error, AccountDeletionError.cancelled);
+    expect(error.message, contains('Nothing was deleted.'));
+    expect(error.message, contains('apple-reauth-web-context-cancelled'));
+  });
+
   test('Apple deletion verification is available when supported', () {
     final authentication = FirebaseAccountDeletionAuthentication(
       _AppleAuthenticationService(),
