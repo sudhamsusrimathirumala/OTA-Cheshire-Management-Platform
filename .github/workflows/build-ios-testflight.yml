@@ -67,12 +67,29 @@ jobs:
           fi
           echo "IPA_PATH=${IPA_PATH}" >> "${GITHUB_ENV}"
 
-      - name: Verify embedded Flutter framework
+      - name: Verify iOS runtime framework packaging
         shell: bash
         run: |
           set -euo pipefail
-          if ! unzip -l "${IPA_PATH}" | grep -Fq "Payload/Runner.app/Frameworks/Flutter.framework/Flutter"; then
+          VERIFY_DIR="$(mktemp -d)"
+          trap 'rm -rf "${VERIFY_DIR}"' EXIT
+          unzip -q "${IPA_PATH}" -d "${VERIFY_DIR}"
+          APP_DIR="${VERIFY_DIR}/Payload/Runner.app"
+          RUNNER_BINARY="${APP_DIR}/Runner"
+          FLUTTER_BINARY="${APP_DIR}/Frameworks/Flutter.framework/Flutter"
+
+          if [ ! -f "${FLUTTER_BINARY}" ]; then
             echo "Flutter.framework is missing from the IPA. Refusing to upload a non-launchable build." >&2
+            exit 1
+          fi
+
+          if ! otool -L "${RUNNER_BINARY}" | grep -Fq "@rpath/Flutter.framework/Flutter"; then
+            echo "Runner does not link Flutter.framework through @rpath as expected." >&2
+            exit 1
+          fi
+
+          if ! otool -l "${RUNNER_BINARY}" | grep -A2 "cmd LC_RPATH" | grep -Fq "path @executable_path/Frameworks "; then
+            echo "Runner is missing the @executable_path/Frameworks LC_RPATH required to load Flutter.framework on device." >&2
             exit 1
           fi
 
