@@ -67,6 +67,15 @@ jobs:
           fi
           echo "IPA_PATH=${IPA_PATH}" >> "${GITHUB_ENV}"
 
+      - name: Verify embedded Flutter framework
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! unzip -l "${IPA_PATH}" | grep -Fq "Payload/Runner.app/Frameworks/Flutter.framework/Flutter"; then
+            echo "Flutter.framework is missing from the IPA. Refusing to upload a non-launchable build." >&2
+            exit 1
+          fi
+
       - name: Save IPA artifact
         uses: actions/upload-artifact@v4
         with:
