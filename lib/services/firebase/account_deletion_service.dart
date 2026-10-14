@@ -355,13 +355,14 @@ class FirebaseAccountDeletionAuthentication
         'Apple verification was cancelled. Nothing was deleted.',
       );
     } on FirebaseAuthException catch (error) {
-      throw _mapDeletionAuthException(error);
+      throw mapAppleDeletionAuthException(error, stage: 'apple-reauth');
     } on AccountDeletionException {
       rethrow;
     } catch (_) {
       throw const AccountDeletionException(
         AccountDeletionError.deletionFailed,
-        'Apple verification could not be completed. Please try again.',
+        'Apple verification could not be completed. Please try again. '
+        'Reference: apple-reauth-unknown.',
       );
     }
   }
@@ -386,11 +387,12 @@ class FirebaseAccountDeletionAuthentication
       try {
         await appleAuthentication.revokeAppleToken(authorizationCode);
       } on FirebaseAuthException catch (error) {
-        throw _mapDeletionAuthException(error);
+        throw mapAppleDeletionAuthException(error, stage: 'apple-revoke');
       } catch (_) {
         throw const AccountDeletionException(
           AccountDeletionError.deletionFailed,
-          'Apple authorization could not be revoked. Please try again.',
+          'Apple authorization could not be revoked. Please try again. '
+          'Reference: apple-revoke-unknown.',
         );
       }
     }
@@ -573,6 +575,48 @@ bool accountOwnsDeletionProfile(
       guardianIds is List &&
       guardianIds.isEmpty;
   return exclusiveParentOwner || selfOwner;
+}
+
+AccountDeletionException mapAppleDeletionAuthException(
+  FirebaseAuthException error, {
+  required String stage,
+}) {
+  final code = sanitizedAuthenticationDiagnosticCode(error.code) ?? 'unknown';
+  final reference = '$stage-$code';
+  if (const {
+    'popup-closed-by-user',
+    'cancelled-popup-request',
+    'web-context-cancelled',
+    'canceled',
+    'cancelled',
+  }.contains(code)) {
+    return AccountDeletionException(
+      AccountDeletionError.cancelled,
+      'Apple verification was cancelled. Nothing was deleted. '
+      'Reference: $reference.',
+    );
+  }
+  if (code == 'requires-recent-login') {
+    return AccountDeletionException(
+      AccountDeletionError.recentLoginRequired,
+      'Please verify your Apple sign-in again before deleting your account. '
+      'Reference: $reference.',
+    );
+  }
+  if (code == 'network-request-failed') {
+    return AccountDeletionException(
+      AccountDeletionError.networkFailure,
+      'The network is unavailable. Check your connection and try again. '
+      'Reference: $reference.',
+    );
+  }
+  final action = stage == 'apple-revoke'
+      ? 'Apple authorization could not be revoked.'
+      : 'Apple account verification could not be completed.';
+  return AccountDeletionException(
+    AccountDeletionError.deletionFailed,
+    '$action Please try again. Reference: $reference.',
+  );
 }
 
 AccountDeletionException _mapDeletionAuthException(
