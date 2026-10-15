@@ -101,10 +101,16 @@ class AccountDeletionService {
   Future<void> deleteAccount(
     AccountReauthenticationMethod method, {
     String? password,
+    Future<bool> Function(AccountDeletionException failure)?
+    confirmAppleRevocationFallback,
   }) {
     final active = _activeDeletion;
     if (active != null) return active;
-    final operation = _deleteAccount(method, password: password);
+    final operation = _deleteAccount(
+      method,
+      password: password,
+      confirmAppleRevocationFallback: confirmAppleRevocationFallback,
+    );
     _activeDeletion = operation;
     unawaited(
       operation.then<void>(
@@ -122,6 +128,8 @@ class AccountDeletionService {
   Future<void> _deleteAccount(
     AccountReauthenticationMethod method, {
     String? password,
+    Future<bool> Function(AccountDeletionException failure)?
+    confirmAppleRevocationFallback,
   }) async {
     final user = authentication.currentUser;
     if (user == null) {
@@ -156,13 +164,29 @@ class AccountDeletionService {
     if (method == AccountReauthenticationMethod.apple) {
       try {
         await authentication.revokeProviderToken(user, method, proof);
-      } on AccountDeletionException {
-        rethrow;
-      } catch (_) {
-        throw const AccountDeletionException(
-          AccountDeletionError.deletionFailed,
-          'Apple authorization could not be revoked. Nothing was deleted.',
-        );
+      } catch (error) {
+        // No destructive writes have begun. Only a fresh, successful Apple
+        // reauthentication may reach this optional manual-revocation path.
+        final failure = error is AccountDeletionException
+            ? error
+            : const AccountDeletionException(
+                AccountDeletionError.deletionFailed,
+                'Apple authorization could not be revoked. Nothing was deleted.',
+              );
+        if (failure.error == AccountDeletionError.cancelled ||
+            failure.error == AccountDeletionError.recentLoginRequired ||
+            confirmAppleRevocationFallback == null) {
+          throw failure;
+        }
+        final confirmed = await confirmAppleRevocationFallback(failure);
+        if (!confirmed) {
+          throw const AccountDeletionException(
+            AccountDeletionError.cancelled,
+            'Account deletion cancelled. Nothing was deleted.',
+          );
+        }
+        // The person explicitly chose to delete their OTA account despite
+        // Apple access requiring manual revocation afterward.
       }
     } else {
       await authentication.revokeProviderToken(user, method, proof);
