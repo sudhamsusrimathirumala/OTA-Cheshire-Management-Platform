@@ -237,6 +237,76 @@ void main() {
     expect(error.message, contains('Reference: apple-revoke-invalid-credential.'));
   });
 
+  test('Apple revocation surfaces only a fixed, safe detail marker', () {
+    final error = mapAppleDeletionAuthException(
+      FirebaseAuthException(
+        code: 'invalid-credential',
+        message:
+            'Error getting access token from Apple. OAuth2 redirect uri is '
+            'https://example.com/?token=private-authorization-code '
+            'for parent@example.com.',
+      ),
+      stage: 'apple-revoke',
+    );
+
+    expect(error.error, AccountDeletionError.deletionFailed);
+    expect(error.firestoreDeletionCompleted, isFalse);
+    expect(error.message, contains('Reference: apple-revoke-invalid-credential.'));
+    expect(error.message, contains('Detail: apple-redirect-uri.'));
+    expect(error.message, isNot(contains('private-authorization-code')));
+    expect(error.message, isNot(contains('parent@example.com')));
+    expect(error.message, isNot(contains('https://')));
+  });
+
+  test('Apple revocation classification is allowlisted', () {
+    final expected = <String, String>{
+      'Code flow is not enabled for Apple.': 'apple-code-flow-disabled',
+      'Error getting access token from Apple.': 'apple-token-exchange',
+      'invalid_client_secret': 'apple-client-secret',
+      'invalid_client': 'apple-client',
+      'invalid_grant': 'apple-grant',
+      'Invalid OAuth response from apple.com': 'apple-oauth-response',
+      'Authorization code has expired': 'apple-code-expired',
+      'Invalid authorization code': 'apple-code-invalid',
+      'CONFIGURATION_NOT_FOUND': 'firebase-configuration',
+      'An internal error has occurred': 'firebase-internal-error',
+      'The supplied auth credential is malformed or expired':
+          'provider-detail-unavailable',
+    };
+
+    for (final entry in expected.entries) {
+      expect(
+        appleRevocationDiagnosticMarker(entry.key),
+        entry.value,
+        reason: entry.key,
+      );
+    }
+    expect(
+      appleRevocationDiagnosticMarker(
+        'Unrecognized error from parent@example.com: '
+        'authorization_code=very-private-value',
+      ),
+      'provider-detail-unavailable',
+    );
+    expect(appleRevocationDiagnosticMarker(null), 'provider-detail-unavailable');
+  });
+
+  test('Unspecified Apple revocation failures do not expose raw details', () {
+    final error = mapAppleDeletionAuthException(
+      FirebaseAuthException(
+        code: 'invalid-credential',
+        message:
+            'The supplied auth credential is malformed or expired. '
+            'secret=very-private-value',
+      ),
+      stage: 'apple-revoke',
+    );
+
+    expect(error.message, contains('Detail: provider-detail-unavailable.'));
+    expect(error.message, isNot(contains('very-private-value')));
+    expect(error.message, contains('Reference: apple-revoke-invalid-credential.'));
+  });
+
   test('Apple cancellation remains non-destructive and identifiable', () {
     final error = mapAppleDeletionAuthException(
       FirebaseAuthException(code: 'web-context-cancelled'),
