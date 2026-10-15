@@ -628,7 +628,7 @@ String appleRevocationDiagnosticMarker(String? message) {
   final normalized = (message ?? '')
       .toLowerCase()
       .replaceAll(RegExp(r'[_-]+'), ' ')
-      .replaceAll(RegExp(r'\\s+'), ' ');
+      .replaceAll(RegExp(r'\s+'), ' ');
 
   if (normalized.contains('code flow is not enabled for apple')) {
     return 'apple-code-flow-disabled';
