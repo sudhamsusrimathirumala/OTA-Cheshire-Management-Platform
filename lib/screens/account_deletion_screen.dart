@@ -28,6 +28,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
   final _passwordController = TextEditingController();
   AccountReauthenticationMethod? _method;
   bool _busy = false;
+  bool _manualAppleRevocationNeeded = false;
   String? _message;
 
   UserAccount? get _account =>
@@ -264,6 +265,7 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
     if (method == null || _busy) return;
     setState(() {
       _busy = true;
+      _manualAppleRevocationNeeded = false;
       _message = null;
     });
     try {
@@ -272,7 +274,19 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
         password: method == AccountReauthenticationMethod.password
             ? _passwordController.text
             : null,
+        confirmAppleRevocationFallback:
+            method == AccountReauthenticationMethod.apple
+            ? (_) async {
+                if (!mounted) return false;
+                final confirmed = await _confirmAppleRevocationFallback();
+                if (confirmed) _manualAppleRevocationNeeded = true;
+                return confirmed;
+              }
+            : null,
       );
+      if (_manualAppleRevocationNeeded && mounted) {
+        await _showManualAppleRevocationReminder();
+      }
       await _completeDeletion();
     } on AccountDeletionException catch (error) {
       if (mounted) setState(() => _message = error.message);
@@ -286,6 +300,88 @@ class _AccountDeletionScreenState extends State<AccountDeletionScreen> {
       _passwordController.clear();
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<bool> _confirmAppleRevocationFallback() async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => PopScope(
+            canPop: false,
+            child: AlertDialog(
+              title: const Text('Apple access could not be disconnected'),
+              content: const SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Apple identity was verified, but OTA could not '
+                      'automatically revoke Sign in with Apple access.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'You can still permanently delete your OTA account and '
+                      'its exclusively owned student profiles. This cannot '
+                      'be undone.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'After deletion, manually remove OTA - Cheshire in '
+                      'iPhone Settings: tap your name, then Sign in with '
+                      'Apple (sometimes under Sign-In & Security), select '
+                      'OTA - Cheshire, and choose Stop Using Apple.',
+                    ),
+                    SizedBox(height: 12),
+                    Text(
+                      'If you keep your account, nothing will be deleted.',
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Keep account'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: OtaColors.actionRed,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Delete OTA account anyway'),
+                ),
+              ],
+            ),
+          ),
+    ) ?? false;
+  }
+
+  Future<void> _showManualAppleRevocationReminder() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('OTA account deleted'),
+          content: const Text(
+            'Your OTA account was deleted, but Sign in with Apple access '
+            'still needs to be removed manually. On your iPhone, open '
+            'Settings, tap your name, open Sign in with Apple (sometimes '
+            'under Sign-In & Security), select OTA - Cheshire, and tap '
+            'Stop Using Apple.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _completeDeletion() async {
