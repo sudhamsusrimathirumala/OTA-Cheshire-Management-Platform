@@ -270,7 +270,10 @@ void main() {
 
     expect(fixture.store.users, isNotEmpty);
     await tester.tap(find.text('Delete OTA account anyway'));
-    await tester.pumpAndSettle();
+    // The post-deletion reminder is also shown while the original button's
+    // loading animation is active behind the modal.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(fixture.authentication.reauthenticateCalls, 1);
     expect(fixture.authentication.deleteCalls, 1);
