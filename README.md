@@ -165,7 +165,7 @@ The history below highlights architectural milestones across the project's devel
 | Family ownership | Linked IDs and relationship hints treated broadly | Exact self owner or one exclusive parent owner, plus link/location/active checks | Ambiguous relationships weakened authority | Multi-guardian sharing is unsupported |
 | Rules scaling | Validate whole households in large operations | Validate the mutated profile; delete sequentially | An 11-profile family could exceed Rules document-access limits | More steps and recovery state, but bounded requests |
 | Account deletion | Broad all-profile batch | Deletion marker, private cleanup, one profile transaction at a time, then user/Auth | Required complete deletion inside Rules limits and recoverable partial progress | Retriable sequence; Firestore may complete before Auth |
-| Apple deletion | Revoke after data deletion | Reauthenticate and revoke before destructive deletion | Revocation failure must leave OTA data intact | Safer ordering; external Apple setup required |
+| Apple deletion | Revoke after data deletion | Reauthenticate, attempt revocation, require explicit consent if revocation fails | No destructive deletion without fresh identity proof and user consent to manual Apple disconnection | Manual Apple revocation is needed after fallback |
 | Firebase environments | Development-centered configuration | Explicit dev/prod options, flavors, schemes, and IDs | Production must never silently use development services | More config, but fail-closed isolation |
 | Android signing | Prod release could use debug signing | External credentials and fail-closed `prodRelease` | A release must not silently carry a debug certificate | Prod debug validation remains possible; signed release needs secrets |
 | Dependency/build inputs | Untracked lockfile and wrapper scripts | Tracked `pubspec.lock` and Gradle wrapper | A clean application clone needs reproducible resolved inputs/tooling | Dependency/tool changes become reviewed diffs |
@@ -393,8 +393,15 @@ sequenceDiagram
     App->>DB: Validate member account (up to 11 profiles)
     App->>Provider: Fresh reauthentication
     alt Apple
-        App->>Provider: Revoke authorization first
-        Provider-->>App: Must succeed before destruction
+        App->>Provider: Attempt authorization revocation
+        alt Revocation fails
+            App-->>User: Explain manual Apple disconnection; request explicit consent
+            alt User declines
+                App-->>User: Stop without deleting anything
+            else User explicitly agrees
+                User->>App: Continue deletion without Apple revocation
+            end
+        end
     end
     App->>DB: Delete pushDevices, reads, deliveries in bounded batches
     App->>DB: Set accountDeletionInProgress = true
@@ -408,7 +415,7 @@ sequenceDiagram
     end
 ```
 
-The account record must be Parent/Student, same-location, unique, nonblank, and no larger than eleven profiles. Apple revocation occurs before private deletion; failure means nothing was deleted. Private subcollections are explicit because parent-document deletion is not recursive.
+The account record must be Parent/Student, same-location, unique, nonblank, and no larger than eleven profiles. Apple revocation is attempted before private deletion. If it fails, the default is to stop without deleting anything; only an explicit in-app confirmation after successful reauthentication permits deletion to continue. The person is instructed to revoke OTA - Cheshire access manually through iPhone Sign in with Apple settings, with a reminder after successful deletion. This fallback does not apply when provider reauthentication fails. Private subcollections are explicit because parent-document deletion is not recursive.
 
 `accountDeletionInProgress` locks the account into deletion Rules. Each profile transaction verifies exact ownership, removes one ID, repairs selection, clears the parent-self marker when needed, records `profileMutationId`, and deletes that profile. A retry can continue partial Firestore progress, including an empty linked list. Auth deletion is last; if it fails after Firestore succeeds, fresh provider verification can finish the remaining Auth-only identity deletion.
 
