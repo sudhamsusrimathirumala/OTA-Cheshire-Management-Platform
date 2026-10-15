@@ -215,6 +215,185 @@ void main() {
     expect(authentication.deletedUser, isNull);
   });
 
+  test('Apple revocation fallback requires explicit confirmation', () async {
+    authentication.failAppleRevocation = true;
+    var confirmationCalls = 0;
+
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.apple,
+        confirmAppleRevocationFallback: (failure) async {
+          confirmationCalls++;
+          expect(failure.error, AccountDeletionError.deletionFailed);
+          expect(failure.message, isNot(contains('apple-authorization-code')));
+          return false;
+        },
+      ),
+      throwsA(
+        isA<AccountDeletionException>()
+            .having(
+              (error) => error.error,
+              'error',
+              AccountDeletionError.cancelled,
+            )
+            .having(
+              (error) => error.message,
+              'message',
+              contains('Nothing was deleted'),
+            ),
+      ),
+    );
+
+    expect(confirmationCalls, 1);
+    expect(authentication.reauthenticateCalls, 1);
+    expect(events, ['load-account', 'reauth-apple', 'revoke-apple']);
+    expect(store.privateDeleteCalls, 0);
+    expect(store.users, isNotEmpty);
+    expect(store.profiles, containsAll(['child', 'self-profile']));
+    expect(authentication.deletedUser, isNull);
+  });
+
+  test('Apple manual revocation fallback continues after confirmation', () async {
+    authentication.failAppleRevocation = true;
+    var confirmationCalls = 0;
+
+    await service.deleteAccount(
+      AccountReauthenticationMethod.apple,
+      confirmAppleRevocationFallback: (failure) async {
+        confirmationCalls++;
+        expect(failure.error, AccountDeletionError.deletionFailed);
+        expect(authentication.reauthenticatedUser, same(authentication.user));
+        expect(store.users, isNotEmpty);
+        expect(store.privateDeleteCalls, 0);
+        return true;
+      },
+    );
+
+    expect(confirmationCalls, 1);
+    expect(authentication.reauthenticateCalls, 1);
+    expect(
+      events,
+      orderedEquals([
+        'load-account',
+        'reauth-apple',
+        'revoke-apple',
+        'delete-private',
+        'delete-profiles-and-user',
+        'delete-auth',
+      ]),
+    );
+    expect(store.users, isEmpty);
+    expect(store.privateDocuments, isEmpty);
+    expect(authentication.deletedUser, same(authentication.user));
+  });
+
+  test('Apple revocation success never asks for fallback', () async {
+    await service.deleteAccount(
+      AccountReauthenticationMethod.apple,
+      confirmAppleRevocationFallback: (_) async {
+        fail('A successful revocation must not trigger fallback.');
+      },
+    );
+
+    expect(authentication.reauthenticateCalls, 1);
+    expect(authentication.deleteCalls, 1);
+  });
+
+  test('Apple reauthentication failure never offers fallback', () async {
+    authentication.appleCancelled = true;
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.apple,
+        confirmAppleRevocationFallback: (_) async {
+          fail('Fallback must not bypass Apple identity verification.');
+        },
+      ),
+      throwsA(
+        isA<AccountDeletionException>().having(
+          (error) => error.error,
+          'error',
+          AccountDeletionError.cancelled,
+        ),
+      ),
+    );
+    expect(store.privateDeleteCalls, 0);
+    expect(authentication.deleteCalls, 0);
+  });
+
+  test('Failure in the confirmation callback fails closed', () async {
+    authentication.failAppleRevocation = true;
+
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.apple,
+        confirmAppleRevocationFallback: (_) async {
+          throw StateError('confirmation unavailable');
+        },
+      ),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(store.privateDeleteCalls, 0);
+    expect(store.users, isNotEmpty);
+    expect(authentication.deleteCalls, 0);
+  });
+
+  test('Privileged Apple user cannot reach fallback', () async {
+    authentication.failAppleRevocation = true;
+    store.users['member'] = _record(role: UserAccountRole.admin);
+
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.apple,
+        confirmAppleRevocationFallback: (_) async {
+          fail('Admin protection must run before fallback.');
+        },
+      ),
+      throwsA(
+        isA<AccountDeletionException>().having(
+          (error) => error.error,
+          'error',
+          AccountDeletionError.privilegedAccount,
+        ),
+      ),
+    );
+
+    expect(authentication.reauthenticateCalls, 0);
+    expect(store.privateDeleteCalls, 0);
+  });
+
+  test('Apple fallback keeps Auth deletion failure retryable', () async {
+    authentication.failAppleRevocation = true;
+    authentication.failAuthDeletion = true;
+
+    await expectLater(
+      service.deleteAccount(
+        AccountReauthenticationMethod.apple,
+        confirmAppleRevocationFallback: (_) async => true,
+      ),
+      throwsA(
+        isA<AccountDeletionException>().having(
+          (error) => error.firestoreDeletionCompleted,
+          'Firestore completed',
+          isTrue,
+        ),
+      ),
+    );
+
+    expect(store.users, isEmpty);
+    authentication.failAuthDeletion = false;
+    events.clear();
+    await service.deleteAccount(
+      AccountReauthenticationMethod.apple,
+      confirmAppleRevocationFallback: (_) async => true,
+    );
+    expect(
+      events,
+      ['load-account', 'reauth-apple', 'revoke-apple', 'delete-auth'],
+    );
+    expect(authentication.deleteCalls, 2);
+  });
+
   test('Apple reauthentication errors include a safe stage reference', () {
     final error = mapAppleDeletionAuthException(
       FirebaseAuthException(code: 'invalid-credential'),
