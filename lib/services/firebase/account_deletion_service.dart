@@ -613,9 +613,14 @@ AccountDeletionException mapAppleDeletionAuthException(
   final action = stage == 'apple-revoke'
       ? 'Apple authorization could not be revoked.'
       : 'Apple account verification could not be completed.';
+  // A fixed marker can distinguish known provider responses without exposing
+  // FirebaseAuthException.message, which may include account or token data.
+  final diagnostic = stage == 'apple-revoke'
+      ? ' Detail: ${appleRevocationDiagnosticMarker(error.message)}.'
+      : '';
   return AccountDeletionException(
     AccountDeletionError.deletionFailed,
-    '$action Please try again. Reference: $reference.',
+    '$action Please try again. Reference: $reference.$diagnostic',
   );
 }
 
