@@ -223,7 +223,10 @@ void main() {
 
     await tester.ensureVisible(find.text('Permanently delete account'));
     await tester.tap(find.text('Permanently delete account'));
-    await tester.pumpAndSettle();
+    // The deletion button keeps an animated spinner while the modal is open.
+    // Do not wait for every animation in the underlying screen to settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Apple access could not be disconnected'), findsOneWidget);
     expect(find.text('Keep account'), findsOneWidget);
@@ -260,7 +263,10 @@ void main() {
     );
     await tester.ensureVisible(find.text('Permanently delete account'));
     await tester.tap(find.text('Permanently delete account'));
-    await tester.pumpAndSettle();
+    // The deletion button keeps an animated spinner while the modal is open.
+    // Do not wait for every animation in the underlying screen to settle.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(fixture.store.users, isNotEmpty);
     await tester.tap(find.text('Delete OTA account anyway'));
