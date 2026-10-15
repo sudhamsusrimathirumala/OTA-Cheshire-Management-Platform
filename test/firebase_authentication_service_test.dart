@@ -298,6 +298,46 @@ void main() {
     }
   });
 
+  test('Apple revoke logs only fixed safe details, never provider text', () async {
+    final diagnostics = <AuthenticationDiagnostic>[];
+    final auth = _FakeFirebaseAuth(
+      revokeError: FirebaseAuthException(
+        code: 'invalid-credential',
+        message:
+            'Error getting access token from Apple. OAuth2 redirect uri is '
+            'https://example.com/?code=secret-code for parent@example.com.',
+      ),
+    );
+    final service = FirebaseAuthenticationService(
+      auth: auth,
+      diagnostics: diagnostics.add,
+      isWeb: false,
+    );
+
+    await expectLater(
+      service.revokeAppleToken('secret-authorization-code'),
+      throwsA(isA<FirebaseAuthException>()),
+    );
+
+    expect(auth.revokedAuthorizationCodes, ['secret-authorization-code']);
+    expect(
+      diagnostics.map((event) => event.stage),
+      orderedEquals(['APPLE_REVOKE_STARTED', 'APPLE_REVOKE_FAILED']),
+    );
+    final failure = diagnostics.last;
+    expect(failure.code, 'invalid-credential');
+    expect(failure.detail, 'apple-redirect-uri');
+    final visibleDiagnostic = [
+      failure.stage,
+      failure.code,
+      failure.detail,
+    ].join(' ');
+    expect(visibleDiagnostic, isNot(contains('secret-code')));
+    expect(visibleDiagnostic, isNot(contains('parent@example.com')));
+    expect(visibleDiagnostic, isNot(contains('https://')));
+    expect(visibleDiagnostic, isNot(contains('secret-authorization-code')));
+  });
+
   test('Web sign-out only clears the canonical Firebase session', () async {
     final auth = _FakeFirebaseAuth();
     final service = FirebaseAuthenticationService(auth: auth, isWeb: true);
@@ -571,10 +611,12 @@ void main() {
 }
 
 class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
-  _FakeFirebaseAuth({this.credential, this.signInError});
+  _FakeFirebaseAuth({this.credential, this.signInError, this.revokeError});
 
   final UserCredential? credential;
   final FirebaseAuthException? signInError;
+  final FirebaseAuthException? revokeError;
+  final List<String> revokedAuthorizationCodes = [];
   int signOutCalls = 0;
   int signInWithCredentialCalls = 0;
 
@@ -587,6 +629,14 @@ class _FakeFirebaseAuth extends Fake implements FirebaseAuth {
     final error = signInError;
     if (error != null) throw error;
     return this.credential ?? _FakeUserCredential();
+  }
+
+  @override
+  Future<void> revokeTokenWithAuthorizationCode(
+    String authorizationCode,
+  ) async {
+    revokedAuthorizationCodes.add(authorizationCode);
+    if (revokeError case final error?) throw error;
   }
 
   @override
