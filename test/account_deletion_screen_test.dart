@@ -213,6 +213,89 @@ void main() {
     expect(completed, 1);
   });
 
+  testWidgets('Apple revocation failure offers a safe choice to keep account', (
+    tester,
+  ) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.apple},
+    )..authentication.failAppleRevocation = true;
+    await _pumpDeletionScreen(tester, fixture);
+
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apple access could not be disconnected'), findsOneWidget);
+    expect(find.text('Keep account'), findsOneWidget);
+    expect(find.text('Delete OTA account anyway'), findsOneWidget);
+    expect(find.textContaining('Stop Using Apple'), findsOneWidget);
+    expect(fixture.authentication.reauthenticateCalls, 1);
+    expect(fixture.store.users, isNotEmpty);
+    expect(fixture.authentication.deleteCalls, 0);
+
+    await tester.tap(find.text('Keep account'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Nothing was deleted'), findsOneWidget);
+    expect(find.text('Apple access could not be disconnected'), findsNothing);
+    expect(fixture.store.users, isNotEmpty);
+    expect(fixture.authentication.deleteCalls, 0);
+  });
+
+  testWidgets('Apple fallback deletes only after user explicitly confirms', (
+    tester,
+  ) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.apple},
+    )..authentication.failAppleRevocation = true;
+    var completed = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AccountDeletionScreen(
+          service: fixture.service,
+          accountOverride: fixture.account,
+          completeSession: () async => completed++,
+        ),
+      ),
+    );
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.store.users, isNotEmpty);
+    await tester.tap(find.text('Delete OTA account anyway'));
+    await tester.pumpAndSettle();
+
+    expect(fixture.authentication.reauthenticateCalls, 1);
+    expect(fixture.authentication.deleteCalls, 1);
+    expect(fixture.store.users, isEmpty);
+    expect(completed, 0);
+    expect(find.text('OTA account deleted'), findsOneWidget);
+    expect(find.textContaining('Stop Using Apple'), findsOneWidget);
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(completed, 1);
+    expect(find.text('OTA account deleted'), findsNothing);
+  });
+
+  testWidgets('Apple reauthentication cancellation cannot reach fallback', (
+    tester,
+  ) async {
+    final fixture = _Fixture(
+      methods: const {AccountReauthenticationMethod.apple},
+    )..authentication.appleCancelled = true;
+    await _pumpDeletionScreen(tester, fixture);
+
+    await tester.ensureVisible(find.text('Permanently delete account'));
+    await tester.tap(find.text('Permanently delete account'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Apple access could not be disconnected'), findsNothing);
+    expect(fixture.store.users, isNotEmpty);
+    expect(fixture.authentication.deleteCalls, 0);
+  });
+
   testWidgets('raw deletion failures are not displayed', (tester) async {
     final fixture = _Fixture()..store.failPrivateDeletion = true;
     await _pumpDeletionScreen(tester, fixture);
@@ -314,6 +397,8 @@ class _WidgetAuthentication implements AccountDeletionAuthentication {
   int deleteCalls = 0;
   int signOutCalls = 0;
   bool googleCancelled = false;
+  bool appleCancelled = false;
+  bool failAppleRevocation = false;
   AccountReauthenticationMethod? lastMethod;
 
   @override
@@ -343,6 +428,12 @@ class _WidgetAuthentication implements AccountDeletionAuthentication {
         'Google verification was cancelled. Nothing was deleted.',
       );
     }
+    if (method == AccountReauthenticationMethod.apple && appleCancelled) {
+      throw const AccountDeletionException(
+        AccountDeletionError.cancelled,
+        'Apple verification was cancelled. Nothing was deleted.',
+      );
+    }
     return method == AccountReauthenticationMethod.apple
         ? const AccountDeletionProviderProof.apple('authorization-code')
         : null;
@@ -353,7 +444,16 @@ class _WidgetAuthentication implements AccountDeletionAuthentication {
     User user,
     AccountReauthenticationMethod method,
     AccountDeletionProviderProof? proof,
-  ) async {}
+  ) async {
+    if (method == AccountReauthenticationMethod.apple &&
+        failAppleRevocation) {
+      throw const AccountDeletionException(
+        AccountDeletionError.deletionFailed,
+        'Apple authorization could not be revoked. '
+        'Reference: apple-revoke-invalid-credential.',
+      );
+    }
+  }
 
   @override
   Future<void> delete(User user) async => deleteCalls++;
