@@ -49,6 +49,9 @@ jobs:
       - name: Analyze Dart code
         run: flutter analyze
 
+      - name: Test account deletion and Apple sign-in
+        run: flutter test test/account_deletion_service_test.dart test/account_deletion_screen_test.dart test/apple_authentication_test.dart
+
       - name: Build signed production IPA
         shell: bash
         run: |
