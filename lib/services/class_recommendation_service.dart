@@ -15,12 +15,13 @@ bool isTeenOrAdultClass(ClassSession session) {
 }
 
 bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
-  if (!session.isPublished ||
-      session.locationId != student.locationId ||
-      !acceptsStudentBelt(session, student)) {
+  if (!session.isPublished || session.locationId != student.locationId) {
     return false;
   }
   final age = const LocationTimeService().ageForStudent(student);
+  // Little Tigers is the only class that ignores belt eligibility.
+  if (isLittleTigersClass(session)) return isLittleTigersAge(age);
+  if (!acceptsStudentBelt(session, student)) return false;
   return age >= otaOlderStudentAge
       ? isTeenOrAdultClass(session)
       : isNumberedLevelClass(session) || session.className == 'Black Belt';
@@ -41,6 +42,9 @@ bool acceptsStudentBelt(ClassSession session, StudentProfile student) =>
 
 String classGuidanceFor(ClassSession session, StudentProfile student) {
   final age = const LocationTimeService().ageForStudent(student);
+  if (isLittleTigersClass(session)) {
+    return 'For children ages 3-5, regardless of belt rank.';
+  }
   if (session.className == 'Black Belt' &&
       age < otaOlderStudentAge &&
       acceptsStudentBelt(session, student)) {
@@ -112,10 +116,13 @@ ClassSession? nextRecommendedClassFromSchedule(
     }
   }
   if (candidates.isEmpty) return null;
+  final age = const LocationTimeService().ageForStudent(student);
 
   final preferred = student.preferredClassGroupIds.firstOrNull;
   if (preferred != null) {
     for (final session in candidates) {
+      // Saved preferences cannot make an older student eligible for Little Tigers.
+      if (isLittleTigersClass(session) && !isLittleTigersAge(age)) continue;
       if (matchesResolvedPreferredClassGroup(
         student.preferredClassGroupIds,
         session.bulkGroupId,
@@ -125,7 +132,14 @@ ClassSession? nextRecommendedClassFromSchedule(
     }
   }
 
-  if (const LocationTimeService().ageForStudent(student) >= otaOlderStudentAge) {
+  // Give preschool-aged students an age-based recommendation first.
+  if (isLittleTigersAge(age)) {
+    for (final session in candidates) {
+      if (isLittleTigersClass(session)) return session;
+    }
+  }
+
+  if (age >= otaOlderStudentAge) {
     for (final session in candidates) {
       if (isTeenOrAdultClass(session) &&
           acceptsStudentBelt(session, student)) {

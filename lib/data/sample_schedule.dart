@@ -5,12 +5,12 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
   DateTime.monday: [
     _session(
       'mon_little_tiger',
-      'Little Tiger (Age 3-5)',
+      'Little Tigers',
       16,
       0,
       const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
-      eligibilityNote: 'Ages 3-5',
+      eligibilityNote: 'Ages 3-5 • All belt ranks',
     ),
     _session(
       'mon_level_1',
@@ -65,12 +65,12 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
     ),
     _session(
       'tue_little_tiger',
-      'Little Tiger (Age 3-5)',
+      'Little Tigers',
       17,
       10,
       const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
-      eligibilityNote: 'Ages 3-5',
+      eligibilityNote: 'Ages 3-5 • All belt ranks',
     ),
     _session(
       'tue_level_3',
@@ -211,12 +211,12 @@ final sampleSummerSchedule = <int, List<ClassSession>>{
   DateTime.friday: [
     _session(
       'fri_little_tiger',
-      'Little Tiger (Age 3-5)',
+      'Little Tigers',
       16,
       40,
       const [],
       'Foundational movement, listening skills, and confidence for our youngest students.',
-      eligibilityNote: 'Ages 3-5',
+      eligibilityNote: 'Ages 3-5 • All belt ranks',
     ),
     _session(
       'fri_black_belt',
@@ -288,7 +288,8 @@ ClassSession _session(
 
 String _classTypeIdFor(String className) {
   return switch (className) {
-    'Little Tiger (Age 3-5)' => 'little-tiger',
+    'Little Tigers' || 'Little Tiger (Age 3-5)' || 'Little Tiger' =>
+        'little-tiger',
     'Level 1' => 'level-1',
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',

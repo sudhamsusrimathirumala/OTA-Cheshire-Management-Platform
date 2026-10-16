@@ -70,6 +70,70 @@ void main() {
     belts: const ['Black'],
   );
 
+  test('Little Tigers: ages 3-5 are eligible regardless of belt', () {
+    final littleTigers = session(
+      id: 'tigers',
+      name: 'Little Tigers',
+      type: 'little-tiger',
+      hour: 16,
+    );
+    final legacy = session(
+      id: 'legacy-tiger',
+      name: 'Little Tiger (Age 3-5)',
+      type: 'little-tiger',
+      hour: 18,
+    );
+    for (final age in [3, 4, 5]) {
+      for (final belt in ['No Belt', 'White', 'Black']) {
+        final profile = child(age, belt: belt);
+        expect(recommend(profile, [littleTigers]), same(littleTigers));
+        expect(recommend(profile, [legacy]), same(legacy));
+        expect(isTypicallyRecommendedFor(littleTigers, profile), isTrue);
+        expect(littleTigers.isEligibleFor(profile), isTrue);
+      }
+    }
+    expect(littleTigers.eligibilityLabel, 'Ages 3-5 • All belt ranks');
+    expect(classGuidanceFor(littleTigers, child(4)), contains('regardless of belt'));
+  });
+
+  test('Little Tigers excludes other ages, including saved preferences', () {
+    final littleTigers = session(
+      id: 'tigers',
+      name: 'Little Tigers',
+      type: 'little-tiger',
+      group: 'little-tiger-standard',
+      hour: 16,
+    );
+    for (final age in [2, 6, 10, 13]) {
+      final profile = child(age, preferred: ['little-tiger-standard']);
+      expect(recommend(profile, [littleTigers]), isNull);
+      expect(isTypicallyRecommendedFor(littleTigers, profile), isFalse);
+      expect(littleTigers.isEligibleFor(profile), isFalse);
+    }
+    expect(preferredClassGroupIdForClassName('Little Tigers'), 'little-tiger-standard');
+    expect(preferredClassGroupIdForClassName('Little Tiger (Age 3-5)'),
+        'little-tiger-standard');
+  });
+
+  test('Little Tigers never loosens other classes with empty belts', () {
+    final littleTigers = session(
+      id: 'tigers',
+      name: 'Little Tigers',
+      type: 'little-tiger',
+      hour: 16,
+    );
+    final level1 = session(
+      id: 'level-1',
+      name: 'Level 1',
+      type: 'level-1',
+      hour: 17,
+    );
+    final profile = child(4, belt: 'Blue');
+    expect(recommend(profile, [level1, littleTigers]), same(littleTigers));
+    expect(recommend(profile, [level1]), isNull);
+    expect(isTypicallyRecommendedFor(level1, profile), isFalse);
+  });
+
   test('younger and older students receive central recommendations', () {
     final schedule = {
       DateTime.monday: [level, teen],

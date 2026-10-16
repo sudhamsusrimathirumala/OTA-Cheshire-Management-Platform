@@ -1,5 +1,19 @@
 import 'student_profile.dart';
 
+/// Reuse the legacy class type for the renamed Little Tigers program.
+bool isLittleTigersClassName(String name) {
+  final normalized = name.trim().toLowerCase();
+  return normalized == 'little tigers' ||
+      normalized == 'little tiger' ||
+      normalized == 'little tiger (age 3-5)';
+}
+
+bool isLittleTigersAge(int age) => age >= 3 && age <= 5;
+
+bool isLittleTigersClass(ClassSession session) =>
+    session.classTypeId == 'little-tiger' ||
+    isLittleTigersClassName(session.className);
+
 class ClassSession {
   ClassSession({
     required this.id,
@@ -52,11 +66,12 @@ class ClassSession {
   String get timeRangeLabel =>
       '$startLabel - ${formatMinutesAsTime(endMinutes)}';
 
-  String get eligibilityLabel =>
-      eligibilityNote ??
-      (eligibleBelts.isEmpty
-          ? 'Instructor placement required'
-          : eligibleBelts.join(', '));
+  String get eligibilityLabel => isLittleTigersClass(this)
+      ? 'Ages 3-5 • All belt ranks'
+      : eligibilityNote ??
+          (eligibleBelts.isEmpty
+              ? 'Instructor placement required'
+              : eligibleBelts.join(', '));
 
   DateTime startDateTime(DateTime date) {
     return DateTime(
@@ -79,6 +94,7 @@ class ClassSession {
   }
 
   bool isEligibleFor(StudentProfile student) {
+    if (isLittleTigersClass(this)) return isLittleTigersAge(student.age);
     if (classTypeId == 'teen-adult-sparring') {
       return student.age >= 13;
     }
@@ -91,7 +107,8 @@ const legacyAmbiguousTeenAdultGroupId = 'teen-adult-standard';
 String preferredClassGroupIdForClassName(String className) {
   final normalized = className.trim();
   return switch (normalized) {
-    'Little Tiger' || 'Little Tiger (Age 3-5)' => 'little-tiger-standard',
+    'Little Tigers' || 'Little Tiger' || 'Little Tiger (Age 3-5)' =>
+        'little-tiger-standard',
     'Level 1' => 'level-1-standard',
     'Level 2' => 'level-2-standard',
     'Level 3' => 'level-3-standard',

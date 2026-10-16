@@ -21,6 +21,24 @@ void main() {
     expect(find.text('Preferred class'), findsNothing);
   });
 
+  testWidgets('Little Tigers swaps belt selection for age-only guidance', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: AdminScheduleScreen()));
+    await tester.tap(find.text('Add Class'));
+    await tester.pumpAndSettle();
+    expect(find.text('Eligible belts'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).first, 'Little Tigers');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('regardless of belt'), findsOneWidget);
+    expect(find.text('Eligible belts'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).first, 'Level 1');
+    await tester.pumpAndSettle();
+    expect(find.text('Eligible belts'), findsOneWidget);
+  });
+
   testWidgets('editing a legacy preferred class still opens safely', (
     tester,
   ) async {

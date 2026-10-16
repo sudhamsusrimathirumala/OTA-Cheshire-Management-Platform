@@ -1924,7 +1924,8 @@ DateTime memberEventWindowStart(DateTime now) {
 
 String _classTypeIdFor(String className) {
   return switch (className) {
-    'Little Tiger (Age 3-5)' => 'little-tiger',
+    'Little Tigers' || 'Little Tiger (Age 3-5)' || 'Little Tiger' =>
+        'little-tiger',
     'Level 1' => 'level-1',
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',

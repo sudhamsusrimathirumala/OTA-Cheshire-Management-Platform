@@ -752,7 +752,8 @@ String? _normalizeClassTypeId(String? classTypeId) {
 String _classTypeIdForClassName(String className) {
   final normalized = className.trim();
   return switch (normalized) {
-    'Little Tiger (Age 3-5)' || 'Little Tiger' => 'little-tiger',
+    'Little Tigers' || 'Little Tiger (Age 3-5)' || 'Little Tiger' =>
+        'little-tiger',
     'Level 1' => 'level-1',
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',

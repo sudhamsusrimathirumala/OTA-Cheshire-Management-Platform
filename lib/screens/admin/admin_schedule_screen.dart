@@ -477,7 +477,7 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _weekday = widget.selectedWeekday;
     _classNameController = TextEditingController(
       text: session?.className ?? '',
-    );
+    )..addListener(_refreshClassTypeFields);
     _startMinutes = session?.startMinutes;
     _endMinutes = session?.endMinutes;
     _eligibleBelts.addAll(session?.eligibleBelts ?? const <String>[]);
@@ -491,8 +491,15 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
     _initialFingerprint = _formFingerprint;
   }
 
+  bool get _isLittleTigers => isLittleTigersClassName(_classNameController.text);
+
+  void _refreshClassTypeFields() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _classNameController.removeListener(_refreshClassTypeFields);
     _classNameController.dispose();
     _descriptionController.dispose();
     _eligibilityNoteController.dispose();
@@ -591,16 +598,22 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
                 ),
               ),
               const SizedBox(height: 10),
-              BeltMultiSelectDropdown(
-                selectedBelts: _eligibleBelts,
-                onChanged: (belts) => setState(() {
-                  _eligibleBelts
-                    ..clear()
-                    ..addAll(belts);
-                }),
-                label: 'Eligible belts',
-                helperText: 'Select each belt rank eligible for this class.',
-              ),
+              if (_isLittleTigers)
+                const Text(
+                  'Little Tigers is for ages 3-5, regardless of belt. '
+                  'No eligible belts need to be selected.',
+                )
+              else
+                BeltMultiSelectDropdown(
+                  selectedBelts: _eligibleBelts,
+                  onChanged: (belts) => setState(() {
+                    _eligibleBelts
+                      ..clear()
+                      ..addAll(belts);
+                  }),
+                  label: 'Eligible belts',
+                  helperText: 'Select each belt rank eligible for this class.',
+                ),
               const SizedBox(height: 10),
               _AdminTextField(
                 controller: _descriptionController,
@@ -691,7 +704,9 @@ class _ClassFormSheetState extends State<_ClassFormSheet> {
       weekday: _weekday,
       startMinutes: startMinutes,
       endMinutes: endMinutes,
-      eligibleBelts: orderedBeltRanks(_eligibleBelts),
+      eligibleBelts: _isLittleTigers
+          ? const <String>[]
+          : orderedBeltRanks(_eligibleBelts),
       description: _descriptionController.text.trim(),
       eligibilityNote: _eligibilityNoteController.text.trim().isEmpty
           ? null
@@ -1571,7 +1586,8 @@ TextStyle? _rowTitleStyle(BuildContext context) {
 String _classTypeIdForClassName(String className) {
   final normalized = className.trim();
   return switch (normalized) {
-    'Little Tiger (Age 3-5)' || 'Little Tiger' => 'little-tiger',
+    'Little Tigers' || 'Little Tiger (Age 3-5)' || 'Little Tiger' =>
+        'little-tiger',
     'Level 1' => 'level-1',
     'Level 2' => 'level-2',
     'Level 3' => 'level-3',
