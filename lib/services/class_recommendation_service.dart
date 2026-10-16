@@ -118,10 +118,41 @@ ClassSession? nextRecommendedClassFromSchedule(
     }
   }
 
+  if (const LocationTimeService().ageForStudent(student) >= otaOlderStudentAge) {
+    for (final session in candidates) {
+      if (isTeenOrAdultClass(session) &&
+          acceptsStudentBelt(session, student)) {
+        return session;
+      }
+    }
+    for (final session in candidates) {
+      if (isNumberedLevelClass(session) &&
+          acceptsStudentBelt(session, student)) {
+        return session;
+      }
+    }
+  } else {
+    for (final session in candidates) {
+      if (isNumberedLevelClass(session) &&
+          acceptsStudentBelt(session, student)) {
+        return session;
+      }
+    }
+    // Black Belt is not a numbered class, but it can still be appropriate
+    // for a younger black belt whose rank is explicitly listed.
+    for (final session in candidates) {
+      if (session.className == 'Black Belt' &&
+          acceptsStudentBelt(session, student)) {
+        return session;
+      }
+    }
+    // Do not recommend a different numbered level, a teen/adult class, or an
+    // unconfigured class just because no appropriate class was found.
+    return null;
+  }
+  // Empty eligibleBelts means instructor placement, not blanket permission.
+  // Older students may also be eligible for non-numbered classes.
   return candidates
-          .where((session) => isTypicallyRecommendedFor(session, student))
-          .firstOrNull ??
-      candidates
-          .where((session) => acceptsStudentBelt(session, student))
-          .firstOrNull;
+      .where((session) => acceptsStudentBelt(session, student))
+      .firstOrNull;
 }
