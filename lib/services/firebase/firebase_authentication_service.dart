@@ -45,11 +45,18 @@ class AuthenticationException implements Exception {
 
 @immutable
 class AuthenticationDiagnostic {
-  const AuthenticationDiagnostic(this.stage, {this.exceptionType, this.code});
+  const AuthenticationDiagnostic(
+    this.stage, {
+    this.exceptionType,
+    this.code,
+    this.detail,
+  });
 
   final String stage;
   final String? exceptionType;
   final String? code;
+  // Only fixed, allowlisted markers belong here; never raw provider messages.
+  final String? detail;
 }
 
 typedef AuthenticationDiagnosticSink =
@@ -60,6 +67,7 @@ void logAuthenticationDiagnostic(AuthenticationDiagnostic diagnostic) {
     diagnostic.stage,
     if (diagnostic.exceptionType case final type?) 'type=$type',
     if (diagnostic.code case final code?) 'code=$code',
+    if (diagnostic.detail case final detail?) 'detail=$detail',
   ];
   developer.log(fields.join(' '), name: 'ota.authentication');
 }
@@ -436,6 +444,7 @@ class FirebaseAuthenticationService
           'APPLE_REVOKE_FAILED',
           exceptionType: 'FirebaseAuthException',
           code: sanitizedAuthenticationDiagnosticCode(error.code),
+          detail: appleRevocationDiagnosticMarker(error.message),
         ),
       );
       rethrow;
@@ -608,6 +617,59 @@ String? sanitizedAuthenticationDiagnosticCode(String? code) {
   final normalized = raw.toLowerCase();
   final sanitized = normalized.replaceAll(RegExp(r'[^a-z0-9_-]'), '-');
   return sanitized.isEmpty ? null : sanitized;
+}
+
+/// Classify known Apple revocation responses without retaining provider text.
+///
+/// FirebaseAuthException.message may include authorization codes, URLs or other
+/// identifying data. Return only a fixed marker, including when no known
+/// reason is available. These markers indicate observed text, not root cause.
+String appleRevocationDiagnosticMarker(String? message) {
+  final normalized = (message ?? '')
+      .toLowerCase()
+      .replaceAll(RegExp(r'[_-]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ');
+
+  if (normalized.contains('code flow is not enabled for apple')) {
+    return 'apple-code-flow-disabled';
+  }
+  if (normalized.contains('oauth2 redirect uri') ||
+      normalized.contains('redirect uri mismatch') ||
+      normalized.contains('invalid redirect uri')) {
+    return 'apple-redirect-uri';
+  }
+  if (normalized.contains('invalid client secret') ||
+      normalized.contains('expired client secret')) {
+    return 'apple-client-secret';
+  }
+  if (normalized.contains('invalid client') ||
+      normalized.contains('unauthorized client')) {
+    return 'apple-client';
+  }
+  if (normalized.contains('invalid grant')) {
+    return 'apple-grant';
+  }
+  if (normalized.contains('invalid oauth response from apple.com')) {
+    return 'apple-oauth-response';
+  }
+  if (normalized.contains('authorization code') &&
+      normalized.contains('expired')) {
+    return 'apple-code-expired';
+  }
+  if (normalized.contains('authorization code') &&
+      (normalized.contains('invalid') || normalized.contains('already used'))) {
+    return 'apple-code-invalid';
+  }
+  if (normalized.contains('error getting access token from apple')) {
+    return 'apple-token-exchange';
+  }
+  if (normalized.contains('configuration not found')) {
+    return 'firebase-configuration';
+  }
+  if (normalized.contains('internal error')) {
+    return 'firebase-internal-error';
+  }
+  return 'provider-detail-unavailable';
 }
 
 String? sanitizedAuthenticationDiagnosticMessage(

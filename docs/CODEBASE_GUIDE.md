@@ -487,7 +487,7 @@ This service performs permanent member account deletion. The work is separated f
 **What it does**
 
 - reauthenticates a password, Google, or Apple user;
-- revokes Apple authorization before deleting anything;
+- attempts to revoke Apple authorization before deleting anything; if revocation fails after successful reauthentication, requires an explicit user confirmation before proceeding without revocation;
 - removes private notification-read, push-device, and announcement-delivery documents;
 - removes or detaches every exactly owned student profile;
 - deletes the Firestore account document; and
@@ -505,7 +505,7 @@ The screen calls `AccountDeletionService`. Provider adapters obtain fresh proof;
 
 Deletion is resumable:
 
-1. Reauthenticate and, for Apple, revoke the authorization code.
+1. Reauthenticate and, for Apple, attempt to revoke the authorization code. A failed revocation stops deletion by default. Only an explicit second confirmation permits deletion to proceed, followed by instructions to manually revoke OTA access in Apple settings. Failed or cancelled reauthentication never offers this fallback.
 2. Delete private user subcollections in small batches so one request does not become too large.
 3. Mark `accountDeletionInProgress` on the user document.
 4. Update each profile whose account/profile fields prove ownership in its own transaction, recording `profileMutationId` so a retry can recognize completed work.
@@ -520,7 +520,7 @@ Review `lib/screens/account_deletion_screen.dart`, ownership helpers in `firesto
 
 **When you would change this file**
 
-Change it when adding an identity provider, adding private account data, changing family ownership, or changing deletion recovery. Order matters: Apple revocation and fresh proof must happen before destructive Firestore work, while Auth deletion stays last.
+Change it when adding an identity provider, adding private account data, changing family ownership, or changing deletion recovery. Order matters: fresh Apple proof and either successful revocation or the user's explicit manual-revocation fallback confirmation must precede destructive Firestore work, while Auth deletion stays last. The service defaults to refusing destructive deletion on revocation failure when no confirmation callback is supplied.
 
 ### Error adapter
 
