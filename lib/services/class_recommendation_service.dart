@@ -44,7 +44,7 @@ String classGuidanceFor(ClassSession session, StudentProfile student) {
   if (session.className == 'Black Belt' &&
       age < otaOlderStudentAge &&
       acceptsStudentBelt(session, student)) {
-    return 'Black Belt training matches this student's rank. Check with an '
+    return 'Black Belt training matches this student\'s rank. Check with an '
         'instructor if you are unsure about their age group.';
   }
   if (isTeenOrAdultClass(session)) {
