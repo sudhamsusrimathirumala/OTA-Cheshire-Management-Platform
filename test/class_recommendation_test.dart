@@ -70,6 +70,14 @@ void main() {
     belts: const ['Black'],
   );
 
+  ClassSession? recommend(Student profile, List<ClassSession> classes) =>
+      nextRecommendedClassFromSchedule(
+        {DateTime.monday: classes},
+        profile,
+        currentWeekday: DateTime.monday,
+        currentMinutes: 0,
+      );
+
   test('Little Tigers: ages 3-5 are eligible regardless of belt', () {
     final littleTigers = session(
       id: 'tigers',
@@ -201,14 +209,6 @@ void main() {
     nextRank: 'White',
     preferredClassGroupIds: preferred,
   );
-  ClassSession? recommend(Student profile, List<ClassSession> classes) =>
-      nextRecommendedClassFromSchedule(
-        {DateTime.monday: classes},
-        profile,
-        currentWeekday: DateTime.monday,
-        currentMinutes: 0,
-      );
-
   for (final age in [7, 10]) {
     test('age $age Black Belt has no beginner or placement fallback', () {
       final white = session(
