@@ -177,8 +177,93 @@ void main() {
       recommend(beginner(), [unspecified, teen, beginnerLevel]),
       same(beginnerLevel),
     );
-    expect(recommend(beginner(), [unspecified, teen]), same(unspecified));
+    expect(recommend(beginner(), [unspecified, teen]), isNull);
+    expect(isTypicallyRecommendedFor(unspecified, beginner()), isFalse);
   });
+  test('younger student is not sent to a different numbered belt level', () {
+    final levelOne = session(
+      id: 'level-one',
+      name: 'Level 1',
+      type: 'level-1',
+      hour: 16,
+      belts: const ['White', 'White-Yellow'],
+    );
+    final levelFour = session(
+      id: 'level-four',
+      name: 'Level 4',
+      type: 'level-4',
+      hour: 18,
+      belts: const ['Red-Green', 'Red-Blue', 'Red-Black'],
+    );
+    final youngerBlueBelt = student(older: false);
+
+    expect(recommend(youngerBlueBelt, [levelOne, levelFour]), isNull);
+    expect(isTypicallyRecommendedFor(levelOne, youngerBlueBelt), isFalse);
+    expect(isTypicallyRecommendedFor(levelFour, youngerBlueBelt), isFalse);
+  });
+
+  test('unconfigured class eligibility does not imply belt access', () {
+    final unconfiguredLevel = session(
+      id: 'unconfigured-level',
+      name: 'Level 1',
+      type: 'level-1',
+      hour: 16,
+    );
+    final unconfiguredAdult = session(
+      id: 'unconfigured-adult',
+      name: 'Adult',
+      type: 'adult',
+      hour: 18,
+    );
+
+    expect(recommend(student(older: false), [unconfiguredLevel]), isNull);
+    expect(recommend(beginner(), [unconfiguredAdult]), isNull);
+    expect(
+      isTypicallyRecommendedFor(unconfiguredLevel, student(older: false)),
+      isFalse,
+    );
+  });
+
+  test('younger black belt may receive a rank-matched Black Belt class', () {
+    final blackBelt = session(
+      id: 'black-belt',
+      name: 'Black Belt',
+      type: 'teen-adult',
+      hour: 17,
+      belts: const ['Black'],
+    );
+    final teenBelt = session(
+      id: 'teen-belt',
+      name: 'Teen & Black Belt',
+      type: 'teen-adult',
+      hour: 16,
+      belts: const ['Black'],
+    );
+    final profile = Student(
+      id: 'younger-black-belt',
+      name: 'Student',
+      locationId: 'cheshire',
+      belt: 'Black',
+      dateOfBirth: DateTime(2016, 1, 1),
+      stickerCount: 0,
+      stickersRequired: 0,
+      nextRank: 'Black',
+    );
+
+    expect(recommend(profile, [teenBelt, blackBelt]), same(blackBelt));
+  });
+
+  test('older student does not receive a rank-excluded generic fallback', () {
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'adult',
+      hour: 17,
+      belts: const ['White'],
+    );
+    expect(recommend(beginner(belt: 'Blue'), [adult]), isNull);
+  });
+
   test(
     'inactive and wrong-location classes cannot override eligibility or preference',
     () {
