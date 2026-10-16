@@ -20,10 +20,10 @@ bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
       !acceptsStudentBelt(session, student)) {
     return false;
   }
-  return const LocationTimeService().ageForStudent(student) >=
-          otaOlderStudentAge
+  final age = const LocationTimeService().ageForStudent(student);
+  return age >= otaOlderStudentAge
       ? isTeenOrAdultClass(session)
-      : isNumberedLevelClass(session);
+      : isNumberedLevelClass(session) || session.className == 'Black Belt';
 }
 
 // Normalize spelling only; unknown ranks do not become beginner ranks.
@@ -40,8 +40,15 @@ bool acceptsStudentBelt(ClassSession session, StudentProfile student) =>
     );
 
 String classGuidanceFor(ClassSession session, StudentProfile student) {
+  final age = const LocationTimeService().ageForStudent(student);
+  if (session.className == 'Black Belt' &&
+      age < otaOlderStudentAge &&
+      acceptsStudentBelt(session, student)) {
+    return 'Black Belt training matches this student's rank. Check with an '
+        'instructor if you are unsure about their age group.';
+  }
   if (isTeenOrAdultClass(session)) {
-    if (student.age < otaOlderStudentAge) {
+    if (age < otaOlderStudentAge) {
       return 'This class is usually attended by teens and adults. Check with an instructor if you are unsure whether it is the best fit.';
     }
     return 'Usually attended by teens and adults.';
@@ -50,7 +57,7 @@ String classGuidanceFor(ClassSession session, StudentProfile student) {
     final level = RegExp(
       r'Level [1-4]',
     ).firstMatch(session.className)?.group(0);
-    if (student.age >= otaOlderStudentAge) {
+    if (age >= otaOlderStudentAge) {
       return 'Older students may still choose this class when it better fits their comfort or schedule.';
     }
     return level == null
