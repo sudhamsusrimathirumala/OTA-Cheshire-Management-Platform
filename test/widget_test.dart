@@ -600,7 +600,7 @@ void main() {
     await tester.tap(find.text('Monday').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('Little Tiger (Age 3-5)'), findsOneWidget);
+    expect(find.text('Little Tigers'), findsOneWidget);
     expect(find.text('Active'), findsWidgets);
     expect(find.text('Edit'), findsWidgets);
     expect(find.text('Delete'), findsWidgets);
@@ -1744,7 +1744,7 @@ void main() {
     () {
       final mondayClasses = sampleSummerSchedule[DateTime.monday]!;
       final ineligibleClass = mondayClasses.firstWhere(
-        (session) => session.className == 'Little Tiger (Age 3-5)',
+        (session) => session.className == 'Little Tigers',
       );
       final eligibleClass = mondayClasses.firstWhere(
         (session) => session.className == 'Teen & Black Belt',
