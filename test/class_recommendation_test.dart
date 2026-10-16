@@ -346,6 +346,9 @@ void main() {
     );
 
     expect(recommend(profile, [teenBelt, blackBelt]), same(blackBelt));
+    expect(isTypicallyRecommendedFor(blackBelt, profile), isTrue);
+    expect(isTypicallyRecommendedFor(teenBelt, profile), isFalse);
+    expect(classGuidanceFor(blackBelt, profile), contains('matches'));
   });
 
   test('older student does not receive a rank-excluded generic fallback', () {
