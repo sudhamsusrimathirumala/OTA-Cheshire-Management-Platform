@@ -154,6 +154,9 @@ class _AdminGeneralResourcesScreenState
         return;
       }
 
+    if (!result.isEditing && result.action == _ResourceSaveAction.draft) {
+      setState(() => _selectedFilter = _ResourceFilter.draft);
+    }
       final message = result.isEditing
           ? 'Resource updated.'
           : switch (result.action) {
