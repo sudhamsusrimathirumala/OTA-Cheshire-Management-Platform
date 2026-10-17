@@ -1085,8 +1085,11 @@ test('real admin can duplicate published content into independent draft document
   const noticeCopy = doc(collection(db, 'announcements'));
   await assertSucceeds(setDoc(notice, original));
   await assertSucceeds(setDoc(noticeCopy, {
-    ...original, status: 'draft', createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(), publishedAt: undefined,
+    ...Object.fromEntries(
+      Object.entries(original).filter(([field]) => field !== 'publishedAt'),
+    ),
+    status: 'draft', createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   }));
   const noticeResult = (await getDoc(noticeCopy)).data();
   assert.equal(noticeResult.status, 'draft');
