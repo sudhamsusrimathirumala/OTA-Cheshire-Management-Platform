@@ -952,17 +952,11 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
         const SizedBox(height: 8),
         _SelectedTargetList(
           emptyMessage: 'No class groups selected.',
-          selectedLabels: [
+          selectedItems: [
             for (final classTypeId in _sortedValues(_targetClassTypeIds))
-              _classGroupLabelFor(classTypeId),
+              (id: classTypeId, label: _classGroupLabelFor(classTypeId)),
           ],
-          onRemove: (label) {
-            final classType = classTypes.firstWhere(
-              (option) => option.label == label,
-              orElse: () => _TargetOption(id: label, label: label),
-            );
-            setState(() => _targetClassTypeIds.remove(classType.id));
-          },
+          onRemove: (id) => setState(() => _targetClassTypeIds.remove(id)),
         ),
       ],
     );
@@ -1022,16 +1016,13 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
         const SizedBox(height: 8),
         _SelectedTargetList(
           emptyMessage: 'No students selected.',
-          selectedLabels: [
+          selectedItems: [
             for (final student in _studentOptions())
-              if (_targetStudentProfileIds.contains(student.id)) student.name,
+              if (_targetStudentProfileIds.contains(student.id))
+                (id: student.id, label: student.name),
           ],
-          onRemove: (name) {
-            final student = _studentOptions().firstWhere(
-              (student) => student.name == name,
-            );
-            setState(() => _targetStudentProfileIds.remove(student.id));
-          },
+          onRemove: (id) =>
+              setState(() => _targetStudentProfileIds.remove(id)),
         ),
       ],
     );
@@ -1101,7 +1092,8 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
     }
 
     final availableProfiles = _studentOptions().map((p) => p.id).toSet();
-    if (_targetStudentProfileIds.any((id) => !availableProfiles.contains(id))) {
+    if ((_audience == _Audience.students || _audience == _Audience.preserved) &&
+        _targetStudentProfileIds.any((id) => !availableProfiles.contains(id))) {
       setState(
         () => _validationMessage =
             'Review targeting: a selected student is no longer active at this location.',
@@ -1489,17 +1481,17 @@ class _AudienceHint extends StatelessWidget {
 class _SelectedTargetList extends StatelessWidget {
   const _SelectedTargetList({
     required this.emptyMessage,
-    required this.selectedLabels,
+    required this.selectedItems,
     required this.onRemove,
   });
 
   final String emptyMessage;
-  final List<String> selectedLabels;
+  final List<({String id, String label})> selectedItems;
   final ValueChanged<String> onRemove;
 
   @override
   Widget build(BuildContext context) {
-    if (selectedLabels.isEmpty) {
+    if (selectedItems.isEmpty) {
       return _AudienceHint(message: emptyMessage);
     }
 
@@ -1511,23 +1503,23 @@ class _SelectedTargetList extends StatelessWidget {
       ),
       child: Column(
         children: [
-          for (final label in selectedLabels) ...[
+          for (final (index, item) in selectedItems.indexed) ...[
             ListTile(
               dense: true,
               title: Text(
-                label,
+                item.label,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: OtaColors.ink,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               trailing: IconButton(
-                onPressed: () => onRemove(label),
+                onPressed: () => onRemove(item.id),
                 tooltip: 'Remove',
                 icon: const Icon(Icons.close_rounded),
               ),
             ),
-            if (label != selectedLabels.last)
+            if (index < selectedItems.length - 1)
               const Divider(height: 1, color: Color(0xFFE4E7EC)),
           ],
         ],
