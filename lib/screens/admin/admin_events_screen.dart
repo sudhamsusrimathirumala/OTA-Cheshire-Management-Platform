@@ -719,7 +719,6 @@ class _DateBadge extends StatelessWidget {
 class _EventFormSheetState extends State<_EventFormSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _notesController;
   late _EventType _eventType;
   DateTime? _startDateTime;
   DateTime? _endDateTime;
@@ -772,7 +771,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     _registrationDeadline = widget.duplicate
         ? null
         : event?.registrationDeadline;
-    _notesController = TextEditingController();
     _eventType = _eventTypeForId(event?.eventType);
     _primaryRegistrationResourceId = initialEventResourceId(
       event,
@@ -786,7 +784,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _notesController.dispose();
     super.dispose();
   }
 
@@ -886,12 +883,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
               ),
               const SizedBox(height: 16),
               _buildResourceLinkingSection(),
-              const SizedBox(height: 10),
-              _AdminTextField(
-                controller: _notesController,
-                label: 'Optional notes',
-                maxLines: 3,
-              ),
               const SizedBox(height: 16),
               if (_validationMessage != null) ...[
                 _ValidationMessage(message: _validationMessage!),
@@ -1088,7 +1079,6 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   String get _formFingerprint => [
     _titleController.text,
     _descriptionController.text,
-    _notesController.text,
     _eventType.name,
     _startDateTime?.toIso8601String() ?? '',
     _endDateTime?.toIso8601String() ?? '',
