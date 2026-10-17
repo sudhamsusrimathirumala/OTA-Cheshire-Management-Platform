@@ -1070,6 +1070,67 @@ test('admin content writes accept app schemas and reject injected fields', async
   }));
 });
 
+test('real admin can duplicate published content into independent draft documents', async () => {
+  await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
+  const db = auth('admin');
+  const now = new Date();
+  const original = {
+    title: 'Notice', summary: 'Summary', body: 'Body',
+    announcementType: 'general', priority: 'important', requiresAction: false,
+    status: 'published', audienceType: 'everyone', locationId: 'cheshire',
+    targetBelts: [], targetClassTypeIds: [], targetStudentProfileIds: [],
+    targetUserIds: [], createdAt: now, updatedAt: now, publishedAt: now,
+  };
+  const notice = doc(db, 'announcements', 'source-notice');
+  const noticeCopy = doc(collection(db, 'announcements'));
+  await assertSucceeds(setDoc(notice, original));
+  await assertSucceeds(setDoc(noticeCopy, {
+    ...original, status: 'draft', createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(), publishedAt: undefined,
+  }));
+  const noticeResult = (await getDoc(noticeCopy)).data();
+  assert.equal(noticeResult.status, 'draft');
+  assert.equal(noticeResult.publishedAt, undefined);
+  assert.equal((await getDoc(notice)).data().status, 'published');
+
+  const resource = {
+    title: 'Form', description: 'Registration', resourceSection: 'general',
+    category: 'registration', linkUrl: 'https://example.com/form',
+    locationId: 'cheshire', isPublished: true, isArchived: false,
+    createdAt: now, updatedAt: now,
+  };
+  const resourceOriginal = doc(db, 'resources', 'source-form');
+  const resourceCopy = doc(collection(db, 'resources'));
+  await assertSucceeds(setDoc(resourceOriginal, resource));
+  await assertSucceeds(setDoc(resourceCopy, {
+    ...resource, isPublished: false, isArchived: false,
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  assert.equal((await getDoc(resourceCopy)).data().isPublished, false);
+  assert.equal((await getDoc(resourceOriginal)).data().isPublished, true);
+
+  const event = {
+    title: 'Seminar', description: 'Source event', locationId: 'cheshire',
+    eventType: 'seminar',
+    startDateTime: new Date('2027-01-04T15:00:00Z'),
+    endDateTime: new Date('2027-01-04T16:00:00Z'),
+    linkedResourceIds: [], isPublished: true, isArchived: false,
+    reminders: {mode: 'none', offsetsMinutes: []},
+    createdAt: now, updatedAt: now,
+  };
+  const eventOriginal = doc(db, 'events', 'source-seminar');
+  const eventCopy = doc(collection(db, 'events'));
+  await assertSucceeds(setDoc(eventOriginal, event));
+  await assertSucceeds(setDoc(eventCopy, {
+    ...event, isPublished: false,
+    startDateTime: new Date('2027-01-11T15:00:00Z'),
+    endDateTime: new Date('2027-01-11T16:00:00Z'),
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  assert.equal((await getDoc(eventCopy)).data().isPublished, false);
+  assert.equal((await getDoc(eventOriginal)).data().isPublished, true);
+});
+
 test('admins may archive legacy content without editing its other fields', async () => {
   await seedAccount({uid: 'admin', role: 'admin', profileIds: []});
   await env.withSecurityRulesDisabled(async (context) => {
