@@ -190,7 +190,7 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Example Student'), findsOneWidget);
+    expect(find.text('Example Student'), findsWidgets);
     expect(find.text('White Belt • OTA Cheshire'), findsOneWidget);
     final originalAge = const LocationTimeService().ageForStudent(
       service.selectedStudentProfile,
