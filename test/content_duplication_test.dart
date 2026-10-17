@@ -115,7 +115,11 @@ void main() {
       );
       expect(copy.isPublished, isFalse);
       expect(copy.schedule!.rule.frequency, 'daily');
-      expect(copy.schedule!.occurrences, hasLength(2));
+      // Copying the first session one day later shifts the whole series,
+      // rather than truncating the final day from the original date range.
+      expect(copy.schedule!.rule.startDate, '2027-01-05');
+      expect(copy.schedule!.rule.endDate, '2027-01-07');
+      expect(copy.schedule!.occurrences, hasLength(3));
       expect(
         copy.schedule!.occurrences.every((o) => !o.canceled && !o.overridden),
         isTrue,
