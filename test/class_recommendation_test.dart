@@ -142,14 +142,12 @@ void main() {
     expect(isTypicallyRecommendedFor(level1, profile), isFalse);
   });
 
-  test('changing a Red Belt test profile from age 9 to 17 cannot recommend Black Belt', () {
-    // Mirrors the production session fields inspected in Firestore.
+  test('changing Red Belt from 9 to 17 never recommends Black Belt', () {
     final levelThree = session(
       id: 'level-three',
       name: 'Level 3',
       type: 'level-3',
       hour: 16,
-      location: 'cheshire',
       belts: const ['Blue', 'Blue-Red', 'Red', 'Red-Yellow'],
     );
     final blackBelt = session(
@@ -157,91 +155,201 @@ void main() {
       name: 'Black Belt',
       type: 'teen-adult',
       hour: 17,
-      location: 'cheshire',
       belts: const ['Black'],
     );
-
-    for (final age in [9, 17]) {
-      final profile = child(age, belt: 'Red');
-      expect(
-        recommend(profile, [blackBelt, levelThree]),
-        same(levelThree),
-        reason: 'An older Red Belt cannot become Black Belt eligible.',
-      );
-      expect(isTypicallyRecommendedFor(blackBelt, profile), isFalse);
-      expect(blackBelt.isEligibleFor(profile), isFalse);
-      expect(profile.preferredClassGroupIds, isEmpty);
-    }
-
-    // Older students may instead receive a genuinely belt-eligible class.
     final adult = session(
-      id: 'adult-red',
+      id: 'adult',
       name: 'Adult',
       type: 'teen-adult',
       hour: 18,
-      belts: const ['Red'],
+    );
+    expect(
+      recommend(child(9, belt: 'Red'), [blackBelt, levelThree, adult]),
+      same(levelThree),
     );
     expect(
       recommend(child(17, belt: 'Red'), [blackBelt, levelThree, adult]),
       same(adult),
     );
     expect(
-      recommend(child(17, belt: 'Red'), [blackBelt]),
+      recommend(child(17, belt: 'Red'), [blackBelt, levelThree]),
       isNull,
     );
-  });
-
-  test('younger and older students receive central recommendations', () {
-    final schedule = {
-      DateTime.monday: [level, teen],
-    };
     expect(
-      nextRecommendedClassFromSchedule(
-        schedule,
-        student(older: false),
-        currentWeekday: DateTime.monday,
-        currentMinutes: 0,
-      ),
-      same(level),
-    );
-    expect(
-      nextRecommendedClassFromSchedule(
-        schedule,
-        student(older: true),
-        currentWeekday: DateTime.monday,
-        currentMinutes: 0,
-      ),
-      same(level),
+      isTypicallyRecommendedFor(blackBelt, child(17, belt: 'Red')),
+      isFalse,
     );
   });
 
-  test('preferred class overrides age and belt recommendations', () {
-    final younger = student(
-      older: false,
-      preferred: const ['teen-black-belt-standard'],
+  test('age 12-18 gets earliest upcoming Teen or Adult regardless of belt', () {
+    final teenEarly = session(
+      id: 'teen-early',
+      name: 'Teen & Black Belt',
+      type: 'teen-adult',
+      hour: 16,
+      belts: const ['Black'],
     );
-    final older = student(older: true, preferred: const ['level-3-standard']);
-    final schedule = {
-      DateTime.monday: [level, teen],
-    };
+    final adultLater = session(
+      id: 'adult-later',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 18,
+    );
+    final blackBelt = session(
+      id: 'black-belt',
+      name: 'Black Belt',
+      type: 'teen-adult',
+      hour: 15,
+      belts: const ['Black'],
+    );
+
+    for (final age in [12, 13, 17, 18]) {
+      final profile = child(age, belt: 'Red');
+      expect(recommend(profile, [adultLater, blackBelt, teenEarly]), same(teenEarly));
+      expect(isTypicallyRecommendedFor(teenEarly, profile), isTrue);
+      expect(isTypicallyRecommendedFor(adultLater, profile), isTrue);
+      expect(isTypicallyRecommendedFor(blackBelt, profile), isFalse);
+      expect(classGuidanceFor(teenEarly, profile), contains('12-18'));
+    }
+    // "Next" means a future start, not a class already in progress.
     expect(
       nextRecommendedClassFromSchedule(
-        schedule,
-        younger,
+        {DateTime.monday: [teenEarly, adultLater]},
+        child(17, belt: 'Red'),
         currentWeekday: DateTime.monday,
-        currentMinutes: 0,
+        currentMinutes: 16 * 60 + 5,
       ),
+      same(adultLater),
+    );
+    // Return to the next week when today's qualifying sessions have passed.
+    expect(
+      nextRecommendedClassFromSchedule(
+        {DateTime.monday: [teenEarly, adultLater]},
+        child(17, belt: 'Red'),
+        currentWeekday: DateTime.monday,
+        currentMinutes: 19 * 60,
+      ),
+      same(teenEarly),
+    );
+  });
+
+  test('19+ only gets Adult, never Teen & Black Belt', () {
+    final teen = session(
+      id: 'teen',
+      name: 'Teen & Black Belt',
+      type: 'teen-adult',
+      hour: 15,
+    );
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 18,
+    );
+    for (final age in [19, 20, 30, 60]) {
+      final profile = child(age, belt: 'Black');
+      expect(recommend(profile, [teen, adult]), same(adult));
+      expect(recommend(profile, [teen]), isNull);
+      expect(isTypicallyRecommendedFor(adult, profile), isTrue);
+      expect(isTypicallyRecommendedFor(teen, profile), isFalse);
+    }
+  });
+
+  test('age 6-11 is belt-based; age below 3 has no recommendation', () {
+    final levelThree = session(
+      id: 'level-three',
+      name: 'Level 3',
+      type: 'level-3',
+      hour: 16,
+      belts: const ['Red'],
+    );
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 15,
+    );
+    for (final age in [6, 9, 11]) {
+      expect(recommend(child(age, belt: 'Red'), [adult, levelThree]), same(levelThree));
+      expect(recommend(child(age, belt: 'Blue'), [adult, levelThree]), isNull);
+    }
+    expect(recommend(child(2, belt: 'Red'), [adult, levelThree]), isNull);
+  });
+
+  test('age-group priority prevents incompatible saved preferences', () {
+    final little = session(
+      id: 'little',
+      name: 'Little Tigers',
+      type: 'little-tiger',
+      hour: 16,
+    );
+    final teen = session(
+      id: 'teen',
+      name: 'Teen & Black Belt',
+      type: 'teen-adult',
+      hour: 17,
+    );
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 18,
+    );
+    final level = session(
+      id: 'level',
+      name: 'Level 3',
+      type: 'level-3',
+      hour: 15,
+      belts: const ['Red'],
+    );
+
+    expect(recommend(child(4, preferred: ['level-3-standard']), [level, little]), same(little));
+    expect(
+      recommend(child(17, belt: 'Red', preferred: ['level-3-standard']),
+          [level, teen, adult]),
       same(teen),
     );
     expect(
-      nextRecommendedClassFromSchedule(
-        schedule,
-        older,
-        currentWeekday: DateTime.monday,
-        currentMinutes: 0,
-      ),
-      same(level),
+      recommend(child(19, preferred: ['teen-adult-standard']), [teen, adult]),
+      same(adult),
     );
+  });
+
+  test('dashboard wrapper and age-based selection stay consistent', () {
+    final levelThree = session(
+      id: 'level-three',
+      name: 'Level 3',
+      type: 'level-3',
+      hour: 16,
+      belts: const ['Blue'],
+    );
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 18,
+    );
+    final schedule = {DateTime.monday: [levelThree, teen, adult]};
+    for (final profile in [student(older: false), student(older: true)]) {
+      expect(
+        nextEligibleClassFromSchedule(
+          schedule,
+          profile,
+          currentWeekday: DateTime.monday,
+          currentMinutes: 0,
+        ),
+        same(nextRecommendedClassFromSchedule(
+          schedule,
+          profile,
+          currentWeekday: DateTime.monday,
+          currentMinutes: 0,
+        )),
+      );
+    }
+    expect(recommend(student(older: false), [levelThree, teen, adult]),
+        same(levelThree));
+    expect(recommend(student(older: true), [levelThree, teen, adult]),
+        same(adult));
   });
 
   Student beginner({
@@ -337,57 +445,47 @@ void main() {
     );
   });
 
-  test(
-    'older beginner never automatically gets an excluded black belt class',
-    () {
-      expect(recommend(beginner(), [teen]), isNull);
-      expect(isTypicallyRecommendedFor(teen, beginner()), isFalse);
-    },
-  );
-  test(
-    'older beginner explicit black belt preference remains authoritative',
-    () {
-      expect(
-        recommend(beginner(preferred: ['teen-black-belt-standard']), [teen]),
-        same(teen),
-      );
-    },
-  );
-  test('eligible teen beginner and advanced classes are recommended', () {
-    final adultBeginner = session(
-      id: 'beginner',
+  test('teen recommendation has no belt requirement', () {
+    final teenEarly = session(
+      id: 'teen-early',
+      name: 'Teen & Black Belt',
+      type: 'teen-adult',
+      hour: 16,
+      belts: const ['Black'],
+    );
+    final adultLater = session(
+      id: 'adult-later',
       name: 'Adult',
-      type: 'adult',
+      type: 'teen-adult',
       hour: 19,
-      belts: ['White'],
     );
-    expect(
-      recommend(beginner(belt: 'White'), [teen, adultBeginner]),
-      same(adultBeginner),
-    );
-    expect(recommend(beginner(belt: 'Black'), [teen]), same(teen));
-  });
-  test('numbered belt match beats unspecified and excluded teen classes', () {
-    final beginnerLevel = session(
-      id: 'beginner',
-      name: 'Level 1',
-      type: 'level-1',
-      hour: 19,
-      belts: ['No Belt'],
-    );
-    final unspecified = session(
-      id: 'unspecified',
-      name: 'Adult',
-      type: 'adult',
+    final ineligibleBeltClass = session(
+      id: 'black',
+      name: 'Black Belt',
+      type: 'teen-adult',
       hour: 15,
+      belts: const ['Black'],
     );
     expect(
-      recommend(beginner(), [unspecified, teen, beginnerLevel]),
-      same(beginnerLevel),
+      recommend(beginner(), [ineligibleBeltClass, teenEarly, adultLater]),
+      same(teenEarly),
     );
-    expect(recommend(beginner(), [unspecified, teen]), isNull);
-    expect(isTypicallyRecommendedFor(unspecified, beginner()), isFalse);
+    expect(recommend(beginner(), [ineligibleBeltClass]), isNull);
+    expect(isTypicallyRecommendedFor(teenEarly, beginner()), isTrue);
+    expect(isTypicallyRecommendedFor(ineligibleBeltClass, beginner()), isFalse);
   });
+
+  test('age-based adult recommendation needs no belt configuration', () {
+    final adult = session(
+      id: 'adult',
+      name: 'Adult',
+      type: 'adult',
+      hour: 18,
+    );
+    expect(recommend(beginner(), [adult]), same(adult));
+    expect(isTypicallyRecommendedFor(adult, beginner()), isTrue);
+  });
+
   test('younger student is not sent to a different numbered belt level', () {
     final levelOne = session(
       id: 'level-one',
@@ -410,26 +508,16 @@ void main() {
     expect(isTypicallyRecommendedFor(levelFour, youngerBlueBelt), isFalse);
   });
 
-  test('unconfigured class eligibility does not imply belt access', () {
+  test('unconfigured numbered classes are still not belt-eligible', () {
     final unconfiguredLevel = session(
       id: 'unconfigured-level',
       name: 'Level 1',
       type: 'level-1',
       hour: 16,
     );
-    final unconfiguredAdult = session(
-      id: 'unconfigured-adult',
-      name: 'Adult',
-      type: 'adult',
-      hour: 18,
-    );
-
-    expect(recommend(student(older: false), [unconfiguredLevel]), isNull);
-    expect(recommend(beginner(), [unconfiguredAdult]), isNull);
-    expect(
-      isTypicallyRecommendedFor(unconfiguredLevel, student(older: false)),
-      isFalse,
-    );
+    expect(recommend(child(10, belt: 'White'), [unconfiguredLevel]), isNull);
+    expect(isTypicallyRecommendedFor(unconfiguredLevel, child(10, belt: 'White')),
+        isFalse);
   });
 
   test('younger black belt may receive a rank-matched Black Belt class', () {
@@ -464,17 +552,6 @@ void main() {
     expect(classGuidanceFor(blackBelt, profile), contains('matches'));
   });
 
-  test('older student does not receive a rank-excluded generic fallback', () {
-    final adult = session(
-      id: 'adult',
-      name: 'Adult',
-      type: 'adult',
-      hour: 17,
-      belts: const ['White'],
-    );
-    expect(recommend(beginner(belt: 'Blue'), [adult]), isNull);
-  });
-
   test(
     'inactive and wrong-location classes cannot override eligibility or preference',
     () {
@@ -504,14 +581,14 @@ void main() {
     },
   );
 
-  test('guidance is advisory for nontraditional class choices', () {
+  test('guidance explains age-first recommendations', () {
     expect(
       classGuidanceFor(level, student(older: true)),
-      contains('may still choose'),
+      contains('generally recommended'),
     );
     expect(
       classGuidanceFor(teen, student(older: false)),
-      contains('usually attended'),
+      contains('12-18'),
     );
   });
 
