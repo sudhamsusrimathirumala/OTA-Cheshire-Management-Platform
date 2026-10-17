@@ -118,4 +118,65 @@ void main() {
     expect(copy.occurrences, hasLength(2));
     expect(copy.occurrences.every((o) => !o.canceled && !o.overridden), isTrue);
   });
+  testWidgets('weekly duplicates rebase weekdays and customized times', (
+    tester,
+  ) async {
+    final key = GlobalKey<EventScheduleEditorState>();
+    final source = EventSchedule.generate(
+      const EventRecurrence(
+        frequency: 'weekly',
+        startDate: '2027-01-04', // Monday
+        endDate: '2027-01-06',
+        startMinutes: 540,
+        endMinutes: 900,
+        weekdays: [1, 3],
+        weekdayTimes: {
+          3: [600, 960, 0],
+        },
+      ),
+      location.timeZoneIdFor(locationId),
+      now: DateTime.utc(2026),
+    );
+
+    Widget editor({DateTime? start, DateTime? end}) => MaterialApp(
+      home: Scaffold(
+        body: EventScheduleEditor(
+          key: key,
+          locationId: locationId,
+          initial: source,
+          duplicate: true,
+          start: start,
+          end: end,
+          onChanged: (_) {},
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(editor());
+    // Jan 4, 2028 is Tuesday: the original Monday/Wednesday sessions become
+    // Tuesday/Thursday, while the second day's special time is preserved.
+    await tester.pumpWidget(
+      editor(
+        start: DateTime.utc(2028, 1, 4, 14),
+        end: DateTime.utc(2028, 1, 4, 20),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final copy = key.currentState!.buildSchedule()!;
+    expect(copy.rule.startDate, '2028-01-04');
+    expect(copy.rule.endDate, '2028-01-06');
+    expect(copy.rule.weekdays, [2, 4]);
+    expect(copy.rule.weekdayTimes[4], [600, 960, 0]);
+    expect(copy.occurrences, hasLength(2));
+    expect(
+      const LocationTimeService().toLocationTime(
+        copy.occurrences.first.start,
+        locationId,
+      ).weekday,
+      DateTime.tuesday,
+    );
+  });
+
+
 }
