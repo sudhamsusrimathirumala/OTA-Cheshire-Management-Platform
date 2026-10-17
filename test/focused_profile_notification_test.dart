@@ -3,6 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/class_session.dart';
 import 'package:ota_cheshire_management_platform/models/notification_item.dart';
 import 'package:ota_cheshire_management_platform/models/student_profile.dart';
+import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
+import 'package:ota_cheshire_management_platform/screens/student_dashboard_screen.dart';
+import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
 import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/screens/notification_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
@@ -173,6 +176,55 @@ void main() {
         isNot(fingerprint(account())));
   });
 
+  testWidgets('Profile rebuilds after a profile birthday and belt change', (
+    tester,
+  ) async {
+    final service = _RealtimeMemberFixture();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(
+      home: ProfileScreen(
+        managementAvailableOverride: false,
+        accountDeletionAvailableOverride: false,
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Example Student'), findsOneWidget);
+    expect(find.text('White Belt • OTA Cheshire'), findsOneWidget);
+    final originalAge = const LocationTimeService().ageForStudent(
+      service.selectedStudentProfile,
+    );
+    expect(find.text('$originalAge'), findsOneWidget);
+
+    service.updateProfile(belt: 'Red', dateOfBirth: DateTime(2009, 3, 27));
+    await tester.pumpAndSettle();
+    expect(find.text('Red Belt • OTA Cheshire'), findsOneWidget);
+    expect(find.text('White Belt • OTA Cheshire'), findsNothing);
+    final updatedAge = const LocationTimeService().ageForStudent(
+      service.selectedStudentProfile,
+    );
+    expect(updatedAge, isNot(originalAge));
+    expect(find.text('$updatedAge'), findsOneWidget);
+  });
+
+  testWidgets('Dashboard rebuilds after active profile belt changes', (
+    tester,
+  ) async {
+    final service = _RealtimeMemberFixture();
+    appDataService = service;
+    addTearDown(initializeMockAppDataServiceForTests);
+
+    await tester.pumpWidget(const MaterialApp(home: StudentDashboardScreen()));
+    await tester.pumpAndSettle();
+    expect(find.text('Viewing Example Student • White Belt'), findsOneWidget);
+
+    service.updateProfile(belt: 'Red', dateOfBirth: DateTime(2009, 3, 27));
+    await tester.pumpAndSettle();
+    expect(find.text('Viewing Example Student • Red Belt'), findsOneWidget);
+    expect(find.text('Viewing Example Student • White Belt'), findsNothing);
+  });
+
   test('preferred options deduplicate weekdays and keep exact groups', () {
     final schedule = <int, List<ClassSession>>{
       DateTime.monday: [
@@ -305,6 +357,53 @@ void main() {
       isFalse,
     );
   });
+}
+
+class _RealtimeMemberFixture extends MockAppDataService {
+  StudentProfile _profile = StudentProfile(
+    id: 'member-profile',
+    name: 'Example Student',
+    locationId: 'ota-cheshire',
+    belt: 'White',
+    dateOfBirth: DateTime(2017, 8, 26),
+    stickerCount: 0,
+    stickersRequired: 0,
+    nextRank: 'White-Yellow',
+    updatedAt: DateTime.utc(2026, 10, 13),
+  );
+
+  @override
+  StudentProfile get selectedStudentProfile => _profile;
+
+  @override
+  List<StudentProfile> get linkedStudentProfiles => [_profile];
+
+  @override
+  UserAccount get currentUserAccount => const UserAccount(
+    id: 'member',
+    firstName: 'Example',
+    lastName: 'Parent',
+    email: 'parent@example.com',
+    role: UserAccountRole.parent,
+    linkedStudentProfileIds: ['member-profile'],
+    selectedStudentProfileId: 'member-profile',
+    locationId: 'ota-cheshire',
+  );
+
+  void updateProfile({required String belt, required DateTime dateOfBirth}) {
+    _profile = StudentProfile(
+      id: _profile.id,
+      name: _profile.name,
+      locationId: _profile.locationId,
+      belt: belt,
+      dateOfBirth: dateOfBirth,
+      stickerCount: _profile.stickerCount,
+      stickersRequired: _profile.stickersRequired,
+      nextRank: _profile.nextRank,
+      updatedAt: _profile.updatedAt,
+    );
+    notifyListeners();
+  }
 }
 
 ClassSession session(String id, String name, int hour) => ClassSession(
