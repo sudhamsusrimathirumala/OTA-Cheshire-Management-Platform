@@ -233,6 +233,101 @@ void main() {
     );
   });
 
+  test('production Adult Class is eligible at 17 and 19 regardless of belt', () {
+    // Mirrors the classSessions document on the live academy schedule:
+    // className: Adult Class, classTypeId: adult-class,
+    // bulkGroupId: adult-class-standard, weekday: Tuesday, 19:45-20:30.
+    final adultClass = ClassSession(
+      id: 'production-adult',
+      className: 'Adult Class',
+      classTypeId: 'adult-class',
+      bulkGroupId: 'adult-class-standard',
+      locationId: 'cheshire',
+      startTime: DateTime(2026, 10, 20, 19, 45),
+      endTime: DateTime(2026, 10, 20, 20, 30),
+      startMinutes: 1185,
+      endMinutes: 1230,
+      eligibleBelts: const ['No Belt', 'Red', 'Black'],
+      description: '',
+    );
+    expect(isAdultClass(adultClass), isTrue);
+    for (final age in [12, 17, 18, 19, 26]) {
+      final profile = child(age, belt: 'Red');
+      expect(isTypicallyRecommendedFor(adultClass, profile), isTrue);
+      expect(
+        nextRecommendedClassFromSchedule(
+          {DateTime.tuesday: [adultClass]},
+          profile,
+          currentWeekday: DateTime.monday,
+          currentMinutes: 20 * 60,
+        ),
+        same(adultClass),
+      );
+    }
+    expect(isTypicallyRecommendedFor(adultClass, child(11)), isFalse);
+  });
+
+  test('teen and adult Class suffixes keep earliest upcoming ordering', () {
+    final teenClass = session(
+      id: 'teen-class',
+      name: 'Teen & Black Belt Class',
+      type: 'teen-black-belt-class',
+      hour: 16,
+      belts: const ['Black'],
+    );
+    final alternateTeen = session(
+      id: 'teen-only',
+      name: 'Teen Class',
+      type: 'teen-class',
+      hour: 17,
+    );
+    final adultClass = session(
+      id: 'adult-class',
+      name: 'Adult Class',
+      type: 'adult-class',
+      hour: 18,
+      belts: const ['White'],
+    );
+    final blackBeltClass = session(
+      id: 'black-belt-class',
+      name: 'Black Belt Class',
+      type: 'teen-adult',
+      hour: 15,
+      belts: const ['Black'],
+    );
+    final sparringClass = session(
+      id: 'sparring-class',
+      name: 'Teen/Adult Sparring Class',
+      type: 'teen-adult-sparring',
+      hour: 14,
+    );
+    expect(isTeenClass(teenClass), isTrue);
+    expect(isTeenClass(alternateTeen), isTrue);
+    expect(isTeenClass(blackBeltClass), isFalse);
+    expect(isAdultClass(blackBeltClass), isFalse);
+    expect(isTeenClass(sparringClass), isFalse);
+    expect(isAdultClass(sparringClass), isFalse);
+
+    expect(
+      recommend(child(17, belt: 'Red'),
+          [adultClass, blackBeltClass, alternateTeen, teenClass, sparringClass]),
+      same(teenClass),
+    );
+    expect(
+      recommend(child(19, belt: 'Black'),
+          [adultClass, blackBeltClass, alternateTeen, teenClass, sparringClass]),
+      same(adultClass),
+    );
+    expect(
+      recommend(child(17, belt: 'Red'), [adultClass, blackBeltClass]),
+      same(adultClass),
+    );
+    expect(
+      classGuidanceFor(adultClass, child(17)),
+      contains('regardless of belt'),
+    );
+  });
+
   test('19+ only gets Adult, never Teen & Black Belt', () {
     final teen = session(
       id: 'teen',
