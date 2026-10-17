@@ -34,6 +34,8 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
   DateTime? _duplicateAnchorDate;
   bool _repeatEndManuallyEdited = false;
   bool _customDatesManuallyEdited = false;
+  bool _weekdaysManuallyEdited = false;
+  bool _weekdayTimesManuallyEdited = false;
   EventSchedule? _preview;
   String? _error;
 
@@ -88,6 +90,27 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
           original.customDates.map(
             (date) => eventDateKey(
               parseEventDate(date).add(Duration(days: delta)),
+            ),
+          ),
+        );
+    }
+    // Move weekday selections and weekday-specific times with the first
+    // session; otherwise a duplicate beginning on Tuesday could still run
+    // its original Monday schedule, omitting the chosen first session.
+    int shiftedWeekday(int weekday) => ((weekday + delta - 1) % 7) + 1;
+    if (!_weekdaysManuallyEdited) {
+      _weekdays
+        ..clear()
+        ..addAll(original.weekdays.map(shiftedWeekday));
+    }
+    if (!_weekdayTimesManuallyEdited) {
+      _times
+        ..clear()
+        ..addEntries(
+          original.weekdayTimes.entries.map(
+            (entry) => MapEntry(
+              shiftedWeekday(entry.key),
+              List<int>.from(entry.value),
             ),
           ),
         );
@@ -220,9 +243,14 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
                 FilterChip(
                   label: Text(_days[day - 1]),
                   selected: _weekdays.contains(day),
-                  onSelected: (v) => _change(
-                    () => v ? _weekdays.add(day) : _weekdays.remove(day),
-                  ),
+                  onSelected: (v) => _change(() {
+                    _weekdaysManuallyEdited = true;
+                    if (v) {
+                      _weekdays.add(day);
+                    } else {
+                      _weekdays.remove(day);
+                    }
+                  }),
                 ),
             ],
           ),
@@ -271,7 +299,10 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
                       ? null
                       : IconButton(
                           icon: const Icon(Icons.clear),
-                          onPressed: () => _change(() => _times.remove(day)),
+                          onPressed: () => _change(() {
+                            _weekdayTimesManuallyEdited = true;
+                            _times.remove(day);
+                          }),
                         ),
                   onTap: () async {
                     final start = await showTimePicker(
@@ -286,7 +317,10 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
                     if (end == null) return;
                     final a = start.hour * 60 + start.minute;
                     final b = end.hour * 60 + end.minute;
-                    _change(() => _times[day] = [a, b, b <= a ? 1 : 0]);
+                    _change(() {
+                      _weekdayTimesManuallyEdited = true;
+                      _times[day] = [a, b, b <= a ? 1 : 0];
+                    });
                   },
                 ),
           ],
