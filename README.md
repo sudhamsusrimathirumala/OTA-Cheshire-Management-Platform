@@ -355,6 +355,8 @@ The client registers a random installation ID only for an authenticated active m
 
 Each class has a stable `classTypeId` and `bulkGroupId`. Current groups distinguish Little Tigers, Levels 1–4, Black Belt, Teen & Black Belt, Adult, Teen/Adult Sparring, and Level 1/2 Sparring. Known legacy target IDs expand compatibly. The ambiguous old `teen-adult-standard` saved preference is deliberately not guessed; the member must select an exact current group.
 
+Automatic next-class recommendations use the academy-local current time and the selected student's age first: ages 3–5 are routed to Little Tigers regardless of belt; ages 6–11 are matched to a numbered level or Black Belt by belt; ages 12–18 receive whichever published Teen & Black Belt or Adult class starts next, irrespective of belt; ages 19+ receive Adult only. Ages under 3 have no automatic class. Classes whose start times have passed are skipped. A saved preferred class can affect automatic ordering only within the belt-eligible ages 6–11 group; it cannot bypass the age rule. Special sparring sessions are not automatic teen/adult recommendations. This policy does not rewrite academy class records in Firestore.
+
 The UI recommends and validates an existing active same-location class. The profile service rechecks class existence, activity, location, and exact group transactionally. Rules separately protect ownership and bound the saved list to zero or one syntactically safe ID without spending another Rules document read on the class.
 
 Admin individual-session create/edit/delete is live. Bulk schedule operations remain impact-preview only.
