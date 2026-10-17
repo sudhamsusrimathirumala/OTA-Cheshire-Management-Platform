@@ -143,6 +143,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
     }
 
     if (!useFirebase) {
+    if (!result.isEditing && result.action == _AnnouncementSaveAction.draft) {
+      setState(() => _selectedFilter = _AnnouncementFilter.draft);
+    }
       final mockMessage = switch (result.action) {
         _AnnouncementSaveAction.draft => 'Mock draft saved.',
         _AnnouncementSaveAction.publish => 'Mock announcement published.',
@@ -161,6 +164,9 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
         return;
       }
 
+    if (!result.isEditing && result.action == _AnnouncementSaveAction.draft) {
+      setState(() => _selectedFilter = _AnnouncementFilter.draft);
+    }
       final message = result.isEditing
           ? 'Announcement updated.'
           : switch (result.action) {
