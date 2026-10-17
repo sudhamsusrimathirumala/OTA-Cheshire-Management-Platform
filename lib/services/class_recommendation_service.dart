@@ -14,7 +14,7 @@ bool isNumberedLevelClass(ClassSession session) =>
 // Match specific names rather than all 'teen-adult' types, since the separate
 // Black Belt and sparring sessions must never enter the age-only group.
 String _normalizedRecommendationClassName(String name) {
-  final normalized = name.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
+  final normalized = name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   return normalized.endsWith(' class')
       ? normalized.substring(0, normalized.length - ' class'.length)
       : normalized;
