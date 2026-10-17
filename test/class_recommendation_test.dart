@@ -142,6 +142,55 @@ void main() {
     expect(isTypicallyRecommendedFor(level1, profile), isFalse);
   });
 
+  test('changing a Red Belt test profile from age 9 to 17 cannot recommend Black Belt', () {
+    // Mirrors the production session fields inspected in Firestore.
+    final levelThree = session(
+      id: 'level-three',
+      name: 'Level 3',
+      type: 'level-3',
+      hour: 16,
+      location: 'cheshire',
+      belts: const ['Blue', 'Blue-Red', 'Red', 'Red-Yellow'],
+    );
+    final blackBelt = session(
+      id: 'black-belt',
+      name: 'Black Belt',
+      type: 'teen-adult',
+      hour: 17,
+      location: 'cheshire',
+      belts: const ['Black'],
+    );
+
+    for (final age in [9, 17]) {
+      final profile = child(age, belt: 'Red');
+      expect(
+        recommend(profile, [blackBelt, levelThree]),
+        same(levelThree),
+        reason: 'An older Red Belt cannot become Black Belt eligible.',
+      );
+      expect(isTypicallyRecommendedFor(blackBelt, profile), isFalse);
+      expect(blackBelt.isEligibleFor(profile), isFalse);
+      expect(profile.preferredClassGroupIds, isEmpty);
+    }
+
+    // Older students may instead receive a genuinely belt-eligible class.
+    final adult = session(
+      id: 'adult-red',
+      name: 'Adult',
+      type: 'teen-adult',
+      hour: 18,
+      belts: const ['Red'],
+    );
+    expect(
+      recommend(child(17, belt: 'Red'), [blackBelt, levelThree, adult]),
+      same(adult),
+    );
+    expect(
+      recommend(child(17, belt: 'Red'), [blackBelt]),
+      isNull,
+    );
+  });
+
   test('younger and older students receive central recommendations', () {
     final schedule = {
       DateTime.monday: [level, teen],
