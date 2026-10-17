@@ -351,8 +351,8 @@ class _NextClassCard extends StatelessWidget {
       DashboardNextClassState.noEligibleClass => 'No Eligible Upcoming Class',
       DashboardNextClassState.found =>
         nextClass!.className.trim().toLowerCase().endsWith(' class')
-            ? nextClass.className
-            : '${nextClass.className} Class',
+            ? nextClass!.className
+            : '${nextClass!.className} Class',
     };
     final detail = switch (state) {
       DashboardNextClassState.loading =>
