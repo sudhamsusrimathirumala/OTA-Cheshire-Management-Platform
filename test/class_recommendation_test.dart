@@ -420,7 +420,7 @@ void main() {
     for (final profile in [
       child(7),
       child(10, belt: 'Blue'),
-      child(7, preferred: ['level-3']),
+      child(7, belt: 'Blue', preferred: ['level-3']),
     ]) {
       expect(
         nextEligibleClassFromSchedule(
@@ -440,7 +440,7 @@ void main() {
       );
     }
     expect(
-      recommend(child(7, preferred: ['level-3']), [level, teen]),
+      recommend(child(7, belt: 'Blue', preferred: ['level-3']), [level, teen]),
       same(level),
     );
   });
