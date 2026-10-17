@@ -6,6 +6,7 @@ import '../../models/student_profile.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/announcement_audience.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
+import '../../services/firebase/admin_content_save_error.dart';
 import '../../theme/ota_colors.dart';
 import '../../utils/notification_formatters.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
@@ -177,13 +178,13 @@ class _AdminAnnouncementsScreenState extends State<AdminAnnouncementsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
+    } catch (error) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to save announcement.')),
+        SnackBar(
+          content: Text(adminContentSaveError(error, item: 'announcement')),
+          duration: const Duration(seconds: 9),
+        ),
       );
     }
   }
