@@ -724,6 +724,7 @@ class _EventFormSheetState extends State<_EventFormSheet> {
   DateTime? _endDateTime;
   DateTime? _registrationDeadline;
   String? _primaryRegistrationResourceId;
+  bool _missingResourceReviewed = false;
   String? _validationMessage;
   late final String _initialFingerprint;
   final _closeController = UnsavedChangesController();
@@ -973,6 +974,14 @@ class _EventFormSheetState extends State<_EventFormSheet> {
                 (resource) => resource.id == _primaryRegistrationResourceId,
               )
               .firstOrNull;
+    if (_originalLinkedResourceUnavailable && !_missingResourceReviewed) {
+      setState(
+        () => _validationMessage =
+            'The original linked resource is unavailable. Select a new '
+            'resource or confirm that the copy will have no link.',
+      );
+      return;
+    }
     if (_primaryRegistrationResourceId != null && selectedResource == null) {
       setState(
         () => _validationMessage =
@@ -1092,6 +1101,14 @@ class _EventFormSheetState extends State<_EventFormSheet> {
     return widget.event?.locationId ?? adminWriteLocationId();
   }
 
+  bool get _originalLinkedResourceUnavailable {
+    final source = widget.event;
+    return source != null &&
+        (source.primaryRegistrationResourceId != null ||
+            source.linkedResourceIds.isNotEmpty) &&
+        _primaryRegistrationResourceId == null;
+  }
+
   Widget _buildResourceLinkingSection() {
     final resources = _resourceOptions();
 
@@ -1139,9 +1156,23 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             onChanged: (resourceId) {
               setState(() {
                 _primaryRegistrationResourceId = resourceId;
+                _missingResourceReviewed = true;
               });
             },
           ),
+          if (_originalLinkedResourceUnavailable &&
+              !_missingResourceReviewed) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'The original registration resource is no longer available. '
+              'Choose a replacement or explicitly remove the old link.',
+            ),
+            TextButton(
+              onPressed: () =>
+                  setState(() => _missingResourceReviewed = true),
+              child: const Text('Continue without linked resource'),
+            ),
+          ],
           const SizedBox(height: 6),
           Text(
             'Linking a General Resource is optional. If selected, published events can only link to a published General Resource.',
@@ -1154,7 +1185,10 @@ class _EventFormSheetState extends State<_EventFormSheet> {
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: () {
-                setState(() => _primaryRegistrationResourceId = null);
+                setState(() {
+                  _primaryRegistrationResourceId = null;
+                  _missingResourceReviewed = true;
+                });
               },
               icon: const Icon(Icons.link_off_rounded),
               label: const Text('Remove linked resource'),
