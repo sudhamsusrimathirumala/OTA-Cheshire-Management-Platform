@@ -92,7 +92,8 @@ ClassSession? nextRecommendedClassFromSchedule(
         DateTime.now(),
         student.locationId,
       );
-  for (var offset = 0; offset < DateTime.daysPerWeek; offset++) {
+  // Include the same weekday next week when every class today has started.
+  for (var offset = 0; offset <= DateTime.daysPerWeek; offset++) {
     final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
     final sessions = [...schedule[weekday] ?? const <ClassSession>[]]
       ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
