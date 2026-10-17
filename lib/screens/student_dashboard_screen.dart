@@ -349,7 +349,10 @@ class _NextClassCard extends StatelessWidget {
       DashboardNextClassState.error => 'Schedule Unavailable',
       DashboardNextClassState.noSchedule => 'No Academy Schedule',
       DashboardNextClassState.noEligibleClass => 'No Eligible Upcoming Class',
-      DashboardNextClassState.found => '${nextClass!.className} Class',
+      DashboardNextClassState.found =>
+        nextClass!.className.trim().toLowerCase().endsWith(' class')
+            ? nextClass.className
+            : '${nextClass.className} Class',
     };
     final detail = switch (state) {
       DashboardNextClassState.loading =>
