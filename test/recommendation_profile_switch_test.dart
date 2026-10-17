@@ -16,7 +16,7 @@ class _Family extends MockAppDataService {
       id: 'young',
       name: 'Younger',
       locationId: 'ota-cheshire',
-      belt: 'Black',
+      belt: 'White',
       legacyAge: 7,
       stickerCount: 0,
       stickersRequired: 0,
@@ -27,12 +27,13 @@ class _Family extends MockAppDataService {
       id: 'older',
       name: 'Older',
       locationId: 'ota-cheshire',
-      belt: 'White',
-      legacyAge: 10,
+      belt: 'Red',
+      legacyAge: 14,
       stickerCount: 0,
       stickersRequired: 0,
-      nextRank: 'White-Yellow',
-      preferredClassGroupIds: ['teen-black-belt-standard'],
+      nextRank: 'Red-Yellow',
+      // An obsolete younger-student preference must not override teen placement.
+      preferredClassGroupIds: ['level-1-standard'],
     ),
   ];
   @override
@@ -78,7 +79,7 @@ class _Family extends MockAppDataService {
 void main() {
   setUp(initializeMockAppDataServiceForTests);
   testWidgets(
-    'parent Dashboard recomputes each selected child and preferred override',
+    'parent Dashboard recomputes age-appropriate classes on child switch',
     (tester) async {
       final family = _Family();
       appDataService = family;
@@ -97,7 +98,7 @@ void main() {
     },
   );
   testWidgets(
-    'Schedule recommendation reacts to child switch without cached preference leakage',
+    'Schedule recommendation changes from younger belt to teen age group',
     (tester) async {
       final family = _Family();
       appDataService = family;
