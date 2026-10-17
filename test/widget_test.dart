@@ -1781,7 +1781,7 @@ void main() {
       name: 'Preferred Student',
       locationId: 'cheshire',
       belt: 'Blue',
-      dateOfBirth: DateTime(2000),
+      dateOfBirth: DateTime(2016),
       stickerCount: 0,
       stickersRequired: 0,
       nextRank: 'Blue-Red',
@@ -1789,8 +1789,8 @@ void main() {
     );
     ClassSession session(String id, String group, int start) => ClassSession(
       id: id,
-      className: id,
-      classTypeId: id,
+      className: 'Level 3',
+      classTypeId: 'level-3',
       bulkGroupId: group,
       locationId: 'cheshire',
       startTime: DateTime(2026, 1, 1, start),
