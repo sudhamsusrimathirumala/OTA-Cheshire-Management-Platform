@@ -10,13 +10,25 @@ bool isNumberedLevelClass(ClassSession session) =>
     RegExp(r'^level-[1-4](?:-|$)').hasMatch(session.classTypeId) ||
     RegExp(r'^Level [1-4](?:\s|$)').hasMatch(session.className);
 
-// Match actual academy class names, not just a broad 'teen-adult' type:
-// Black Belt sessions also use that type, but are NOT teen/adult classes.
-bool isTeenClass(ClassSession session) =>
-    session.className.trim().toLowerCase() == 'teen & black belt';
+// Accept existing schedule labels with an optional "Class" suffix.
+// Match specific names rather than all 'teen-adult' types, since the separate
+// Black Belt and sparring sessions must never enter the age-only group.
+String _normalizedRecommendationClassName(String name) {
+  final normalized = name.trim().toLowerCase().replaceAll(RegExp(r'\\s+'), ' ');
+  return normalized.endsWith(' class')
+      ? normalized.substring(0, normalized.length - ' class'.length)
+      : normalized;
+}
+
+bool isTeenClass(ClassSession session) {
+  final name = _normalizedRecommendationClassName(session.className);
+  return name == 'teen' ||
+      name == 'teen & black belt' ||
+      name == 'teen and black belt';
+}
 
 bool isAdultClass(ClassSession session) =>
-    session.className.trim().toLowerCase() == 'adult';
+    _normalizedRecommendationClassName(session.className) == 'adult';
 
 bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
   if (!session.isPublished || session.locationId != student.locationId) {
