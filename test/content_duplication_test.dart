@@ -242,6 +242,76 @@ void main() {
       );
     });
   }
+  testWidgets('event duplication requires review of archived registration link', (
+    tester,
+  ) async {
+    for (final event in guestDemoAppDataService.events) {
+      await guestDemoAppDataService.deleteEvent(event.id);
+    }
+    await guestDemoAppDataService.saveResource(
+      const ResourceWriteData(
+        title: 'Archived registration form',
+        description: 'No longer available',
+        category: 'registration',
+        locationId: guestDemoLocationId,
+        isPublished: true,
+        isArchived: true,
+        linkUrl: 'https://example.com/expired',
+      ),
+    );
+    final resource = guestDemoAppDataService.resources.firstWhere(
+      (item) => item.title == 'Archived registration form',
+    );
+    await guestDemoAppDataService.saveEvent(
+      EventWriteData(
+        title: 'Linked source',
+        description: 'Source event details',
+        locationId: guestDemoLocationId,
+        eventType: 'seminar',
+        startDateTime: DateTime.utc(2027, 1, 1, 14),
+        endDateTime: DateTime.utc(2027, 1, 1, 16),
+        isPublished: false,
+        linkedResourceIds: [resource.id],
+        primaryRegistrationResourceId: resource.id,
+      ),
+    );
+    final source = guestDemoAppDataService.events.single;
+    await tester.pumpWidget(const MaterialApp(home: AdminEventsScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Draft'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Duplicate'));
+    await tester.tap(find.text('Duplicate'));
+    await tester.pumpAndSettle();
+
+    final fields = tester
+        .widgetList<LocationDateTimeField>(find.byType(LocationDateTimeField))
+        .toList();
+    fields[0].onChanged(DateTime.utc(2028, 1, 5, 14));
+    fields[1].onChanged(DateTime.utc(2028, 1, 5, 16));
+    await tester.pump();
+
+    await tester.ensureVisible(find.text('Save Draft'));
+    await tester.tap(find.text('Save Draft'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue without linked resource'), findsOneWidget);
+    expect(guestDemoAppDataService.events, hasLength(1));
+
+    await tester.ensureVisible(find.text('Continue without linked resource'));
+    await tester.tap(find.text('Continue without linked resource'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Save Draft'));
+    await tester.tap(find.text('Save Draft'));
+    await tester.pumpAndSettle();
+
+    final copy = guestDemoAppDataService.events.firstWhere(
+      (e) => e.id != source.id,
+    );
+    expect(copy.primaryRegistrationResourceId, isNull);
+    expect(copy.linkedResourceIds, isEmpty);
+    expect(source.primaryRegistrationResourceId, resource.id);
+  });
+
   for (final historical in [false, true]) {
     testWidgets(
       'duplicate ${historical ? 'historical' : 'draft'} event requires new dates and resets publication',
