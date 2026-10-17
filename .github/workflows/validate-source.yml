@@ -7,6 +7,7 @@ on:
       - "lib/**"
       - "test/**"
       - "functions/**"
+      - "tool/firebase_emulator_tests/**"
       - "pubspec.yaml"
       - "pubspec.lock"
       - "firestore.rules"
