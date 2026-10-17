@@ -42,24 +42,50 @@ String firebaseSessionDataFingerprint({
   required Iterable<StudentProfile> profiles,
   required StudentProfile? selectedProfile,
 }) {
+  // Profile and account snapshots may be edited directly in Firestore
+  // without updating the `updatedAt` field. Cover every field consumed by
+  // the member Dashboard/Profile/Manage screens, rather than treating that
+  // timestamp as a reliable change token.
   final profileParts = profiles.map(
     (profile) => [
       profile.id,
       profile.updatedAt?.microsecondsSinceEpoch ?? 0,
       profile.name,
       profile.beltRank,
+      profile.dateOfBirth?.microsecondsSinceEpoch ?? 0,
+      profile.legacyAge,
+      profile.locationId,
       profile.stickerCount,
       profile.stickersRequired,
+      profile.nextRank,
+      profile.guardianUserIds.join(','),
+      profile.guardianEmail,
+      profile.linkedUserId,
       profile.preferredClassGroupIds.join(','),
+      profile.promotionHistory.join(','),
+      profile.testingNotes.join(','),
       profile.isActive,
     ].join('|'),
   );
+  final defaults = account?.studentProfileDefaults;
   return [
     account?.id ?? '',
     account?.updatedAt?.microsecondsSinceEpoch ?? 0,
-    account?.displayName ?? '',
+    account?.firstName ?? '',
+    account?.lastName ?? '',
+    account?.email ?? '',
+    account?.role.name ?? '',
+    account?.isActive ?? false,
+    account?.locationId ?? '',
     account?.selectedStudentProfileId ?? '',
     account?.linkedStudentProfileIds.join(',') ?? '',
+    account?.googleAccountId ?? '',
+    defaults?.dateOfBirth?.microsecondsSinceEpoch ?? 0,
+    defaults?.beltRank ?? '',
+    defaults?.guardianEmail ?? '',
+    defaults?.stickerCurrent ?? 0,
+    defaults?.stickerRequired ?? 0,
+    defaults?.nextRank ?? '',
     selectedProfile?.id ?? '',
     ...profileParts,
   ].join('\u0000');
