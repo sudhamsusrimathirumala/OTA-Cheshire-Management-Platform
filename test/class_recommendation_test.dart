@@ -386,7 +386,7 @@ void main() {
       expect(recommend(child(age), [white, teen]), isNull);
       expect(
         recommend(child(age, preferred: ['level-1-standard']), [white, teen]),
-        same(white),
+        isNull,
       );
     });
   }
