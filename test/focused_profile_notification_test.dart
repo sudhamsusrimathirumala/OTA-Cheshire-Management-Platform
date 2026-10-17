@@ -10,6 +10,7 @@ import 'package:ota_cheshire_management_platform/models/user_account.dart';
 import 'package:ota_cheshire_management_platform/screens/notification_detail_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/mock_app_data_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/profile/profile_edit_sheets.dart';
 
@@ -223,6 +224,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Viewing Example Student • Red Belt'), findsOneWidget);
     expect(find.text('Viewing Example Student • White Belt'), findsNothing);
+  });
+
+  test('location label and access changes reach the Profile screen', () {
+    String fingerprint({String? name, SessionStage stage = SessionStage.member}) =>
+        firebaseSessionDataFingerprint(
+          account: null,
+          profiles: [baseProfile],
+          selectedProfile: baseProfile,
+          selectedLocationName: name,
+          sessionStage: stage,
+        );
+    expect(
+      fingerprint(name: 'OTA Cheshire'),
+      isNot(fingerprint(name: 'Olympic Taekwondo Academy Cheshire')),
+    );
+    expect(
+      fingerprint(name: 'OTA Cheshire', stage: SessionStage.disabled),
+      isNot(fingerprint(name: 'OTA Cheshire')),
+    );
   });
 
   test('preferred options deduplicate weekdays and keep exact groups', () {
