@@ -3,28 +3,35 @@ import '../models/class_session.dart';
 import '../models/student_profile.dart';
 import 'location_time_service.dart';
 
-const int otaOlderStudentAge = 13;
+const int otaTeenStartAge = 12;
+const int otaAdultOnlyAge = 19;
 
 bool isNumberedLevelClass(ClassSession session) =>
     RegExp(r'^level-[1-4](?:-|$)').hasMatch(session.classTypeId) ||
     RegExp(r'^Level [1-4](?:\s|$)').hasMatch(session.className);
 
-bool isTeenOrAdultClass(ClassSession session) {
-  final value = '${session.classTypeId} ${session.className}'.toLowerCase();
-  return value.contains('teen') || value.contains('adult');
-}
+// Match actual academy class names, not just a broad 'teen-adult' type:
+// Black Belt sessions also use that type, but are NOT teen/adult classes.
+bool isTeenClass(ClassSession session) =>
+    session.className.trim().toLowerCase() == 'teen & black belt';
+
+bool isAdultClass(ClassSession session) =>
+    session.className.trim().toLowerCase() == 'adult';
 
 bool isTypicallyRecommendedFor(ClassSession session, StudentProfile student) {
   if (!session.isPublished || session.locationId != student.locationId) {
     return false;
   }
   final age = const LocationTimeService().ageForStudent(student);
-  // Little Tigers is the only class that ignores belt eligibility.
-  if (isLittleTigersClass(session)) return isLittleTigersAge(age);
-  if (!acceptsStudentBelt(session, student)) return false;
-  return age >= otaOlderStudentAge
-      ? isTeenOrAdultClass(session)
-      : isNumberedLevelClass(session) || session.className == 'Black Belt';
+  if (isLittleTigersAge(age)) return isLittleTigersClass(session);
+  if (age >= otaAdultOnlyAge) return isAdultClass(session);
+  if (age >= otaTeenStartAge) {
+    return isTeenClass(session) || isAdultClass(session);
+  }
+  if (age < 6) return false;
+  return (isNumberedLevelClass(session) ||
+          session.className.trim() == 'Black Belt') &&
+      acceptsStudentBelt(session, student);
 }
 
 // Normalize spelling only; unknown ranks do not become beginner ranks.
@@ -43,30 +50,28 @@ bool acceptsStudentBelt(ClassSession session, StudentProfile student) =>
 String classGuidanceFor(ClassSession session, StudentProfile student) {
   final age = const LocationTimeService().ageForStudent(student);
   if (isLittleTigersClass(session)) {
-    return 'For children ages 3-5, regardless of belt rank.';
+    return 'Recommended for children ages 3-5, regardless of belt rank.';
   }
-  if (session.className == 'Black Belt' &&
-      age < otaOlderStudentAge &&
-      acceptsStudentBelt(session, student)) {
-    return 'Black Belt training matches this student\'s rank. Check with an '
-        'instructor if you are unsure about their age group.';
+  if (isAdultClass(session)) {
+    return 'Recommended for students ages 12 and older, regardless of belt rank.';
   }
-  if (isTeenOrAdultClass(session)) {
-    if (age < otaOlderStudentAge) {
-      return 'This class is usually attended by teens and adults. Check with an instructor if you are unsure whether it is the best fit.';
-    }
-    return 'Usually attended by teens and adults.';
+  if (isTeenClass(session)) {
+    return 'Recommended for ages 12-18, regardless of belt rank.';
+  }
+  if (session.className.trim() == 'Black Belt') {
+    return 'Belt-based recommendation for younger Black Belt students. '
+        'Older students are directed to teen or adult classes.';
   }
   if (isNumberedLevelClass(session)) {
-    final level = RegExp(
-      r'Level [1-4]',
-    ).firstMatch(session.className)?.group(0);
-    if (age >= otaOlderStudentAge) {
-      return 'Older students may still choose this class when it better fits their comfort or schedule.';
+    final level = RegExp(r'Level [1-4]').firstMatch(session.className)?.group(0);
+    if (age >= otaTeenStartAge) {
+      return 'Students ages 12 and older are generally recommended a teen '
+          'or adult class. Check with an instructor for alternate placement.';
     }
     return level == null
-        ? 'Typically attended by younger students.'
-        : 'Younger students in $level. Students may choose another class when it better fits their comfort or schedule.';
+        ? 'For ages 6-11 when the student's belt matches this class.'
+        : '$level is recommended for ages 6-11 when the belt matches. '
+          'Ask an instructor about alternative placement.';
   }
   return session.eligibilityNote?.trim().isNotEmpty == true
       ? session.eligibilityNote!.trim()
@@ -109,7 +114,7 @@ ClassSession? nextRecommendedClassFromSchedule(
                   ),
                 ),
               )) ||
-          (offset == 0 && session.endMinutes <= currentMinutes)) {
+          (offset == 0 && session.startMinutes < currentMinutes)) {
         continue;
       }
       candidates.add(session);
@@ -118,11 +123,20 @@ ClassSession? nextRecommendedClassFromSchedule(
   if (candidates.isEmpty) return null;
   final age = const LocationTimeService().ageForStudent(student);
 
-  final preferred = student.preferredClassGroupIds.firstOrNull;
-  if (preferred != null) {
-    for (final session in candidates) {
-      // Saved preferences cannot make an older student eligible for Little Tigers.
-      if (isLittleTigersClass(session) && !isLittleTigersAge(age)) continue;
+  // Candidates already follow the upcoming weekly schedule chronologically.
+  // Ages 3-5: Little Tigers. Ages 12-18: whichever Teen & Black Belt or Adult
+  // class starts next. Ages 19+: Adult only. No belt restriction for those
+  // age groups; younger ages 6-11 require explicit belt eligibility.
+  final eligible = candidates
+      .where((session) => isTypicallyRecommendedFor(session, student))
+      .toList(growable: false);
+  if (eligible.isEmpty) return null;
+
+  // Preserve manually saved preferences ONLY within the belt-eligible
+  // 6-11 group. All age-only groups must always show the earliest session.
+  if (age >= 6 && age < otaTeenStartAge &&
+      student.preferredClassGroupIds.isNotEmpty) {
+    for (final session in eligible) {
       if (matchesResolvedPreferredClassGroup(
         student.preferredClassGroupIds,
         session.bulkGroupId,
@@ -132,48 +146,5 @@ ClassSession? nextRecommendedClassFromSchedule(
     }
   }
 
-  // Give preschool-aged students an age-based recommendation first.
-  if (isLittleTigersAge(age)) {
-    for (final session in candidates) {
-      if (isLittleTigersClass(session)) return session;
-    }
-  }
-
-  if (age >= otaOlderStudentAge) {
-    for (final session in candidates) {
-      if (isTeenOrAdultClass(session) &&
-          acceptsStudentBelt(session, student)) {
-        return session;
-      }
-    }
-    for (final session in candidates) {
-      if (isNumberedLevelClass(session) &&
-          acceptsStudentBelt(session, student)) {
-        return session;
-      }
-    }
-  } else {
-    for (final session in candidates) {
-      if (isNumberedLevelClass(session) &&
-          acceptsStudentBelt(session, student)) {
-        return session;
-      }
-    }
-    // Black Belt is not a numbered class, but it can still be appropriate
-    // for a younger black belt whose rank is explicitly listed.
-    for (final session in candidates) {
-      if (session.className == 'Black Belt' &&
-          acceptsStudentBelt(session, student)) {
-        return session;
-      }
-    }
-    // Do not recommend a different numbered level, a teen/adult class, or an
-    // unconfigured class just because no appropriate class was found.
-    return null;
-  }
-  // Empty eligibleBelts means instructor placement, not blanket permission.
-  // Older students may also be eligible for non-numbered classes.
-  return candidates
-      .where((session) => acceptsStudentBelt(session, student))
-      .firstOrNull;
+  return eligible.first;
 }
