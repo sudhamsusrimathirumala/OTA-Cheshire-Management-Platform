@@ -7,6 +7,7 @@ import '../../widgets/admin/event_schedule_editor.dart';
 import '../../widgets/admin/event_occurrence_editor.dart';
 import '../../services/app_data_service_provider.dart';
 import '../../services/firebase/firebase_admin_write_service.dart';
+import '../../services/firebase/admin_content_save_error.dart';
 import '../../services/event_resource_rules.dart';
 import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
@@ -184,14 +185,14 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Unable to save event.')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(adminContentSaveError(error, item: 'event')),
+          duration: const Duration(seconds: 9),
+        ),
+      );
     }
   }
 
