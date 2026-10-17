@@ -549,7 +549,7 @@ void main() {
     expect(recommend(profile, [teenBelt, blackBelt]), same(blackBelt));
     expect(isTypicallyRecommendedFor(blackBelt, profile), isTrue);
     expect(isTypicallyRecommendedFor(teenBelt, profile), isFalse);
-    expect(classGuidanceFor(blackBelt, profile), contains('matches'));
+    expect(classGuidanceFor(blackBelt, profile), contains('Belt-based'));
   });
 
   test(
