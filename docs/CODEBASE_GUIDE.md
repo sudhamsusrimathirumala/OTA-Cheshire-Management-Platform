@@ -1213,25 +1213,31 @@ build is running; do not blame the service worker without evidence.
 
 ### Automatic class recommendations
 
-The older-student branch previously accepted any class whose type/name looked like
-Teen/Adult, then any numbered level, without belt checks. A teenager could therefore
-be assigned a Black Belt class that explicitly excluded their belt. Automatic older
-recommendations now prefer an explicitly belt-eligible Teen/Adult class, then an
-explicitly belt-eligible numbered level, then another belt-eligible class, then an
-unspecified-eligibility placement fallback. If all candidates explicitly exclude
-the belt, there is no automatic recommendation. Publication and location filtering
-apply before preferences. Explicit saved preferred classes still override normal
-age/belt recommendations. Existing younger-student placement fallback is preserved. The schedule next-class
-banner now uses the same central recommendation function, avoiding its separate
-first-class fallback that could still select an excluded Black Belt class.
+Current age-first policy (October 2026), shared by member Dashboard, Schedule,
+mock data and guest demo:
 
-An empty eligibility list is not silently interpreted as all belts: the model labels
-it `Instructor placement required`, admin creation permits it, and existing younger
-recommendations use it as placement fallback. Production documents were not read to
-infer this convention. Regression tests cover excluded beginner/Black Belt choices,
-older and younger preferred overrides, beginner/advanced eligibility, numbered-level
-fallback, empty eligibility, unpublished classes, and wrong locations.
+- **Ages 3–5:** next upcoming **Little Tigers**, regardless of belt.
+- **Ages 6–11:** next belt-eligible numbered Level 1–4 or Black Belt class;
+  a saved preference may select a later class only within this eligible set.
+  Empty `eligibleBelts` never grants an automatic numbered/Black Belt match.
+- **Ages 12–18:** the chronologically next **Teen & Black Belt** or **Adult**
+  class, regardless of belt. Neither the separate **Black Belt** class nor
+  specialized sparring sessions count as a Teen/Adult recommendation. No
+  preference can override this age-based ordering.
+- **Ages 19+:** next upcoming **Adult** class only, regardless of belt.
+- **Younger than 3:** no automatic recommendation.
 
+The search sorts upcoming class starts in academy-local time, ignores already
+started sessions, checks resumption dates, publication and location, and can
+roll forward to the same weekday next week if today's qualifying class has
+already started. If a matching class is not available, it returns `null`.
+Saved class preferences remain a separate user choice in the Schedule UI; they
+do not automatically override these age-only recommendation categories.
+The recommendation policy does not silently rewrite existing Firestore
+`eligibleBelts`, which may still be used for instructor placement.
+
+The older diagnostic investigation below documents superseded implementation
+behavior and should not be used to determine the current recommendation policy.
 
 ### Local validation and changed files
 
@@ -1329,6 +1335,8 @@ The largest gap between ordered events, together with that operation's duration,
 This implementation is local and uncommitted. No production documents, configuration, migrations, notifications or deployments were changed. Existing Web diagnostics and the temporary Timings panel remain in place. Deployment and physical-device acceptance are separate gates.
 
 ### Recommendation policy and the reported issue
+
+> Historical implementation notes (superseded by the current age-first policy above).
 
 `lib/services/class_recommendation_service.dart` is the policy shared by the Firebase Dashboard path, Schedule screen, guest demo and mock data. The younger branch previously returned the first numbered class after failing to find a belt match. A seven- or ten-year-old Black Belt could therefore receive Level 1 even when its explicit `eligibleBelts` excluded Black. An additional inconsistency let an empty eligibility list qualify as a typical younger-student recommendation and as a final recommendation fallback, although `ClassSession.eligibilityLabel` calls this instructor placement. The older branch already checked belt eligibility in this checkout.
 
