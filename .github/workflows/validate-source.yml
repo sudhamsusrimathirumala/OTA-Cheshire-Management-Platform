@@ -67,6 +67,10 @@ jobs:
           java-version: "21"
       - run: npm ci
         working-directory: tool/firebase_emulator_tests
+      - run: npm ci
+        working-directory: functions
+      - run: npm run build
+        working-directory: functions
       - run: npm install --global firebase-tools
-      - name: Run local Firestore Rules tests without production access
-        run: firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test"
+      - name: Run Firestore Rules and event-reminder integration tests
+        run: firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test && node --test functions/lib/test/event_reminders_emulator.test.js"
