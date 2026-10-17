@@ -49,3 +49,24 @@ jobs:
         working-directory: functions
       - run: npm test
         working-directory: functions
+
+  firestore-rules-tests:
+    name: Firestore Security Rules emulator tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tool/firebase_emulator_tests/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: npm ci
+        working-directory: tool/firebase_emulator_tests
+      - run: npm install --global firebase-tools
+      - name: Run local Firestore Rules tests without production access
+        run: firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test"
