@@ -31,6 +31,9 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
   final _weekdays = <int>{};
   final _custom = <String>{};
   final _times = <int, List<int>>{};
+  DateTime? _duplicateAnchorDate;
+  bool _repeatEndManuallyEdited = false;
+  bool _customDatesManuallyEdited = false;
   EventSchedule? _preview;
   String? _error;
 
@@ -40,13 +43,15 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
     final rule = widget.initial?.rule;
     if (rule != null) {
       _frequency = rule.frequency;
-      _until = parseEventDate(rule.endDate);
+      // Copies retain repeat settings, but dates belong to the new event.
+      _until = widget.duplicate ? null : parseEventDate(rule.endDate);
       _interval = rule.intervalWeeks;
       _count = rule.maxOccurrences;
       _weekdays.addAll(rule.weekdays);
       _custom.addAll(rule.customDates);
       _times.addAll(rule.weekdayTimes);
     }
+    _rebaseDuplicateDates();
     _refresh();
   }
 
@@ -54,7 +59,38 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
   void didUpdateWidget(EventScheduleEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.start != widget.start || oldWidget.end != widget.end) {
+      _rebaseDuplicateDates();
       _refresh();
+    }
+  }
+
+  // When copying an event to another date, move the repeat window and custom
+  // session dates by the same calendar-day offset. This copies the recurrence
+  // pattern, not the old event's history or canceled occurrences.
+  void _rebaseDuplicateDates() {
+    final original = widget.initial?.rule;
+    if (!widget.duplicate || original == null || widget.start == null) return;
+    final local = const LocationTimeService().toLocationTime(
+      widget.start!,
+      widget.locationId,
+    );
+    final selectedDay = DateTime.utc(local.year, local.month, local.day);
+    if (_duplicateAnchorDate == selectedDay) return;
+    _duplicateAnchorDate = selectedDay;
+    final delta = selectedDay.difference(parseEventDate(original.startDate)).inDays;
+    if (!_repeatEndManuallyEdited) {
+      _until = parseEventDate(original.endDate).add(Duration(days: delta));
+    }
+    if (!_customDatesManuallyEdited) {
+      _custom
+        ..clear()
+        ..addAll(
+          original.customDates.map(
+            (date) => eventDateKey(
+              parseEventDate(date).add(Duration(days: delta)),
+            ),
+          ),
+        );
     }
   }
 
@@ -152,7 +188,12 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
           ),
           onPressed: () async {
             final date = await _pickDate(_until);
-            if (date != null) _change(() => _until = date);
+            if (date != null) {
+              _change(() {
+                _repeatEndManuallyEdited = true;
+                _until = date;
+              });
+            }
           },
         ),
         TextFormField(
@@ -192,7 +233,12 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
             label: const Text('Add session date'),
             onPressed: () async {
               final date = await _pickDate(null);
-              if (date != null) _change(() => _custom.add(eventDateKey(date)));
+              if (date != null) {
+                _change(() {
+                  _customDatesManuallyEdited = true;
+                  _custom.add(eventDateKey(date));
+                });
+              }
             },
           ),
           Wrap(
@@ -201,7 +247,10 @@ class EventScheduleEditorState extends State<EventScheduleEditor> {
               for (final date in _custom.toList()..sort())
                 InputChip(
                   label: Text(date),
-                  onDeleted: () => _change(() => _custom.remove(date)),
+                  onDeleted: () => _change(() {
+                    _customDatesManuallyEdited = true;
+                    _custom.remove(date);
+                  }),
                 ),
             ],
           ),
