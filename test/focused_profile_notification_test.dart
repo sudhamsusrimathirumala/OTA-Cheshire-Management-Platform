@@ -66,6 +66,113 @@ void main() {
     expect(account.locationId, updatedProfile.locationId);
   });
 
+  test('profile date-of-birth edit updates member fingerprint without updatedAt', () {
+    final account = UserAccount(
+      id: 'parent',
+      firstName: 'Parent',
+      lastName: 'Example',
+      email: 'parent@example.com',
+      role: UserAccountRole.parent,
+      locationId: 'cheshire',
+      linkedStudentProfileIds: const ['student-1'],
+      selectedStudentProfileId: 'student-1',
+      updatedAt: DateTime.utc(2026, 7, 16),
+    );
+    final before = firebaseSessionDataFingerprint(
+      account: account,
+      profiles: [baseProfile],
+      selectedProfile: baseProfile,
+    );
+    final newBirthDate = StudentProfile(
+      id: baseProfile.id,
+      name: baseProfile.name,
+      locationId: baseProfile.locationId,
+      belt: baseProfile.belt,
+      dateOfBirth: DateTime(2009, 3, 27),
+      stickerCount: baseProfile.stickerCount,
+      stickersRequired: baseProfile.stickersRequired,
+      nextRank: baseProfile.nextRank,
+      preferredClassGroupIds: baseProfile.preferredClassGroupIds,
+      updatedAt: baseProfile.updatedAt, // Firebase Console leaves this unchanged.
+    );
+    final after = firebaseSessionDataFingerprint(
+      account: account,
+      profiles: [newBirthDate],
+      selectedProfile: newBirthDate,
+    );
+    expect(after, isNot(before));
+    expect(
+      firebaseSessionDataFingerprint(
+        account: account,
+        profiles: [newBirthDate],
+        selectedProfile: newBirthDate,
+      ),
+      after,
+      reason: 'Identical snapshots should not trigger redundant redraws.',
+    );
+  });
+
+  test('profile promotion and guardian edits refresh without updatedAt', () {
+    String fingerprint(StudentProfile profile) => firebaseSessionDataFingerprint(
+      account: null,
+      profiles: [profile],
+      selectedProfile: profile,
+    );
+    final previous = fingerprint(baseProfile);
+    StudentProfile withEdits({
+      String nextRank = 'White-Yellow',
+      String? guardianEmail,
+      List<String> history = const [],
+      List<String> notes = const [],
+      String locationId = 'cheshire',
+    }) => StudentProfile(
+      id: baseProfile.id,
+      name: baseProfile.name,
+      locationId: locationId,
+      belt: baseProfile.belt,
+      dateOfBirth: baseProfile.dateOfBirth,
+      stickerCount: baseProfile.stickerCount,
+      stickersRequired: baseProfile.stickersRequired,
+      nextRank: nextRank,
+      guardianEmail: guardianEmail,
+      preferredClassGroupIds: baseProfile.preferredClassGroupIds,
+      promotionHistory: history,
+      testingNotes: notes,
+      updatedAt: baseProfile.updatedAt,
+    );
+    expect(fingerprint(withEdits(nextRank: 'Yellow')), isNot(previous));
+    expect(fingerprint(withEdits(guardianEmail: 'guardian@example.com')),
+        isNot(previous));
+    expect(fingerprint(withEdits(history: ['White 2026'])), isNot(previous));
+    expect(fingerprint(withEdits(notes: ['Ready for test'])), isNot(previous));
+    expect(fingerprint(withEdits(locationId: 'another-location')),
+        isNot(previous));
+  });
+
+  test('account email and role changes refresh with unchanged updatedAt', () {
+    UserAccount account({String email = 'old@example.com',
+      UserAccountRole role = UserAccountRole.parent}) => UserAccount(
+        id: 'parent',
+        firstName: 'Parent',
+        lastName: 'Example',
+        email: email,
+        role: role,
+        linkedStudentProfileIds: const ['student-1'],
+        selectedStudentProfileId: 'student-1',
+        locationId: 'cheshire',
+        updatedAt: DateTime.utc(2026, 7, 16),
+      );
+    String fingerprint(UserAccount value) => firebaseSessionDataFingerprint(
+      account: value,
+      profiles: [baseProfile],
+      selectedProfile: baseProfile,
+    );
+    expect(fingerprint(account(email: 'new@example.com')),
+        isNot(fingerprint(account())));
+    expect(fingerprint(account(role: UserAccountRole.student)),
+        isNot(fingerprint(account())));
+  });
+
   test('preferred options deduplicate weekdays and keep exact groups', () {
     final schedule = <int, List<ClassSession>>{
       DateTime.monday: [
