@@ -41,6 +41,8 @@ String firebaseSessionDataFingerprint({
   required UserAccount? account,
   required Iterable<StudentProfile> profiles,
   required StudentProfile? selectedProfile,
+  String? selectedLocationName,
+  SessionStage? sessionStage,
 }) {
   // Profile and account snapshots may be edited directly in Firestore
   // without updating the `updatedAt` field. Cover every field consumed by
@@ -87,6 +89,8 @@ String firebaseSessionDataFingerprint({
     defaults?.stickerRequired ?? 0,
     defaults?.nextRank ?? '',
     selectedProfile?.id ?? '',
+    selectedLocationName ?? '',
+    sessionStage?.name ?? '',
     ...profileParts,
   ].join('\u0000');
 }
@@ -219,6 +223,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       account: account,
       profiles: session.profiles,
       selectedProfile: profile,
+      selectedLocationName: session.selectedLocationName,
+      sessionStage: session.stage,
     );
     if (!superAdmin && (locationId == null || locationId.isEmpty)) {
       _stopFirestoreListeners();
