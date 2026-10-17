@@ -69,7 +69,7 @@ String classGuidanceFor(ClassSession session, StudentProfile student) {
           'or adult class. Check with an instructor for alternate placement.';
     }
     return level == null
-        ? 'For ages 6-11 when the student's belt matches this class.'
+        ? "For ages 6-11 when the student's belt matches this class."
         : '$level is recommended for ages 6-11 when the belt matches. '
           'Ask an instructor about alternative placement.';
   }
