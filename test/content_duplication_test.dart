@@ -9,9 +9,72 @@ import 'package:ota_cheshire_management_platform/services/guest/guest_demo_app_d
 import 'package:ota_cheshire_management_platform/widgets/location_date_time_field.dart';
 import 'package:ota_cheshire_management_platform/models/event_schedule.dart';
 import 'package:ota_cheshire_management_platform/services/location_time_service.dart';
+import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
 
 void main() {
   setUp(initializeGuestDemoAppDataServiceForTests);
+  testWidgets('duplicated announcement removes selected students by ID, not name', (
+    tester,
+  ) async {
+    final first = await guestDemoAppDataService.createChild(
+      StudentProfileInput(
+        firstName: 'Same',
+        lastName: 'Name',
+        dateOfBirth: DateTime.utc(2017, 3, 1),
+        beltRank: 'White',
+      ),
+    );
+    final second = await guestDemoAppDataService.createChild(
+      StudentProfileInput(
+        firstName: 'Same',
+        lastName: 'Name',
+        dateOfBirth: DateTime.utc(2017, 3, 1),
+        beltRank: 'White',
+      ),
+    );
+    await guestDemoAppDataService.saveAnnouncement(
+      AnnouncementWriteData(
+        title: 'Identical names targeted',
+        summary: 'Original',
+        body: 'Only selected profiles should be notified.',
+        announcementType: 'general',
+        priority: 'general',
+        status: 'draft',
+        audienceType: 'students',
+        targetStudentProfileIds: [first, second],
+        locationId: guestDemoLocationId,
+        requiresAction: false,
+      ),
+    );
+    final source = guestDemoAppDataService.adminAnnouncements.firstWhere(
+      (a) => a.title == 'Identical names targeted',
+    );
+    await tester.pumpWidget(
+      const MaterialApp(home: AdminAnnouncementsScreen()),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Duplicate').first);
+    await tester.tap(find.text('Duplicate').first);
+    await tester.pumpAndSettle();
+
+    final removeButtons = find.byTooltip('Remove');
+    expect(removeButtons, findsNWidgets(2));
+    await tester.ensureVisible(removeButtons.last);
+    await tester.tap(removeButtons.last);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Save Draft'));
+    await tester.tap(find.text('Save Draft'));
+    await tester.pumpAndSettle();
+
+    final copy = guestDemoAppDataService.adminAnnouncements.firstWhere(
+      (a) => a.id != source.id && a.title == source.title,
+    );
+    expect(copy.targetStudentProfileIds, contains(first));
+    expect(copy.targetStudentProfileIds, isNot(contains(second)));
+    expect(source.targetStudentProfileIds, containsAll([first, second]));
+  });
+
   for (final status in ['draft', 'published', 'archived']) {
     testWidgets('announcement $status duplicates as independent draft', (
       tester,
