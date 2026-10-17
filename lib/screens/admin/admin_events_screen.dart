@@ -150,6 +150,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
     }
 
     if (!useFirebase) {
+    if (!result.isEditing && result.action == _EventSaveAction.draft) {
+      setState(() => _selectedFilter = _EventFilter.draft);
+    }
       final mockMessage = switch (result.action) {
         _EventSaveAction.draft => 'Mock event draft saved.',
         _EventSaveAction.publish => 'Mock event published.',
@@ -168,6 +171,9 @@ class _AdminEventsScreenState extends State<AdminEventsScreen> {
         return;
       }
 
+    if (!result.isEditing && result.action == _EventSaveAction.draft) {
+      setState(() => _selectedFilter = _EventFilter.draft);
+    }
       final message = result.isEditing
           ? 'Event updated.'
           : switch (result.action) {
