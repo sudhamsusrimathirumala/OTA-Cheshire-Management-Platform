@@ -97,7 +97,7 @@ jobs:
                   raise SystemExit("::error::Missing the app bundle's base manifest.")
               signatures = [
                   name for name in names
-                  if re.fullmatch(r"META-INF/[^/]+\\.(?:RSA|DSA|EC|SF)", name, re.I)
+                  if re.fullmatch(r"META-INF/[^/]+\.(?:RSA|DSA|EC|SF)", name, re.I)
               ]
               if signatures:
                   raise SystemExit("::error::Expected an unsigned AAB, but found signature files.")
