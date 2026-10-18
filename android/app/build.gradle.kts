@@ -127,9 +127,21 @@ tasks.matching { it.name == "mergeProdReleaseJniLibFolders" }.configureEach {
     outputs.upToDateWhen { false }
 }
 
+// Explicit CI-only escape hatch for an unsigned *bundle*, never a signed Play
+// release. The environment flag alone is insufficient: only the dedicated
+// bundleProdRelease Gradle invocation may opt in. APK builds stay fail-closed.
+val requestedGradleTasks = gradle.startParameter.taskNames
+val allowUnsignedProdBundle =
+    System.getenv("OTA_ALLOW_UNSIGNED_PROD_AAB") == "true" &&
+        requestedGradleTasks.isNotEmpty() &&
+        requestedGradleTasks.all {
+            it.substringAfterLast(':').equals("bundleProdRelease", ignoreCase = true)
+        }
+
 tasks.configureEach {
     if (name.contains("ProdRelease", ignoreCase = true) &&
-        !releaseSigningConfigured
+        !releaseSigningConfigured &&
+        !allowUnsignedProdBundle
     ) {
         doFirst {
             throw GradleException(
