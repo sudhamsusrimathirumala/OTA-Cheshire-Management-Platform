@@ -53,6 +53,55 @@ void main() {
     );
   });
 
+  test('Web updates revalidate all cached Flutter assets on normal reload', () {
+    final config =
+        jsonDecode(File('firebase.json').readAsStringSync())
+            as Map<String, dynamic>;
+    final hosting = config['hosting'] as Map<String, dynamic>;
+    final rules =
+        (hosting['headers'] as List<dynamic>).cast<Map<String, dynamic>>();
+
+    String cacheControlFor(String source) {
+      final rule = rules.singleWhere((rule) => rule['source'] == source);
+      final headers =
+          (rule['headers'] as List<dynamic>).cast<Map<String, dynamic>>();
+      return headers.singleWhere(
+            (header) => header['key'] == 'Cache-Control',
+          )['value']
+          as String;
+    }
+
+    // Covers root routes, bootstrap, main.dart.js, fonts, and assets.
+    expect(cacheControlFor('**'), 'max-age=0, must-revalidate');
+    expect(
+      cacheControlFor('**/index.html'),
+      'no-cache, no-store, must-revalidate',
+    );
+    expect(
+      cacheControlFor('**/flutter_service_worker.js'),
+      'no-cache, no-store, must-revalidate',
+    );
+    expect(cacheControlFor('404.html'), 'max-age=0, must-revalidate');
+
+    // An overlapping Firebase Hosting rule must not restore a stale TTL.
+    for (final rule in rules) {
+      final headers =
+          (rule['headers'] as List<dynamic>).cast<Map<String, dynamic>>();
+      for (final header in headers.where(
+        (header) => header['key'] == 'Cache-Control',
+      )) {
+        expect(
+          header['value'],
+          anyOf(
+            'max-age=0, must-revalidate',
+            'no-cache, no-store, must-revalidate',
+          ),
+          reason: 'Unsafe cache policy for ${rule['source']}',
+        );
+      }
+    }
+  });
+
   test('Web metadata is OTA branded and installable at the site root', () {
     final manifest =
         jsonDecode(File('web/manifest.json').readAsStringSync())
