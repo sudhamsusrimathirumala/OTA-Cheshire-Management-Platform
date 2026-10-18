@@ -1,0 +1,117 @@
+name: Build Unsigned Production AAB
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Build versionCode (default 10; must be an integer)"
+        required: true
+        default: "10"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unsigned-prod-aab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-unsigned-aab:
+    name: Build unsigned OTA production AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Flutter and Android toolchain
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate version code
+        shell: bash
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]] || (( VERSION_CODE > 2100000000 )); then
+            echo "::error::version_code must be between 1 and 2100000000."
+            exit 1
+          fi
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze Flutter source
+        run: flutter analyze
+
+      - name: Test feedback and bug report navigation
+        run: flutter test test/feedback_form_test.dart
+
+      - name: Ensure upload signing credentials are not present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -e android/key.properties ]]; then
+            echo "::error::This workflow is for unsigned bundles only."
+            exit 1
+          fi
+
+      - name: Build unsigned production AAB
+        shell: bash
+        env:
+          OTA_ALLOW_UNSIGNED_PROD_AAB: "true"
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release --flavor prod \
+            -t lib/main_prod.dart --build-number "$VERSION_CODE"
+
+      - name: Verify unsigned bundle and label artifact
+        shell: bash
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import zipfile
+          from pathlib import Path
+
+          bundle = Path("build/app/outputs/bundle/prodRelease/app-prod-release.aab")
+          if not bundle.is_file() or bundle.stat().st_size == 0:
+              raise SystemExit("::error::The expected production AAB was not produced.")
+
+          with zipfile.ZipFile(bundle) as archive:
+              names = archive.namelist()
+              if "base/manifest/AndroidManifest.xml" not in names:
+                  raise SystemExit("::error::Missing the app bundle's base manifest.")
+              signatures = [
+                  name for name in names
+                  if re.fullmatch(r"META-INF/[^/]+\\.(?:RSA|DSA|EC|SF)", name, re.I)
+              ]
+              if signatures:
+                  raise SystemExit("::error::Expected an unsigned AAB, but found signature files.")
+
+          print("Unsigned AAB archive verified.")
+          PY
+          cp build/app/outputs/bundle/prodRelease/app-prod-release.aab \
+            "OTA-Cheshire-prod-UNSIGNED-vc${VERSION_CODE}.aab"
+          sha256sum "OTA-Cheshire-prod-UNSIGNED-vc${VERSION_CODE}.aab"
+
+      - name: Upload UNSIGNED artifact (not accepted by Google Play)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-prod-UNSIGNED-aab-vc${{ inputs.version_code }}-run${{ github.run_number }}
+          path: OTA-Cheshire-prod-UNSIGNED-vc${{ inputs.version_code }}.aab
+          if-no-files-found: error
+          retention-days: 7
