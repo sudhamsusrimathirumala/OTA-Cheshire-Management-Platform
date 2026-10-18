@@ -9,7 +9,23 @@ const accountDeletionRequestUrl =
     'https://docs.google.com/forms/d/e/'
     '1FAIpQLScLct1c2cEmJMjEt-vXNJUOjOMuWZiB5uyLMYyV0agFolYWMQ/viewform';
 
+/// Public responder link provided by the academy. No account or student data
+/// is attached to the URL.
+const feedbackFormUrl =
+    'https://docs.google.com/forms/d/e/'
+    '1FAIpQLSfrhfhlIYH5TuTtw1GXmGfx-G8zKdRas-bZa87sdg67MFJFng/viewform';
+
 typedef ExternalLinkLauncher = Future<bool> Function(Uri uri);
+
+Future<void> openFeedbackForm(
+  BuildContext context, {
+  ExternalLinkLauncher? launcher,
+}) => _openExternalLink(
+  context,
+  feedbackFormUrl,
+  failureMessage: 'The feedback form could not be opened. Please try again.',
+  launcher: launcher,
+);
 
 Future<void> openPrivacyPolicy(
   BuildContext context, {
