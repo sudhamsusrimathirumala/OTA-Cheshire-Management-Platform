@@ -413,9 +413,10 @@ class _SettingsActionsSection extends StatelessWidget {
           label: 'Privacy Policy',
           onTap: () => openPrivacyPolicy(context),
         ),
-        const ProfileActionRow(
-          icon: Icons.help_rounded,
-          label: 'Help / Contact Academy',
+        ProfileActionRow(
+          icon: Icons.bug_report_outlined,
+          label: 'Feedback & Report a Bug',
+          onTap: () => openFeedbackForm(context),
         ),
         ProfileActionRow(
           icon: Icons.logout_rounded,
