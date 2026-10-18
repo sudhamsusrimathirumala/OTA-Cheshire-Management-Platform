@@ -181,6 +181,11 @@ class AdminProfileScreen extends StatelessWidget {
                             onTap: () => openPrivacyPolicy(context),
                           ),
                           ProfileActionRow(
+                            icon: Icons.bug_report_outlined,
+                            label: 'Feedback & Report a Bug',
+                            onTap: () => openFeedbackForm(context),
+                          ),
+                          ProfileActionRow(
                             icon: Icons.edit_rounded,
                             label: 'Edit Account',
                             onTap: debugViewController.isActive
