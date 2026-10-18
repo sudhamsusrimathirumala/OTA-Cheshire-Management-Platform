@@ -1,0 +1,179 @@
+name: Build Signed Android App Bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_code:
+        description: "Google Play versionCode (must exceed the last uploaded versionCode)"
+        required: true
+        default: "10"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-android-aab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-production-aab:
+    name: Build and verify signed prod AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configure Flutter and Android toolchain
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Validate requested version code
+        shell: bash
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION_CODE" =~ ^[1-9][0-9]*$ ]] || (( VERSION_CODE > 2100000000 )); then
+            echo "::error::version_code must be an integer between 1 and 2100000000."
+            exit 1
+          fi
+          echo "Building production versionCode $VERSION_CODE"
+
+      - name: Install locked Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze Flutter source
+        run: flutter analyze
+
+      - name: Test member and admin feedback access
+        run: flutter test test/feedback_form_test.dart
+
+      - name: Restore existing Google Play upload signing key
+        shell: bash
+        env:
+          ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
+          ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import binascii
+          import os
+          import re
+          from pathlib import Path
+
+          names = (
+              "ANDROID_UPLOAD_KEYSTORE_BASE64",
+              "ANDROID_UPLOAD_STORE_PASSWORD",
+              "ANDROID_UPLOAD_KEY_ALIAS",
+              "ANDROID_UPLOAD_KEY_PASSWORD",
+          )
+          missing = [name for name in names if not os.environ.get(name)]
+          if missing:
+              raise SystemExit(
+                  "::error::Configure these repository Actions secrets first: "
+                  + ", ".join(missing)
+              )
+
+          def escape_property(value):
+              if "\n" in value or "\r" in value:
+                  raise SystemExit("::error::Signing secrets must be single-line.")
+              return (
+                  value.replace("\\", "\\\\")
+                  .replace("=", "\\=")
+                  .replace(":", "\\:")
+                  .replace("#", "\\#")
+                  .replace("!", "\\!")
+              )
+
+          try:
+              raw_base64 = re.sub(r"\s+", "", os.environ["ANDROID_UPLOAD_KEYSTORE_BASE64"])
+              keystore_bytes = base64.b64decode(raw_base64, validate=True)
+          except (binascii.Error, ValueError):
+              raise SystemExit("::error::The keystore secret is not valid Base64.") from None
+          if len(keystore_bytes) < 64:
+              raise SystemExit("::error::The decoded keystore is unexpectedly small.")
+
+          keystore = Path("android/app/ota-upload-key.jks")
+          keystore.write_bytes(keystore_bytes)
+          keystore.chmod(0o600)
+
+          properties = Path("android/key.properties")
+          properties.write_text(
+              "storeFile=ota-upload-key.jks\n"
+              + "storePassword="
+              + escape_property(os.environ["ANDROID_UPLOAD_STORE_PASSWORD"])
+              + "\nkeyAlias="
+              + escape_property(os.environ["ANDROID_UPLOAD_KEY_ALIAS"])
+              + "\nkeyPassword="
+              + escape_property(os.environ["ANDROID_UPLOAD_KEY_PASSWORD"])
+              + "\n",
+              encoding="iso-8859-1",
+          )
+          properties.chmod(0o600)
+          print("Existing production upload signing key prepared securely.")
+          PY
+
+      - name: Build signed production app bundle
+        shell: bash
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release --flavor prod \
+            -t lib/main_prod.dart --build-number "$VERSION_CODE"
+
+      - name: Verify artifact and JAR signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="build/app/outputs/bundle/prodRelease/app-prod-release.aab"
+          if [[ ! -s "$BUNDLE" ]]; then
+            echo "::error::Expected production AAB was not created at $BUNDLE."
+            exit 1
+          fi
+          if ! python3 - "$BUNDLE" <<'PY'
+          import sys
+          import zipfile
+
+          with zipfile.ZipFile(sys.argv[1]) as archive:
+              assert "base/manifest/AndroidManifest.xml" in archive.namelist(), (
+                  "The app bundle is missing its base Android manifest."
+              )
+          PY
+          then
+            echo "::error::The app bundle failed archive validation."
+            exit 1
+          fi
+          if ! jarsigner -verify "$BUNDLE" | grep -Fq "jar verified."; then
+            echo "::error::The app bundle does not have a valid JAR signature."
+            exit 1
+          fi
+          sha256sum "$BUNDLE"
+
+      - name: Upload signed AAB for manual Google Play upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-prod-aab-vc${{ inputs.version_code }}-run${{ github.run_number }}
+          path: build/app/outputs/bundle/prodRelease/app-prod-release.aab
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove signing files from runner
+        if: always()
+        shell: bash
+        run: |
+          rm -f android/key.properties android/app/ota-upload-key.jks
