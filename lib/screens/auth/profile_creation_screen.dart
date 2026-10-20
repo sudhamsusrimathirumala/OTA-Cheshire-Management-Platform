@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/sample_curriculum.dart';
 import '../../models/academy_location.dart';
+import '../../models/signup_profile_details.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../../services/firebase/profile_service.dart';
 import '../../services/performance_diagnostics.dart';
@@ -15,7 +16,8 @@ class ProfileCreationScreen extends StatefulWidget {
     this.loadLocations,
     this.onProfilesCreated,
     this.onSignOut,
-    this.appleDisplayName,
+    this.providerDisplayName,
+    this.signupDetails,
   });
 
   final String? accountEmail;
@@ -23,7 +25,8 @@ class ProfileCreationScreen extends StatefulWidget {
   final Future<List<AcademyLocation>> Function()? loadLocations;
   final VoidCallback? onProfilesCreated;
   final VoidCallback? onSignOut;
-  final String? appleDisplayName;
+  final String? providerDisplayName;
+  final SignupProfileDetails? signupDetails;
 
   @override
   State<ProfileCreationScreen> createState() => _ProfileCreationScreenState();
@@ -59,12 +62,16 @@ class _ProfileCreationScreenState extends State<ProfileCreationScreen> {
   @override
   void initState() {
     super.initState();
-    _prefillAppleName();
+    _prefillApplicantDetails();
     _loadLocations();
   }
 
-  void _prefillAppleName() {
-    final displayName = widget.appleDisplayName?.trim();
+  void _prefillApplicantDetails() {
+    _dateOfBirth = widget.signupDetails?.dateOfBirth;
+    final enteredName = widget.signupDetails?.fullName?.trim();
+    final displayName = enteredName != null && enteredName.isNotEmpty
+        ? enteredName
+        : widget.providerDisplayName?.trim();
     if (displayName == null || displayName.isEmpty) return;
     final parts = displayName.split(RegExp(r'\s+'));
     _firstName.text = parts.first;

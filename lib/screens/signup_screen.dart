@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../models/signup_profile_details.dart';
 import '../routes.dart';
 import 'login_screen.dart' show authenticationDisplayMessage;
 import '../services/firebase/firebase_authentication_service.dart';
@@ -43,6 +44,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _password = TextEditingController();
   final _confirmation = TextEditingController();
   final _dateOfBirth = TextEditingController();
+  final _fullName = TextEditingController();
   bool _obscure = true;
   bool _loading = false;
   bool _emailAccountCreated = false;
@@ -54,6 +56,7 @@ class _SignupScreenState extends State<SignupScreen> {
     _password.dispose();
     _confirmation.dispose();
     _dateOfBirth.dispose();
+    _fullName.dispose();
     super.dispose();
   }
 
@@ -155,7 +158,14 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _openAuthGate() {
     debugViewController.clear();
-    Navigator.of(context).pushNamedAndRemoveUntil(OtaRoutes.gate, (_) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      OtaRoutes.gate,
+      (_) => false,
+      arguments: SignupProfileDetails(
+        fullName: _fullName.text.trim(),
+        dateOfBirth: parseRegistrationDateOfBirth(_dateOfBirth.text),
+      ),
+    );
   }
 
   @override
@@ -231,6 +241,14 @@ class _SignupScreenState extends State<SignupScreen> {
                     keyboardType: TextInputType.datetime,
                     textInputAction: TextInputAction.done,
                     validator: registrationDateOfBirthError,
+                  ),
+                  const SizedBox(height: 14),
+                  OtaAuthTextField(
+                    label: 'Full name (optional)',
+                    controller: _fullName,
+                    keyboardType: TextInputType.name,
+                    autofillHints: const [AutofillHints.name],
+                    textInputAction: TextInputAction.done,
                   ),
                   const SizedBox(height: 8),
                   const Text(

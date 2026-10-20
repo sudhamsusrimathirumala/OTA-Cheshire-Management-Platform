@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:ota_cheshire_management_platform/models/signup_profile_details.dart';
 import 'package:ota_cheshire_management_platform/routes.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/auth_gate.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
@@ -13,6 +14,57 @@ import 'package:ota_cheshire_management_platform/services/firebase/firebase_sess
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 void main() {
+  for (final provider in ['email', 'google', 'apple']) {
+    testWidgets('$provider signup carries name and birthday to profile setup', (
+      tester,
+    ) async {
+      SignupProfileDetails? details;
+      ProfileCreationScreen? destination;
+      await tester.pumpWidget(
+        _app(
+          SignupScreen(
+            emailSignUp: (_, _) async => Object(),
+            googleSignIn: () async => Object(),
+            appleSignIn: () async => Object(),
+            appleSupported: true,
+          ),
+          gateBuilder: (context) {
+            final arguments = ModalRoute.of(context)!.settings.arguments;
+            if (arguments is! SignupProfileDetails) {
+              return const Scaffold(body: Text('AUTH GATE'));
+            }
+            details = arguments;
+            destination = authGateDestination(
+              stage: SessionStage.needsProfiles,
+              providerDisplayName: 'Provider Name',
+              signupDetails: details,
+            ) as ProfileCreationScreen;
+            return const Scaffold(body: Text('PROFILE SETUP GATE'));
+          },
+        ),
+      );
+      await _enterValidSignup(tester);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name (optional)'),
+        '  Entered Applicant  ',
+      );
+      final button = switch (provider) {
+        'email' => find.text('CREATE ACCOUNT'),
+        'google' => find.text('CONTINUE WITH GOOGLE'),
+        _ => find.byType(SignInWithAppleButton),
+      };
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+
+      expect(details?.fullName, 'Entered Applicant');
+      expect(details?.dateOfBirth, DateTime(2000, 1, 1));
+      expect(destination?.signupDetails, same(details));
+      expect(destination?.providerDisplayName, 'Provider Name');
+      expect(find.text('PROFILE SETUP GATE'), findsOneWidget);
+    });
+  }
+
   test('session adoption waits until the account snapshot resolves', () async {
     final user = _FakeUser();
     final authentication = _SignupAuthenticationService(user);
@@ -225,7 +277,7 @@ void main() {
       ),
     );
     await tester.enterText(
-      find.byType(TextFormField).last,
+      find.widgetWithText(TextFormField, 'Date of birth (MM/DD/YYYY)'),
       _under16DateOfBirth(),
     );
     await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));

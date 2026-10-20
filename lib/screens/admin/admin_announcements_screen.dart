@@ -365,23 +365,30 @@ class _AnnouncementsToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AdminPanel(
-      child: Row(
-        children: [
-          Container(width: 4, height: 34, color: OtaColors.maroon),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Family-facing announcement management',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: OtaColors.ink,
-                fontWeight: FontWeight.w800,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final heading = Row(
+            children: [
+              Container(width: 4, height: 34, color: OtaColors.maroon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Family-facing announcement management',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            ),
-          ),
-          FilledButton.icon(
+            ],
+          );
+          final createButton = FilledButton.icon(
             onPressed: onCreateAnnouncement,
             icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Create Announcement'),
+            label: const Text(
+              'Create Announcement',
+              textAlign: TextAlign.center,
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: OtaColors.maroon,
               foregroundColor: OtaColors.white,
@@ -390,8 +397,26 @@ class _AnnouncementsToolbar extends StatelessWidget {
               ),
               textStyle: const TextStyle(fontWeight: FontWeight.w800),
             ),
-          ),
-        ],
+          );
+          final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          if (constraints.maxWidth < 640 * textScale) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                heading,
+                const SizedBox(height: 12),
+                createButton,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: heading),
+              const SizedBox(width: 16),
+              createButton,
+            ],
+          );
+        },
       ),
     );
   }
@@ -755,11 +780,23 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final twoColumns = constraints.maxWidth >= 620;
+                  final textScale =
+                      MediaQuery.textScalerOf(context).scale(14) / 14;
+                  final twoColumns = constraints.maxWidth >= 620 * textScale;
                   final fields = [
                     DropdownButtonFormField<NotificationCategory>(
                       initialValue: _category,
+                      isExpanded: true,
+                      itemHeight: null,
                       decoration: _fieldDecoration('Category'),
+                      selectedItemBuilder: (context) => [
+                        for (final category in NotificationCategory.values)
+                          Text(
+                            category.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
                       items: [
                         for (final category in NotificationCategory.values)
                           DropdownMenuItem<NotificationCategory>(
@@ -775,7 +812,17 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                     ),
                     DropdownButtonFormField<NotificationPriority>(
                       initialValue: _priority,
+                      isExpanded: true,
+                      itemHeight: null,
                       decoration: _fieldDecoration('Priority'),
+                      selectedItemBuilder: (context) => [
+                        for (final priority in _announcementPriorityOptions)
+                          Text(
+                            priority.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
                       items: [
                         for (final priority in _announcementPriorityOptions)
                           DropdownMenuItem<NotificationPriority>(
@@ -814,7 +861,21 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               DropdownButtonFormField<_Audience>(
                 key: const ValueKey('announcement-audience-dropdown'),
                 initialValue: _audience,
+                isExpanded: true,
+                itemHeight: null,
                 decoration: _fieldDecoration('Audience'),
+                selectedItemBuilder: (context) => [
+                  for (final audience in _Audience.values.where(
+                    (a) =>
+                        a != _Audience.preserved ||
+                        _audience == _Audience.preserved,
+                  ))
+                    Text(
+                      audience.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
                 items: [
                   for (final audience in _Audience.values.where(
                     (a) =>

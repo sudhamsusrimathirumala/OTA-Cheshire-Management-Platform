@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../models/signup_profile_details.dart';
 import '../../services/firebase/firebase_session_controller.dart';
 import '../admin/admin_dashboard_screen.dart';
 import '../student_dashboard_screen.dart';
@@ -19,21 +20,14 @@ class AuthGate extends StatelessWidget {
         stage: firebaseSessionController.stage,
         errorMessage: firebaseSessionController.errorMessage,
         justCreatedProfiles: firebaseSessionController.justCreatedProfiles,
-        appleDisplayName: _appleDisplayName(),
+        providerDisplayName: firebaseSessionController.authUser?.displayName,
+        signupDetails: switch (ModalRoute.of(context)?.settings.arguments) {
+          SignupProfileDetails details => details,
+          _ => null,
+        },
       );
     },
   );
-
-  String? _appleDisplayName() {
-    final user = firebaseSessionController.authUser;
-    if (user == null ||
-        !user.providerData.any(
-          (provider) => provider.providerId == 'apple.com',
-        )) {
-      return null;
-    }
-    return user.displayName;
-  }
 }
 
 @visibleForTesting
@@ -41,12 +35,14 @@ Widget authGateDestination({
   required SessionStage stage,
   String? errorMessage,
   bool justCreatedProfiles = false,
-  String? appleDisplayName,
+  String? providerDisplayName,
+  SignupProfileDetails? signupDetails,
 }) => switch (stage) {
   SessionStage.loading => const _LoadingScreen(),
   SessionStage.signedOut => const WelcomeScreen(),
   SessionStage.needsProfiles => ProfileCreationScreen(
-    appleDisplayName: appleDisplayName,
+    providerDisplayName: providerDisplayName,
+    signupDetails: signupDetails,
   ),
   SessionStage.disabled => _SessionErrorScreen(
     message: errorMessage ?? 'This account or academy location is unavailable.',
