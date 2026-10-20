@@ -365,23 +365,30 @@ class _AnnouncementsToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _AdminPanel(
-      child: Row(
-        children: [
-          Container(width: 4, height: 34, color: OtaColors.maroon),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Family-facing announcement management',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                color: OtaColors.ink,
-                fontWeight: FontWeight.w800,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final heading = Row(
+            children: [
+              Container(width: 4, height: 34, color: OtaColors.maroon),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Family-facing announcement management',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: OtaColors.ink,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
-            ),
-          ),
-          FilledButton.icon(
+            ],
+          );
+          final createButton = FilledButton.icon(
             onPressed: onCreateAnnouncement,
             icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('Create Announcement'),
+            label: const Text(
+              'Create Announcement',
+              textAlign: TextAlign.center,
+            ),
             style: FilledButton.styleFrom(
               backgroundColor: OtaColors.maroon,
               foregroundColor: OtaColors.white,
@@ -390,8 +397,26 @@ class _AnnouncementsToolbar extends StatelessWidget {
               ),
               textStyle: const TextStyle(fontWeight: FontWeight.w800),
             ),
-          ),
-        ],
+          );
+          final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+          if (constraints.maxWidth < 640 * textScale) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                heading,
+                const SizedBox(height: 12),
+                createButton,
+              ],
+            );
+          }
+          return Row(
+            children: [
+              Expanded(child: heading),
+              const SizedBox(width: 16),
+              createButton,
+            ],
+          );
+        },
       ),
     );
   }

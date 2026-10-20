@@ -474,7 +474,10 @@ void main() {
 }
 
 Future<void> _enterEligibleSignupDate(WidgetTester tester) async {
-  await tester.enterText(find.byType(TextFormField).last, '01/01/2000');
+  await tester.enterText(
+    find.widgetWithText(TextFormField, 'Date of birth (MM/DD/YYYY)'),
+    '01/01/2000',
+  );
   await tester.pump();
 }
 

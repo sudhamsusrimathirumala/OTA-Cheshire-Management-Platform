@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/academy_location.dart';
+import 'package:ota_cheshire_management_platform/models/signup_profile_details.dart';
 import 'package:ota_cheshire_management_platform/screens/auth/profile_creation_screen.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/profile_service.dart';
@@ -64,14 +65,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('Apple display name prefills without a Firebase lookup', (
+  testWidgets('provider display name prefills without a Firebase lookup', (
     tester,
   ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: ProfileCreationScreen(
           accountEmail: 'apple@example.com',
-          appleDisplayName: 'Ada Lovelace',
+          providerDisplayName: 'Ada Lovelace',
           loadLocations: () async => const [cheshire],
           createProfiles: (_) async {},
           onProfilesCreated: () {},
@@ -89,6 +90,82 @@ void main() {
     );
     expect(firstName.controller?.text, 'Ada');
     expect(lastName.controller?.text, 'Lovelace');
+  });
+
+  testWidgets('signup details override provider name and remain editable', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(800, 2000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    ProfileCreationRequest? submitted;
+    final screen = ProfileCreationScreen(
+      accountEmail: 'applicant@example.com',
+      providerDisplayName: 'Provider Name',
+      signupDetails: SignupProfileDetails(
+        fullName: '  Entered   Applicant  ',
+        dateOfBirth: DateTime(2000, 1, 2),
+      ),
+      loadLocations: () async => const [cheshire],
+      createProfiles: (request) async => submitted = request,
+      onProfilesCreated: () {},
+      onSignOut: () {},
+    );
+    await tester.pumpWidget(MaterialApp(home: screen));
+    await tester.pumpAndSettle();
+    final firstName = find.widgetWithText(TextFormField, 'First name').first;
+    final lastName = find.widgetWithText(TextFormField, 'Last name').first;
+    expect(tester.widget<TextFormField>(firstName).controller?.text, 'Entered');
+    expect(tester.widget<TextFormField>(lastName).controller?.text, 'Applicant');
+    await tester.enterText(firstName, 'Corrected');
+
+    // A parent rebuild must not restore the initial values over user edits.
+    await tester.pumpWidget(MaterialApp(home: screen));
+    await tester.pumpAndSettle();
+    await tapInStepper(tester, find.byKey(const ValueKey('profile-continue-0')));
+    await tapInStepper(tester, find.byKey(const ValueKey('profile-back-1')));
+    expect(tester.widget<TextFormField>(firstName).controller?.text, 'Corrected');
+    await tapInStepper(tester, find.byKey(const ValueKey('profile-continue-0')));
+    await tapInStepper(tester, find.byKey(const ValueKey('profile-continue-1')));
+    await tapInStepper(tester, find.byType(CheckboxListTile));
+    await tapInStepper(tester, find.byKey(const ValueKey('profile-continue-2')));
+    await tester.pumpAndSettle();
+
+    expect(submitted?.firstName, 'Corrected');
+    expect(submitted?.lastName, 'Applicant');
+    expect(submitted?.dateOfBirth, DateTime(2000, 1, 2));
+  });
+
+  testWidgets('birthday-only signup retains the provider name fallback', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ProfileCreationScreen(
+          accountEmail: 'provider@example.com',
+          providerDisplayName: 'Provider Applicant',
+          signupDetails: SignupProfileDetails(
+            fullName: '   ',
+            dateOfBirth: DateTime(2000, 1, 2),
+          ),
+          loadLocations: () async => const [cheshire],
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'First name').first,
+      ).controller?.text,
+      'Provider',
+    );
+    expect(
+      tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Last name').first,
+      ).controller?.text,
+      'Applicant',
+    );
+    expect(find.text('Required'), findsNothing);
   });
 
   testWidgets('location loading does not block applicant form entry', (
