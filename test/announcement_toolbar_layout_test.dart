@@ -28,7 +28,10 @@ void main() {
       await tester.pumpAndSettle();
 
       final heading = find.text('Family-facing announcement management');
-      final create = find.widgetWithText(FilledButton, 'Create Announcement');
+      final create = find.ancestor(
+        of: find.text('Create Announcement'),
+        matching: find.byWidgetPredicate((widget) => widget is FilledButton),
+      );
       expect(tester.getSize(heading).width, greaterThan(width * 0.65));
       expect(
         tester.getTopLeft(create).dy,

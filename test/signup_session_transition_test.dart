@@ -29,8 +29,11 @@ void main() {
             appleSupported: true,
           ),
           gateBuilder: (context) {
-            details = ModalRoute.of(context)!.settings.arguments
-                as SignupProfileDetails;
+            final arguments = ModalRoute.of(context)!.settings.arguments;
+            if (arguments is! SignupProfileDetails) {
+              return const Scaffold(body: Text('AUTH GATE'));
+            }
+            details = arguments;
             destination = authGateDestination(
               stage: SessionStage.needsProfiles,
               providerDisplayName: 'Provider Name',
