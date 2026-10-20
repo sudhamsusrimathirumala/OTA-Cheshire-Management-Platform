@@ -780,11 +780,23 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               const SizedBox(height: 10),
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final twoColumns = constraints.maxWidth >= 620;
+                  final textScale =
+                      MediaQuery.textScalerOf(context).scale(14) / 14;
+                  final twoColumns = constraints.maxWidth >= 620 * textScale;
                   final fields = [
                     DropdownButtonFormField<NotificationCategory>(
                       initialValue: _category,
+                      isExpanded: true,
+                      itemHeight: null,
                       decoration: _fieldDecoration('Category'),
+                      selectedItemBuilder: (context) => [
+                        for (final category in NotificationCategory.values)
+                          Text(
+                            category.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
                       items: [
                         for (final category in NotificationCategory.values)
                           DropdownMenuItem<NotificationCategory>(
@@ -800,7 +812,17 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
                     ),
                     DropdownButtonFormField<NotificationPriority>(
                       initialValue: _priority,
+                      isExpanded: true,
+                      itemHeight: null,
                       decoration: _fieldDecoration('Priority'),
+                      selectedItemBuilder: (context) => [
+                        for (final priority in _announcementPriorityOptions)
+                          Text(
+                            priority.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
                       items: [
                         for (final priority in _announcementPriorityOptions)
                           DropdownMenuItem<NotificationPriority>(
@@ -839,7 +861,21 @@ class _AnnouncementFormSheetState extends State<_AnnouncementFormSheet> {
               DropdownButtonFormField<_Audience>(
                 key: const ValueKey('announcement-audience-dropdown'),
                 initialValue: _audience,
+                isExpanded: true,
+                itemHeight: null,
                 decoration: _fieldDecoration('Audience'),
+                selectedItemBuilder: (context) => [
+                  for (final audience in _Audience.values.where(
+                    (a) =>
+                        a != _Audience.preserved ||
+                        _audience == _Audience.preserved,
+                  ))
+                    Text(
+                      audience.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                ],
                 items: [
                   for (final audience in _Audience.values.where(
                     (a) =>

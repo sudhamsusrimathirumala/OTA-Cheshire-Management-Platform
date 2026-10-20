@@ -192,7 +192,14 @@ void main() {
     expect(find.textContaining(', OTA'), findsOneWidget);
     expect(find.text('Viewing Sudhamsu \u2022 Red-Black Belt'), findsOneWidget);
     expect(find.textContaining('â€¢'), findsNothing);
-    expect(find.text('Teen & Black Belt Class'), findsOneWidget);
+    // The next eligible teen or adult session depends on the current time.
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Text &&
+            const ['Teen & Black Belt Class', 'Adult Class'].contains(widget.data),
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Black'), findsOneWidget);
     expect(find.text('Summer Camp Registration Now Open'), findsOneWidget);
     expect(find.text('Dashboard'), findsOneWidget);
