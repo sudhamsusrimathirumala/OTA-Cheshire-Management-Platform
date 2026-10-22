@@ -21,6 +21,7 @@ class AuthGate extends StatelessWidget {
       animation: controller,
       builder: (context, _) {
         return authGateDestination(
+          session: controller,
           stage: controller.stage,
           errorMessage: controller.errorMessage,
           justCreatedProfiles: controller.justCreatedProfiles,
@@ -38,6 +39,7 @@ class AuthGate extends StatelessWidget {
 @visibleForTesting
 Widget authGateDestination({
   required SessionStage stage,
+  FirebaseSessionController? session,
   String? errorMessage,
   bool justCreatedProfiles = false,
   String? providerDisplayName,
@@ -50,9 +52,11 @@ Widget authGateDestination({
     signupDetails: signupDetails,
   ),
   SessionStage.disabled => _SessionErrorScreen(
+    session: session,
     message: errorMessage ?? 'This account or academy location is unavailable.',
   ),
   SessionStage.adminDisabled => _SessionErrorScreen(
+    session: session,
     message: errorMessage ?? 'This administrator account is unavailable.',
   ),
   SessionStage.member =>
@@ -62,6 +66,7 @@ Widget authGateDestination({
   SessionStage.guest => const GuestModeShell(child: GuestDashboardScreen()),
   SessionStage.admin => const AdminDashboardScreen(),
   SessionStage.error => _SessionErrorScreen(
+    session: session,
     message: errorMessage ?? 'Your account could not be loaded.',
   ),
 };
@@ -84,8 +89,9 @@ class _LoadingScreen extends StatelessWidget {
 }
 
 class _SessionErrorScreen extends StatelessWidget {
-  const _SessionErrorScreen({required this.message});
+  const _SessionErrorScreen({required this.message, this.session});
   final String message;
+  final FirebaseSessionController? session;
   @override
   Widget build(BuildContext context) => Scaffold(
     body: Center(
@@ -101,12 +107,12 @@ class _SessionErrorScreen extends StatelessWidget {
               Text(message, textAlign: TextAlign.center),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: firebaseSessionController.retry,
+                onPressed: () => (session ?? firebaseSessionController).retry(),
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Retry'),
               ),
               TextButton(
-                onPressed: firebaseSessionController.signOut,
+                onPressed: () => (session ?? firebaseSessionController).signOut(),
                 child: const Text('Sign out'),
               ),
             ],
