@@ -8,17 +8,15 @@ import '../utils/notification_formatters.dart';
 import 'content_unavailable_screen.dart';
 
 class NotificationDetailScreen extends StatefulWidget {
-  const NotificationDetailScreen({required NotificationItem notification, super.key})
-    : notification = notification,
-      notificationId = null,
+  const NotificationDetailScreen({required NotificationItem this.notification, super.key})
+    : notificationId = null,
       markReadOnOpen = false;
 
   const NotificationDetailScreen.fromId({
-    required String notificationId,
+    required String this.notificationId,
     this.markReadOnOpen = false,
     super.key,
-  }) : notificationId = notificationId,
-       notification = null;
+  }) : notification = null;
 
   final NotificationItem? notification;
   final String? notificationId;

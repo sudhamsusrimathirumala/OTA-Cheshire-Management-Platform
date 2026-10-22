@@ -172,7 +172,9 @@ class PushNavigationCoordinator {
   void _open(PushDestination destination) {
     final access = _accessState();
     if (access.stage != SessionStage.member ||
-        access.memberLocationId != destination.locationId) return;
+        access.memberLocationId != destination.locationId) {
+      return;
+    }
     final navigator = navigatorKey.currentState;
     if (navigator == null) {
       _pending.queue(destination);

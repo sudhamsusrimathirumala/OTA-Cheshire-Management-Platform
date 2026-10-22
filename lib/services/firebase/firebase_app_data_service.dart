@@ -356,6 +356,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _latestAnnouncementsSnapshot = null;
     _latestTargetedAnnouncementsSnapshot = null;
     _notificationReadIds = const <String>{};
+    _markAllNotificationsInProgress = false;
     _notificationReadsUid = null;
     _notificationReadIdsFingerprint = '';
     _notificationReadsFirestore = null;
@@ -934,6 +935,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_notificationReadsSubscription?.cancel());
     _notificationReadsSubscription = null;
     _notificationReadIds = const <String>{};
+    _markAllNotificationsInProgress = false;
     if (ids.isEmpty) return;
     PerformanceDiagnostics.mark('notification_reads_listener_started');
     _notificationReadsSubscription = firestore
@@ -945,7 +947,9 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .listen(
           (snapshot) {
             if (_notificationReadsUid != uid ||
-                _notificationReadIdsFingerprint != fingerprint) return;
+                _notificationReadIdsFingerprint != fingerprint) {
+              return;
+            }
             PerformanceDiagnostics.mark(
               'notification_reads_first_snapshot',
               fromCache: snapshot.metadata.isFromCache,
@@ -1295,6 +1299,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       );
     }
     final (uid, firestore) = _notificationWriteContext();
+    final generation = _listenerGeneration;
     final previous = _notificationReadIds;
     _applyNotificationReadIds({...previous, id});
     try {
@@ -1305,11 +1310,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .doc(id)
           .set({'readAt': FieldValue.serverTimestamp()});
     } on FirebaseException catch (error) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       _debugNotificationWriteError('mark-one', error, true);
       throw classifyNotificationReadException(error);
     } catch (_) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       rethrow;
     }
   }
@@ -1329,6 +1338,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       );
     }
     final (uid, firestore) = _notificationWriteContext();
+    final generation = _listenerGeneration;
     final previous = _notificationReadIds;
     _applyNotificationReadIds(previous.where((value) => value != id).toSet());
     try {
@@ -1339,11 +1349,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .doc(id)
           .delete();
     } on FirebaseException catch (error) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       _debugNotificationWriteError('mark-unread', error, true);
       throw classifyNotificationReadException(error);
     } catch (_) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       rethrow;
     }
   }
@@ -1380,6 +1394,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .toList(growable: false);
     if (unreadIds.isEmpty) return;
     final (uid, firestore) = _notificationWriteContext();
+    final generation = _listenerGeneration;
     final previous = _notificationReadIds;
     _markAllNotificationsInProgress = true;
     _applyNotificationReadIds({...previous, ...unreadIds});
@@ -1401,14 +1416,20 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         await batch.commit();
       }
     } on FirebaseException catch (error) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       _debugNotificationWriteError('mark-all', error, true);
       throw classifyNotificationReadException(error);
     } catch (_) {
-      _applyNotificationReadIds(previous);
+      if (generation == _listenerGeneration) {
+        _applyNotificationReadIds(previous);
+      }
       rethrow;
     } finally {
-      _markAllNotificationsInProgress = false;
+      if (generation == _listenerGeneration) {
+        _markAllNotificationsInProgress = false;
+      }
     }
   }
 

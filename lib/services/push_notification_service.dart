@@ -304,7 +304,9 @@ class PushNotificationService {
         // A later token can recover a failed registration.
       }
       if (!_isCurrentRegistration(uid, generation) ||
-          _registrationFingerprint == fingerprint) return;
+          _registrationFingerprint == fingerprint) {
+        return;
+      }
       await _registrationStore.upsert(
         uid: uid,
         installationId: installationId,
