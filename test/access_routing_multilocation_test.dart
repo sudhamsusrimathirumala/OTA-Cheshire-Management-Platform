@@ -18,6 +18,14 @@ import 'package:ota_cheshire_management_platform/services/location_time_service.
 
 void main() {
   group('active access route authorization', () {
+    test('student profile routes require an active student identity', () {
+      for (final stage in [SessionStage.disabled, SessionStage.adminDisabled,
+        SessionStage.admin, SessionStage.needsProfiles, SessionStage.loading]) {
+        expect(isRouteAuthorized(routeName: OtaRoutes.profile, stage: stage), isFalse);
+      }
+      expect(isRouteAuthorized(routeName: OtaRoutes.profile, stage: SessionStage.member), isTrue);
+    });
+
     test('signed-out and disabled sessions cannot open student content', () {
       for (final stage in [
         SessionStage.signedOut,

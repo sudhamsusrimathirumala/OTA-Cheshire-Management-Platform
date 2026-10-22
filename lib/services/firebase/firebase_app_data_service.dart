@@ -935,7 +935,6 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     unawaited(_notificationReadsSubscription?.cancel());
     _notificationReadsSubscription = null;
     _notificationReadIds = const <String>{};
-    _markAllNotificationsInProgress = false;
     if (ids.isEmpty) return;
     PerformanceDiagnostics.mark('notification_reads_listener_started');
     _notificationReadsSubscription = firestore

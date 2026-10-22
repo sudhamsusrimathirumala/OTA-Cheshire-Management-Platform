@@ -11,9 +11,9 @@ RouteAccess accessForRoute(String? routeName) {
     OtaRoutes.login ||
     OtaRoutes.signup => RouteAccess.public,
     OtaRoutes.guestDashboard => RouteAccess.guest,
-    OtaRoutes.profile => RouteAccess.authenticated,
     OtaRoutes.accountDeletion => RouteAccess.realMember,
     OtaRoutes.manageProfiles => RouteAccess.student,
+    OtaRoutes.profile ||
     OtaRoutes.dashboard ||
     OtaRoutes.schedule ||
     OtaRoutes.events ||

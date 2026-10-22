@@ -190,7 +190,9 @@ void main() {
     coordinator.handlePayload({'contentType': 'announcement', 'contentId': notice.id,
       'locationId': 'ota-cheshire'});
     await tester.pump();
+    await tester.pump();
     await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(NotificationDetailScreen), findsOneWidget);
     expect(find.text('Loading item…'), findsOneWidget);
     expect(find.text('This item is no longer available.'), findsNothing);
     expect(service.readCalls, isEmpty);
@@ -238,6 +240,22 @@ void main() {
     expect(tester.takeException(), isNull);
     session.clearIdentity(SessionStage.signedOut);
     await tester.pump();
+    expect(find.text('Parent'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an open profile closes when a disabled account loses its profile', (tester) async {
+    final session = _MutableSession(authentication: _FakeAuthenticationService(_FakeUser()))
+      ..stage = SessionStage.member
+      ..account = _account;
+    await tester.pumpWidget(MaterialApp(home: AuthorizedRoute(
+      session: session, routeName: OtaRoutes.profile,
+      builder: (_) => Scaffold(body: Text(session.account!.firstName)),
+    )));
+    session.errorMessage = 'Account disabled';
+    session.clearIdentity(SessionStage.disabled);
+    await tester.pump();
+    expect(find.text('Account disabled'), findsOneWidget);
     expect(find.text('Parent'), findsNothing);
     expect(tester.takeException(), isNull);
   });
