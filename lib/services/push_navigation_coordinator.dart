@@ -1,16 +1,16 @@
 import 'dart:async';
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../routes.dart';
-import '../screens/content_unavailable_screen.dart';
 import '../screens/events_screen.dart';
 import '../screens/notification_detail_screen.dart';
 import '../screens/resource_detail_screen.dart';
-import 'app_data_service_provider.dart';
+import '../widgets/authorized_route.dart';
 import 'firebase/firebase_session_controller.dart';
 import 'push_notification_service.dart';
 
@@ -170,6 +170,9 @@ class PushNavigationCoordinator {
   }
 
   void _open(PushDestination destination) {
+    final access = _accessState();
+    if (access.stage != SessionStage.member ||
+        access.memberLocationId != destination.locationId) return;
     final navigator = navigatorKey.currentState;
     if (navigator == null) {
       _pending.queue(destination);
@@ -177,33 +180,29 @@ class PushNavigationCoordinator {
     }
     switch (destination.type) {
       case PushContentType.announcement:
-        final notification = appDataService.notifications
-            .where((item) => item.id == destination.contentId)
-            .firstOrNull;
         navigator.pushNamed(OtaRoutes.notifications);
-        if (notification == null) {
-          navigator.push(
-            MaterialPageRoute<void>(
-              builder: (_) => const ContentUnavailableScreen(
-                returnRoute: OtaRoutes.notifications,
-              ),
-            ),
-          );
-          return;
-        }
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                NotificationDetailScreen(notification: notification),
+            builder: (context) => _protectedDetail(
+              context,
+              OtaRoutes.notifications,
+              (_) => NotificationDetailScreen.fromId(
+                notificationId: destination.contentId,
+                markReadOnOpen: true,
+              ),
+            ),
           ),
         );
-        unawaited(appDataService.markNotificationRead(notification.id));
       case PushContentType.event:
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) => EventsScreen(
-              initialEventId: destination.contentId,
-              initialOccurrenceId: destination.occurrenceId,
+            builder: (context) => _protectedDetail(
+              context,
+              OtaRoutes.events,
+              (_) => EventsScreen(
+                initialEventId: destination.contentId,
+                initialOccurrenceId: destination.occurrenceId,
+              ),
             ),
           ),
         );
@@ -211,12 +210,26 @@ class PushNavigationCoordinator {
         navigator.pushNamed(OtaRoutes.resources);
         navigator.push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                ResourceDetailScreen.fromId(resourceId: destination.contentId),
+            builder: (context) => _protectedDetail(
+              context,
+              OtaRoutes.resources,
+              (_) => ResourceDetailScreen.fromId(
+                resourceId: destination.contentId,
+              ),
+            ),
           ),
         );
     }
   }
+
+  Widget _protectedDetail(
+    BuildContext context,
+    String route,
+    WidgetBuilder builder,
+  ) =>
+      Firebase.apps.isNotEmpty
+          ? AuthorizedRoute(routeName: route, builder: builder)
+          : builder(context);
 
   Future<void> dispose() async {
     await _foregroundSubscription?.cancel();

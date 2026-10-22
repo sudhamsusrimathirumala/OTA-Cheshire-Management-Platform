@@ -88,15 +88,26 @@ void main() {
       'studentProfiles',
       'users',
     ]) {
-      final listener = RegExp(
-        'FirestoreCollections\\.$collection[\\s\\S]{0,500}?\\.snapshots\\(',
-      );
       expect(
-        listener.hasMatch(appData),
+        appData.contains('FirestoreCollections.$collection'),
         isTrue,
         reason: '$collection must remain realtime',
       );
     }
+    expect(appData, contains('return query.snapshots('));
+  });
+
+  test('changing accounts or member/admin scope restarts authorized queries', () {
+    bool restarts({String nextUid = 'one', bool nextMember = true}) =>
+        shouldRestartAppDataListeners(
+          currentLocationId: 'academy', nextLocationId: 'academy',
+          currentSuperAdmin: false, nextSuperAdmin: false,
+          currentUid: 'one', nextUid: nextUid,
+          currentMember: true, nextMember: nextMember,
+        );
+    expect(restarts(), isFalse);
+    expect(restarts(nextUid: 'two'), isTrue);
+    expect(restarts(nextMember: false), isTrue);
   });
 
   test('profile creation no longer replaces the authenticated session', () {

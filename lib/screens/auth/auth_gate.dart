@@ -10,24 +10,29 @@ import 'account_ready_screen.dart';
 import 'profile_creation_screen.dart';
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+  const AuthGate({this.session, super.key});
+
+  final FirebaseSessionController? session;
 
   @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: firebaseSessionController,
-    builder: (context, _) {
-      return authGateDestination(
-        stage: firebaseSessionController.stage,
-        errorMessage: firebaseSessionController.errorMessage,
-        justCreatedProfiles: firebaseSessionController.justCreatedProfiles,
-        providerDisplayName: firebaseSessionController.authUser?.displayName,
-        signupDetails: switch (ModalRoute.of(context)?.settings.arguments) {
-          SignupProfileDetails details => details,
-          _ => null,
-        },
-      );
-    },
-  );
+  Widget build(BuildContext context) {
+    final controller = session ?? firebaseSessionController;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return authGateDestination(
+          stage: controller.stage,
+          errorMessage: controller.errorMessage,
+          justCreatedProfiles: controller.justCreatedProfiles,
+          providerDisplayName: controller.authUser?.displayName,
+          signupDetails: switch (ModalRoute.of(context)?.settings.arguments) {
+            SignupProfileDetails details => details,
+            _ => null,
+          },
+        );
+      },
+    );
+  }
 }
 
 @visibleForTesting

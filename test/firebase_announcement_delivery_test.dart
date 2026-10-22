@@ -1,8 +1,38 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ota_cheshire_management_platform/models/notification_item.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_app_data_service.dart';
+import 'package:ota_cheshire_management_platform/services/announcement_load_state.dart';
 
 void main() {
+  test('announcement loading waits for both authorized feeds', () {
+    final state = AnnouncementLoadState();
+    state.resolve(AnnouncementSource.everyone);
+    expect(state.isLoading, isTrue);
+    state.resolve(AnnouncementSource.targeted);
+    expect(state.isLoading, isFalse);
+    state.reset();
+    state.resolve(AnnouncementSource.targeted);
+    expect(state.isLoading, isTrue);
+    state.resolve(AnnouncementSource.everyone);
+    expect(state.isLoading, isFalse);
+  });
+
+  test('one feed recovering does not hide a different feed failure', () {
+    final state = AnnouncementLoadState();
+    state.resolve(AnnouncementSource.targeted, error: 'Targeted feed failed');
+    state.resolve(AnnouncementSource.everyone);
+    expect(state.isLoading, isFalse);
+    expect(state.errorMessage, 'Targeted feed failed');
+    state.resolve(AnnouncementSource.targeted);
+    expect(state.errorMessage, isNull);
+    state.resolve(AnnouncementSource.everyone, error: 'Public feed failed');
+    state.resolve(AnnouncementSource.targeted);
+    expect(state.errorMessage, 'Public feed failed');
+    state.reset();
+    expect(state.isLoading, isTrue);
+    expect(state.errorMessage, isNull);
+  });
+
   test(
     'authorized announcement sources merge, sort, deduplicate, and limit',
     () {

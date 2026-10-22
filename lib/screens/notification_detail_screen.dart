@@ -5,11 +5,24 @@ import '../services/app_data_service_provider.dart';
 import '../services/firebase/notification_read_exception.dart';
 import '../theme/ota_colors.dart';
 import '../utils/notification_formatters.dart';
+import 'content_unavailable_screen.dart';
 
 class NotificationDetailScreen extends StatefulWidget {
-  const NotificationDetailScreen({required this.notification, super.key});
+  const NotificationDetailScreen({required NotificationItem notification, super.key})
+    : notification = notification,
+      notificationId = null,
+      markReadOnOpen = false;
 
-  final NotificationItem notification;
+  const NotificationDetailScreen.fromId({
+    required String notificationId,
+    this.markReadOnOpen = false,
+    super.key,
+  }) : notificationId = notificationId,
+       notification = null;
+
+  final NotificationItem? notification;
+  final String? notificationId;
+  final bool markReadOnOpen;
 
   @override
   State<NotificationDetailScreen> createState() =>
@@ -18,6 +31,7 @@ class NotificationDetailScreen extends StatefulWidget {
 
 class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
   bool _updating = false;
+  bool _automaticReadAttempted = false;
 
   @override
   Widget build(BuildContext context) {
@@ -25,33 +39,32 @@ class _NotificationDetailScreenState extends State<NotificationDetailScreen> {
       animation: appDataService,
       builder: (context, _) {
         final notification = appDataService.notifications
-            .where((item) => item.id == widget.notification.id)
+            .where((item) => item.id ==
+                (widget.notificationId ?? widget.notification!.id))
             .firstOrNull;
         if (notification == null) {
           return Scaffold(
             appBar: AppBar(title: const Text('Notification Detail')),
-            body: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'This item is no longer available.',
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Back'),
-                    ),
-                  ],
-                ),
-              ),
+            body: ContentStatusPanel(
+              loading: appDataService.isAnnouncementsLoading,
+              errorMessage: appDataService.announcementsErrorMessage,
+              onRetry: appDataService.retryLiveData,
             ),
           );
         }
         final current = notification;
+        if (widget.markReadOnOpen && !_automaticReadAttempted) {
+          _automaticReadAttempted = true;
+          if (!current.isRead) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted && appDataService.notifications.any(
+                (item) => item.id == current.id,
+              )) {
+                _setReadState(current);
+              }
+            });
+          }
+        }
         return Scaffold(
           backgroundColor: OtaColors.blush,
           appBar: AppBar(

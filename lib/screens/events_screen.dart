@@ -81,7 +81,8 @@ class _EventsScreenState extends State<EventsScreen> {
         final initialEventId = widget.initialEventId;
         if (!_handledInitialEvent &&
             initialEventId != null &&
-            !_service.isEventsLoading) {
+            !_service.isEventsLoading &&
+            _service.eventsErrorMessage == null) {
           _handledInitialEvent = true;
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -527,7 +528,7 @@ void _showEventDetails(
       return AnimatedBuilder(
         animation: dataService,
         builder: (context, child) {
-          final locationId = dataService.selectedStudentProfile.locationId;
+          final locationId = event.locationId;
           final liveEvent = visibleStudentEventById(
             dataService.events,
             eventId: event.id,

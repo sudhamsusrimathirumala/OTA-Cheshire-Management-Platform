@@ -150,36 +150,52 @@ class PushNotificationService {
   String? _registeredUid;
   String? _installationId;
   String? _registrationFingerprint;
-  bool _registering = false;
+  int _registrationGeneration = 0;
+  int? _runningGeneration;
+  String? _sessionUid;
+  Future<String>? _installationIdLoad;
+  Future<void>? _registrationWrite;
   bool _permissionRequested = false;
   bool? _permissionGranted;
   final diagnostics = ValueNotifier<PushDiagnostics>(
     const PushDiagnostics(state: PushRegistrationState.idle),
   );
 
-  Future<void> handleSession(FirebaseSessionController session) async {
+  Future<void> handleSession(
+    FirebaseSessionController session, {
+    bool refreshPermission = false,
+  }) async {
     final account = session.account;
-    if (!shouldRegisterPushDevice(
+    final eligible = shouldRegisterPushDevice(
       stage: session.stage,
       account: account,
       hasAuthenticatedUser: session.authUser != null,
       debugViewActive: debugViewController.isActive,
-    )) {
+    );
+    final uid = eligible ? account!.id : null;
+    if (_sessionUid != uid) {
+      _sessionUid = uid;
+      ++_registrationGeneration;
+    }
+    if (!eligible || uid == null) {
       diagnostics.value = PushDiagnostics(
         state: PushRegistrationState.idle,
         sessionEligible: false,
       );
       return;
     }
-    if (_registering) return;
-    _registering = true;
+    final generation = _registrationGeneration;
+    if (_runningGeneration == generation) return;
+    _runningGeneration = generation;
     try {
       diagnostics.value = const PushDiagnostics(
         state: PushRegistrationState.requestingPermission,
         sessionEligible: true,
       );
-      if (!_permissionRequested) {
-        _permissionGranted = await _tokenProvider.requestPermission();
+      if (refreshPermission || !_permissionRequested) {
+        final granted = await _tokenProvider.requestPermission();
+        if (!_isCurrentRegistration(uid, generation)) return;
+        _permissionGranted = granted;
         _permissionRequested = true;
       }
       if (_permissionGranted != true) {
@@ -195,6 +211,7 @@ class PushNotificationService {
         permissionGranted: true,
       );
       final token = await _tokenProvider.getToken();
+      if (!_isCurrentRegistration(uid, generation)) return;
       if (token == null || token.trim().isEmpty) {
         diagnostics.value = const PushDiagnostics(
           state: PushRegistrationState.tokenUnavailable,
@@ -209,7 +226,8 @@ class PushNotificationService {
         permissionGranted: true,
         tokenExists: true,
       );
-      await _writeRegistration(account!.id, token);
+      await _writeRegistration(uid, token, generation);
+      if (!_isCurrentRegistration(uid, generation)) return;
       diagnostics.value = const PushDiagnostics(
         state: PushRegistrationState.registered,
         sessionEligible: true,
@@ -218,19 +236,20 @@ class PushNotificationService {
         registrationSucceeded: true,
       );
       await _tokenSubscription?.cancel();
+      if (!_isCurrentRegistration(uid, generation)) return;
       _tokenSubscription = _tokenProvider.onTokenRefresh.listen((value) {
-        if (value.trim().isNotEmpty && _registeredUid == account.id) {
-          unawaited(_writeRegistration(account.id, value));
+        if (value.trim().isNotEmpty && _isCurrentRegistration(uid, generation)) {
+          unawaited(_refreshRegistration(uid, value, generation));
         }
       });
     } on FirebaseException catch (error) {
-      _failed(error.code);
+      if (_isCurrentRegistration(uid, generation)) _failed(error.code);
     } on PlatformException catch (error) {
-      _failed(error.code);
+      if (_isCurrentRegistration(uid, generation)) _failed(error.code);
     } catch (_) {
-      _failed('unknown');
+      if (_isCurrentRegistration(uid, generation)) _failed('unknown');
     } finally {
-      _registering = false;
+      if (_runningGeneration == generation) _runningGeneration = null;
     }
   }
 
@@ -244,31 +263,84 @@ class PushNotificationService {
     );
   }
 
-  Future<void> _writeRegistration(String uid, String token) async {
-    final installationId = _installationId ??= await _installationIds
-        .getOrCreate();
+  bool _isCurrentRegistration(String uid, int generation) =>
+      _sessionUid == uid && generation == _registrationGeneration;
+
+  Future<void> _refreshRegistration(String uid, String token, int generation) async {
+    try {
+      await _writeRegistration(uid, token, generation);
+      if (_isCurrentRegistration(uid, generation)) {
+        diagnostics.value = const PushDiagnostics(
+          state: PushRegistrationState.registered,
+          sessionEligible: true,
+          permissionGranted: true,
+          tokenExists: true,
+          registrationSucceeded: true,
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (_isCurrentRegistration(uid, generation)) _failed(error.code);
+    } catch (_) {
+      if (_isCurrentRegistration(uid, generation)) _failed('token-refresh-failed');
+    }
+  }
+
+  Future<void> _writeRegistration(String uid, String token, int generation) async {
+    final installationId = _installationId ??= await (
+      _installationIdLoad ??= _installationIds.getOrCreate()
+    );
+    if (!_isCurrentRegistration(uid, generation)) return;
     final platform = defaultTargetPlatform == TargetPlatform.iOS
         ? 'ios'
         : 'android';
     final environment = AppEnvironmentConfig.current.name;
     final fingerprint =
         '$uid\u0000$installationId\u0000$token\u0000$platform\u0000$environment';
-    if (_registrationFingerprint == fingerprint) return;
-    await _registrationStore.upsert(
-      uid: uid,
-      installationId: installationId,
-      token: token,
-      platform: platform,
-      environment: environment,
-    );
-    _registeredUid = uid;
-    _registrationFingerprint = fingerprint;
+    final previousWrite = _registrationWrite;
+    final write = () async {
+      try {
+        await previousWrite;
+      } catch (_) {
+        // A later token can recover a failed registration.
+      }
+      if (!_isCurrentRegistration(uid, generation) ||
+          _registrationFingerprint == fingerprint) return;
+      await _registrationStore.upsert(
+        uid: uid,
+        installationId: installationId,
+        token: token,
+        platform: platform,
+        environment: environment,
+      );
+      if (!_isCurrentRegistration(uid, generation)) return;
+      _registeredUid = uid;
+      _registrationFingerprint = fingerprint;
+    }();
+    _registrationWrite = write;
+    try {
+      await write;
+    } finally {
+      if (identical(_registrationWrite, write)) _registrationWrite = null;
+    }
   }
 
   Future<void> unregisterForSignOut() async {
-    final uid = _registeredUid ?? FirebaseAuth.instance.currentUser?.uid;
-    final installationId =
-        _installationId ?? await _installationIds.getOrCreate();
+    final uid = _registeredUid ?? _sessionUid ?? FirebaseAuth.instance.currentUser?.uid;
+    _sessionUid = null;
+    final generation = ++_registrationGeneration;
+    _registeredUid = null;
+    _registrationFingerprint = null;
+    final subscription = _tokenSubscription;
+    _tokenSubscription = null;
+    await subscription?.cancel();
+    try {
+      await _registrationWrite;
+    } catch (_) {
+      // Complete an in-flight write before removing its device document.
+    }
+    final installationId = _installationId ??= await (
+      _installationIdLoad ??= _installationIds.getOrCreate()
+    );
     try {
       if (uid != null) {
         await _registrationStore.delete(
@@ -279,15 +351,12 @@ class PushNotificationService {
     } catch (_) {
       // Sign-out cleanup is intentionally best effort.
     }
+    if (generation != _registrationGeneration) return;
     try {
       await _tokenProvider.deleteToken();
     } catch (_) {
       // Token deletion must not prevent sign-out.
     }
-    await _tokenSubscription?.cancel();
-    _tokenSubscription = null;
-    _registeredUid = null;
-    _registrationFingerprint = null;
   }
 
   FirebaseMessaging get messaging => _messaging ?? FirebaseMessaging.instance;

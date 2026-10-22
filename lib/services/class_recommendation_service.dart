@@ -97,42 +97,39 @@ ClassSession? nextRecommendedClassFromSchedule(
   required int currentMinutes,
   DateTime? currentDate,
 }) {
-  final candidates = <ClassSession>[];
-  final academyDate =
-      currentDate ??
-      const LocationTimeService().toLocationTime(
-        DateTime.now(),
-        student.locationId,
-      );
-  // Include the same weekday next week when every class today has started.
-  for (var offset = 0; offset <= DateTime.daysPerWeek; offset++) {
-    final weekday = ((currentWeekday + offset - 1) % DateTime.daysPerWeek) + 1;
-    final sessions = [...schedule[weekday] ?? const <ClassSession>[]]
-      ..sort((a, b) => a.startMinutes.compareTo(b.startMinutes));
-    for (final session in sessions) {
-      if (!session.isPublished ||
-          session.locationId != student.locationId ||
-          (session.resumesOn != null &&
-              session.resumesOn!.isAfter(
-                const LocationTimeService().combineDateAndTime(
-                  locationId: student.locationId,
-                  date: DateTime(
-                    academyDate.year,
-                    academyDate.month,
-                    academyDate.day + offset,
-                  ),
-                  time: TimeOfDay(
-                    hour: session.startMinutes ~/ 60,
-                    minute: session.startMinutes % 60,
-                  ),
-                ),
-              )) ||
-          (offset == 0 && session.startMinutes < currentMinutes)) {
-        continue;
+  final candidates = <({ClassSession session, int dayOffset})>[];
+  final time = const LocationTimeService();
+  final academyDate = currentDate ?? time.toLocationTime(
+    DateTime.now(), student.locationId,
+  );
+  final baseDate = DateTime.utc(academyDate.year, academyDate.month, academyDate.day);
+  for (final entry in schedule.entries) {
+    for (final session in entry.value) {
+      if (!session.isPublished || session.locationId != student.locationId) continue;
+      var offset = (entry.key - currentWeekday + DateTime.daysPerWeek) % DateTime.daysPerWeek;
+      if (offset == 0 && session.startMinutes < currentMinutes) offset += 7;
+      final resumesOn = session.resumesOn;
+      if (resumesOn != null) {
+        final resumeDate = time.toLocationTime(resumesOn, student.locationId);
+        final daysUntilResume = DateTime.utc(resumeDate.year, resumeDate.month, resumeDate.day)
+            .difference(baseDate).inDays;
+        if (daysUntilResume > offset) {
+          offset += ((daysUntilResume - offset + 6) ~/ 7) * 7;
+        }
+        final start = time.combineDateAndTime(
+          locationId: student.locationId,
+          date: DateTime(academyDate.year, academyDate.month, academyDate.day + offset),
+          time: TimeOfDay(hour: session.startMinutes ~/ 60, minute: session.startMinutes % 60),
+        );
+        if (resumesOn.isAfter(start)) offset += 7;
       }
-      candidates.add(session);
+      candidates.add((session: session, dayOffset: offset));
     }
   }
+  candidates.sort((a, b) {
+    final days = a.dayOffset.compareTo(b.dayOffset);
+    return days != 0 ? days : a.session.startMinutes.compareTo(b.session.startMinutes);
+  });
   if (candidates.isEmpty) return null;
   final age = const LocationTimeService().ageForStudent(student);
 
@@ -140,7 +137,7 @@ ClassSession? nextRecommendedClassFromSchedule(
   // Ages 3-5: Little Tigers. Ages 12-18: whichever Teen & Black Belt or Adult
   // class starts next. Ages 19+: Adult only. No belt restriction for those
   // age groups; younger ages 6-11 require explicit belt eligibility.
-  final eligible = candidates
+  final eligible = candidates.map((candidate) => candidate.session)
       .where((session) => isTypicallyRecommendedFor(session, student))
       .toList(growable: false);
   if (eligible.isEmpty) return null;

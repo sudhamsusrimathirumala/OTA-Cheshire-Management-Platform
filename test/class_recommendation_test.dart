@@ -29,6 +29,7 @@ void main() {
     List<String> belts = const <String>[],
     String location = 'cheshire',
     bool published = true,
+    DateTime? resumesOn,
   }) => ClassSession(
     id: id,
     className: name,
@@ -40,6 +41,7 @@ void main() {
     eligibleBelts: belts,
     description: '',
     isPublished: published,
+    resumesOn: resumesOn,
   );
 
   Student student({required bool older, List<String> preferred = const []}) =>
@@ -77,6 +79,32 @@ void main() {
         currentWeekday: DateTime.monday,
         currentMinutes: 0,
       );
+
+  test('a class paused for several weeks remains a future recommendation', () {
+    final paused = session(id: 'paused', name: 'Adult', type: 'adult', hour: 18,
+      resumesOn: DateTime.utc(2026, 2, 2, 0));
+    expect(nextRecommendedClassFromSchedule({DateTime.monday: [paused]}, child(30),
+      currentWeekday: DateTime.monday, currentMinutes: 0,
+      currentDate: DateTime(2026, 1, 5)), same(paused));
+  });
+
+  test('resume dates take priority over weekday order', () {
+    final paused = session(id: 'paused', name: 'Adult', type: 'adult', hour: 18,
+      resumesOn: DateTime.utc(2026, 2, 2, 0));
+    final available = session(id: 'available', name: 'Adult', type: 'adult', hour: 18);
+    expect(nextRecommendedClassFromSchedule({DateTime.monday: [paused], DateTime.tuesday: [available]}, child(30),
+      currentWeekday: DateTime.monday, currentMinutes: 0,
+      currentDate: DateTime(2026, 1, 5)), same(available));
+  });
+
+  test('resuming after class time skips that occurrence', () {
+    final paused = session(id: 'paused', name: 'Adult', type: 'adult', hour: 18,
+      resumesOn: DateTime.utc(2026, 1, 5, 23, 30));
+    final available = session(id: 'available', name: 'Adult', type: 'adult', hour: 18);
+    expect(nextRecommendedClassFromSchedule({DateTime.monday: [paused], DateTime.tuesday: [available]}, child(30),
+      currentWeekday: DateTime.monday, currentMinutes: 0,
+      currentDate: DateTime(2026, 1, 5)), same(available));
+  });
 
   test('Little Tigers: ages 3-5 are eligible regardless of belt', () {
     final littleTigers = session(

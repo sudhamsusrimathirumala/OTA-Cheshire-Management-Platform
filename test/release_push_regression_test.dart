@@ -22,6 +22,7 @@ import 'package:ota_cheshire_management_platform/services/mock_app_data_service.
 import 'package:ota_cheshire_management_platform/services/push_navigation_coordinator.dart';
 import 'package:ota_cheshire_management_platform/services/push_notification_service.dart';
 import 'package:ota_cheshire_management_platform/widgets/unsaved_changes_guard.dart';
+import 'package:ota_cheshire_management_platform/widgets/authorized_route.dart';
 
 void main() {
   setUp(initializeMockAppDataServiceForTests);
@@ -169,6 +170,76 @@ void main() {
     await tester.pump();
     expect(find.text('This item is no longer available.'), findsOneWidget);
     expect(find.text(resource.description), findsNothing);
+  });
+
+  testWidgets('announcement push waits for content and handles a read failure', (tester) async {
+    final service = _MutableAppDataService();
+    final notice = service.notificationItems.first;
+    service.notificationItems = [];
+    service.announcementsLoading = true;
+    service.failReads = true;
+    appDataService = service;
+    final navigatorKey = GlobalKey<NavigatorState>();
+    await tester.pumpWidget(MaterialApp(navigatorKey: navigatorKey,
+      home: const SizedBox(), routes: {
+        OtaRoutes.notifications: (_) => const Scaffold(body: Text('Announcements')),
+      }));
+    final coordinator = PushNavigationCoordinator(navigatorKey: navigatorKey,
+      service: _pushService(), accessState: () => const PushAccessState(
+        stage: SessionStage.member, memberLocationId: 'ota-cheshire'));
+    coordinator.handlePayload({'contentType': 'announcement', 'contentId': notice.id,
+      'locationId': 'ota-cheshire'});
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Loading item…'), findsOneWidget);
+    expect(find.text('This item is no longer available.'), findsNothing);
+    expect(service.readCalls, isEmpty);
+    service.notificationItems = [notice];
+    service.announcementsLoading = false;
+    service.publishChange();
+    await tester.pump();
+    await tester.pump();
+    expect(find.text(notice.title), findsWidgets);
+    expect(service.readCalls, [notice.id]);
+    expect(find.text('Unable to update notification state.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resource detail distinguishes loading and retryable errors', (tester) async {
+    final service = _MutableAppDataService()
+      ..clearResources()
+      ..resourcesLoading = true;
+    appDataService = service;
+    await tester.pumpWidget(const MaterialApp(
+      home: ResourceDetailScreen.fromId(resourceId: 'late-resource')));
+    expect(find.text('Loading item…'), findsOneWidget);
+    service.resourcesLoading = false;
+    service.resourcesError = 'offline';
+    service.publishChange();
+    await tester.pump();
+    expect(find.text('This item is no longer available.'), findsNothing);
+    await tester.tap(find.text('Retry'));
+    expect(service.retryCalls, 1);
+  });
+
+  testWidgets('mounted protected routes stop building after identity is cleared', (tester) async {
+    final authentication = _FakeAuthenticationService(_FakeUser());
+    final session = _MutableSession(authentication: authentication)
+      ..stage = SessionStage.member
+      ..account = _account;
+    await tester.pumpWidget(MaterialApp(home: AuthorizedRoute(
+      session: session, routeName: OtaRoutes.dashboard,
+      builder: (_) => Scaffold(body: Text(session.account!.firstName)),
+    )));
+    expect(find.text('Parent'), findsOneWidget);
+    session.clearIdentity(SessionStage.loading);
+    await tester.pump();
+    expect(find.text('Loading your OTA account...'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    session.clearIdentity(SessionStage.signedOut);
+    await tester.pump();
+    expect(find.text('Parent'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('deleted class detail becomes unavailable', (tester) async {
@@ -364,6 +435,85 @@ void main() {
     );
   });
 
+  test('returning from notification settings refreshes a denied permission', () async {
+    final tokens = _FakeTokenProvider('token', permissionGranted: false);
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(tokens, registrations);
+    final session = _memberSession();
+    await service.handleSession(session);
+    tokens.permissionGranted = true;
+    await service.handleSession(session, refreshPermission: true);
+    expect(tokens.permissionRequests, 2);
+    expect(registrations.writes, ['member-1:install-1:token']);
+    await service.unregisterForSignOut();
+  });
+
+  test('token lookup finishing after sign-out cannot restore registration', () async {
+    final result = Completer<String?>();
+    final tokens = _FakeTokenProvider(null)..tokenResult = result.future;
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(tokens, registrations);
+    final registering = service.handleSession(_memberSession());
+    await Future<void>.delayed(Duration.zero);
+    await service.unregisterForSignOut();
+    result.complete('late-token');
+    await registering;
+    expect(registrations.writes, isEmpty);
+    expect(registrations.deletes, ['member-1:install-1']);
+  });
+
+  test('sign-out removes the device after an in-flight registration completes', () async {
+    final gate = Completer<void>();
+    final registrations = _FakeRegistrationStore()
+      ..writeGate = gate.future
+      ..writeStarted = Completer<void>();
+    final service = _memberPushService(_FakeTokenProvider('token'), registrations);
+    final registering = service.handleSession(_memberSession());
+    await registrations.writeStarted!.future;
+    final signingOut = service.unregisterForSignOut();
+    await Future<void>.delayed(Duration.zero);
+    expect(registrations.deletes, isEmpty);
+    gate.complete();
+    await Future.wait([registering, signingOut]);
+    expect(registrations.writes, ['member-1:install-1:token']);
+    expect(registrations.deletes, ['member-1:install-1']);
+  });
+
+  test('token refresh errors are handled and a later token can recover', () async {
+    final tokens = _FakeTokenProvider('token-1');
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(tokens, registrations);
+    await service.handleSession(_memberSession());
+    registrations.failuresRemaining = 1;
+    tokens.emit('token-2');
+    await Future<void>.delayed(Duration.zero);
+    expect(service.diagnostics.value.state, PushRegistrationState.failed);
+    tokens.emit('token-3');
+    await Future<void>.delayed(Duration.zero);
+    expect(service.diagnostics.value.state, PushRegistrationState.registered);
+    expect(registrations.writes.last, 'member-1:install-1:token-3');
+    await service.unregisterForSignOut();
+  });
+
+  test('rapid token changes preserve the newest token after delayed writes', () async {
+    final tokens = _FakeTokenProvider('token-1');
+    final registrations = _FakeRegistrationStore();
+    final service = _memberPushService(tokens, registrations);
+    await service.handleSession(_memberSession());
+    final gate = Completer<void>();
+    registrations.writeGate = gate.future;
+    registrations.writeStarted = Completer<void>();
+    tokens.emit('token-2');
+    await registrations.writeStarted!.future;
+    tokens.emit('token-3');
+    await Future<void>.delayed(Duration.zero);
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+    expect(registrations.writes, ['member-1:install-1:token-1',
+      'member-1:install-1:token-2', 'member-1:install-1:token-3']);
+    await service.unregisterForSignOut();
+  });
+
   test(
     'sanitized Firestore failure can be retried without exposing token',
     () async {
@@ -423,6 +573,33 @@ class _MutableAppDataService extends MockAppDataService {
   late List<NotificationItem> notificationItems;
   late List<AcademyResource> resourceItems;
   late Map<int, List<ClassSession>> scheduleItems;
+  bool announcementsLoading = false;
+  bool resourcesLoading = false;
+  String? resourcesError;
+  bool failReads = false;
+  final readCalls = <String>[];
+  int retryCalls = 0;
+
+  void publishChange() => notifyListeners();
+
+  @override
+  bool get isAnnouncementsLoading => announcementsLoading;
+
+  @override
+  bool get isResourcesLoading => resourcesLoading;
+
+  @override
+  String? get resourcesErrorMessage => resourcesError;
+
+  @override
+  void retryLiveData() => retryCalls++;
+
+  @override
+  Future<void> markNotificationRead(String announcementId) async {
+    readCalls.add(announcementId);
+    if (failReads) throw Exception('Read failed');
+    await super.markNotificationRead(announcementId);
+  }
 
   @override
   List<NotificationItem> get notifications => notificationItems;
@@ -457,7 +634,8 @@ class _FakeTokenProvider implements PushTokenProvider {
   _FakeTokenProvider(this.token, {this.permissionGranted = true});
 
   String? token;
-  final bool permissionGranted;
+  bool permissionGranted;
+  Future<String?>? tokenResult;
   int deleteCalls = 0;
   int permissionRequests = 0;
   final _refreshes = StreamController<String>.broadcast();
@@ -468,7 +646,7 @@ class _FakeTokenProvider implements PushTokenProvider {
   Future<void> deleteToken() async => deleteCalls++;
 
   @override
-  Future<String?> getToken() async => token;
+  Future<String?> getToken() => tokenResult ?? Future.value(token);
 
   @override
   Stream<String> get onTokenRefresh => _refreshes.stream;
@@ -488,6 +666,8 @@ class _FakeInstallationIdStore implements InstallationIdStore {
 class _FakeRegistrationStore implements DeviceRegistrationStore {
   _FakeRegistrationStore({this.failuresRemaining = 0});
   int failuresRemaining;
+  Future<void>? writeGate;
+  Completer<void>? writeStarted;
   final writes = <String>[];
   final deletes = <String>[];
 
@@ -507,6 +687,8 @@ class _FakeRegistrationStore implements DeviceRegistrationStore {
     required String platform,
     required String environment,
   }) async {
+    if (writeStarted?.isCompleted == false) writeStarted!.complete();
+    await writeGate;
     if (failuresRemaining > 0) {
       failuresRemaining--;
       throw FirebaseException(
@@ -521,6 +703,17 @@ class _FakeRegistrationStore implements DeviceRegistrationStore {
 class _FakeUser implements User {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _MutableSession extends FirebaseSessionController {
+  _MutableSession({required super.authentication});
+
+  void clearIdentity(SessionStage next) {
+    account = null;
+    selectedProfile = null;
+    stage = next;
+    notifyListeners();
+  }
 }
 
 class _FakeAuthenticationService implements AuthenticationService {

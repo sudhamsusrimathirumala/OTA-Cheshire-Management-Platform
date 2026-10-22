@@ -33,6 +33,7 @@ import 'services/guest/guest_experience_controller.dart';
 import 'services/push_runtime.dart';
 import 'theme/ota_colors.dart';
 import 'widgets/performance_diagnostics_panel.dart';
+import 'widgets/authorized_route.dart';
 
 class OTAApp extends StatefulWidget {
   const OTAApp({super.key});
@@ -68,11 +69,11 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(firebaseSessionController.handleAppResumed());
-      _handleSessionChanged();
+      _handleSessionChanged(refreshPushPermission: true);
     }
   }
 
-  void _handleSessionChanged() {
+  void _handleSessionChanged({bool refreshPushPermission = false}) {
     final current = firebaseSessionController.stage;
     final enteringGuest =
         current == SessionStage.guest && _previousStage != SessionStage.guest;
@@ -80,7 +81,10 @@ class _OTAAppState extends State<OTAApp> with WidgetsBindingObserver {
     if (current == SessionStage.signedOut) guestExperienceController.reset();
     final pushService = pushNotificationService;
     if (pushService != null) {
-      pushService.handleSession(firebaseSessionController);
+      pushService.handleSession(
+        firebaseSessionController,
+        refreshPermission: refreshPushPermission,
+      );
     }
     pushNavigationCoordinator?.flush();
     if (current != SessionStage.signedOut) {
@@ -220,6 +224,9 @@ Route<dynamic>? _buildAuthorizedRoute(RouteSettings settings) {
   return PageRouteBuilder<void>(
     settings: settings,
     pageBuilder: (context, animation, secondaryAnimation) {
+      if (Firebase.apps.isNotEmpty) {
+        return AuthorizedRoute(routeName: settings.name, builder: builder);
+      }
       final page = authorizedBuilder(context);
       if (authorized &&
           stage == SessionStage.guest &&

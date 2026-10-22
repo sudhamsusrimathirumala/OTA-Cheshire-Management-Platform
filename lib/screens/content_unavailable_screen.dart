@@ -1,5 +1,50 @@
 import 'package:flutter/material.dart';
 
+class ContentStatusPanel extends StatelessWidget {
+  const ContentStatusPanel({
+    required this.loading,
+    required this.errorMessage,
+    required this.onRetry,
+    super.key,
+  });
+
+  final bool loading;
+  final String? errorMessage;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (loading) ...[
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            const Text('Loading item…'),
+          ] else ...[
+            Text(
+              errorMessage == null
+                  ? 'This item is no longer available.'
+                  : 'Unable to load this item. Check your connection and try again.',
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            if (errorMessage != null)
+              FilledButton(onPressed: onRetry, child: const Text('Retry'))
+            else
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Back'),
+              ),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
 class ContentUnavailableScreen extends StatelessWidget {
   const ContentUnavailableScreen({required this.returnRoute, super.key});
 

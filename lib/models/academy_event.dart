@@ -68,13 +68,17 @@ class AcademyEvent {
     occurrenceId: occurrence.id,
   );
 
-  bool get isRegistrationOpen {
-    if (primaryRegistrationResourceId == null) {
+  bool get isRegistrationOpen => registrationOpenAt(DateTime.now());
+
+  bool registrationOpenAt(DateTime now) {
+    final end = occurrenceId == null ? lastOccurrenceEnd : endDateTime;
+    if (primaryRegistrationResourceId == null || !isPublished ||
+        isArchived || !end.isAfter(now)) {
       return false;
     }
 
     return registrationDeadline == null ||
-        registrationDeadline!.isAfter(DateTime.now());
+        registrationDeadline!.isAfter(now);
   }
 
   String get dateRangeLabel => _formatDateTime(startDateTime);

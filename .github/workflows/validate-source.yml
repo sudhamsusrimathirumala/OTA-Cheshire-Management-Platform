@@ -74,5 +74,22 @@ jobs:
       - run: npm run build
         working-directory: functions
       - run: npm install --global firebase-tools
-      - name: Run Firestore Rules and event-reminder integration tests
-        run: firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test && node --test functions/lib/test/event_reminders_emulator.test.js"
+      - name: Run Firestore Rules and notification integration tests
+        run: firebase emulators:exec --only firestore --project demo-ota-active-access "npm --prefix tool/firebase_emulator_tests test && node --test functions/lib/test/*_emulator.test.js"
+
+  production-android-build:
+    name: Production Android compilation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug --flavor prod -t lib/main_prod.dart

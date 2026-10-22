@@ -15,6 +15,7 @@ import '../../models/student.dart';
 import '../../models/student_profile.dart';
 import '../../models/user_account.dart';
 import '../debug_view_controller.dart';
+import '../announcement_load_state.dart';
 import 'firebase_identity_contract.dart';
 import 'firebase_session_controller.dart';
 import 'notification_read_exception.dart';
@@ -123,6 +124,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     firebaseSessionController.addListener(_handleSessionChanged);
     _adminLocations.addListener(_handleAdminLocationsChanged);
     _handleSessionChanged();
+    _clockTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (_listeningLocationId != null || _listeningAsSuperAdmin) {
+        notifyListeners();
+      }
+    });
   }
 
   FirebaseFirestore? _firestore;
@@ -167,6 +173,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _isScheduleLoading = true;
   String? _scheduleErrorMessage;
   bool _isAnnouncementsLoading = true;
+  final _announcementLoadState = AnnouncementLoadState();
   String? _announcementsErrorMessage;
   bool _isEventsLoading = true;
   String? _eventsErrorMessage;
@@ -179,6 +186,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   bool _isUsingFallbackData = false;
   DebugViewMode _developmentViewMode = DebugViewMode.none;
   String? _listeningLocationId;
+  String? _listeningUid;
+  bool _listeningAsMember = false;
+  int _listenerGeneration = 0;
+  Timer? _clockTimer;
   bool _listeningAsSuperAdmin = false;
   String _sessionDataFingerprint = '';
   String _notificationReadIdsFingerprint = '';
@@ -239,6 +250,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       currentSuperAdmin: _listeningAsSuperAdmin,
       nextLocationId: locationId,
       nextSuperAdmin: superAdmin,
+      currentUid: _listeningUid,
+      nextUid: session.authUser?.uid,
+      currentMember: _listeningAsMember,
+      nextMember: session.stage == SessionStage.member,
     )) {
       if (_sessionDataFingerprint == sessionFingerprint) return;
       _sessionDataFingerprint = sessionFingerprint;
@@ -252,6 +267,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _stopFirestoreListeners();
     _listeningLocationId = locationId;
     _listeningAsSuperAdmin = superAdmin;
+    _listeningUid = session.authUser?.uid;
+    _listeningAsMember = session.stage == SessionStage.member;
     _sessionDataFingerprint = sessionFingerprint;
     PerformanceDiagnostics.mark('app_data_eligible');
     _listenToFirestore(locationId: locationId, superAdmin: superAdmin);
@@ -304,6 +321,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _stopFirestoreListeners() {
+    ++_listenerGeneration;
     unawaited(_scheduleSubscription?.cancel());
     unawaited(_announcementsSubscription?.cancel());
     unawaited(_targetedAnnouncementsSubscription?.cancel());
@@ -322,6 +340,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminStudentsSubscription = null;
     _adminUsersSubscription = null;
     _listeningLocationId = null;
+    _listeningUid = null;
+    _listeningAsMember = false;
     _listeningAsSuperAdmin = false;
     _sessionDataFingerprint = '';
     _initialDataTrace = null;
@@ -353,6 +373,7 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _isUsingFallbackData = false;
     _isScheduleLoading = true;
     _isAnnouncementsLoading = true;
+    _announcementLoadState.reset();
     _isEventsLoading = true;
     _isResourcesLoading = true;
     _isAdminStudentsLoading = true;
@@ -404,6 +425,23 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _adminUsersErrorMessage = null;
   }
 
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>> _listenToQuery(
+    Query<Map<String, dynamic>> query,
+    void Function(QuerySnapshot<Map<String, dynamic>>) onData,
+    void Function(Object) onError, {
+    bool includeMetadataChanges = false,
+  }) {
+    final generation = _listenerGeneration;
+    return query.snapshots(includeMetadataChanges: includeMetadataChanges).listen(
+      (snapshot) {
+        if (generation == _listenerGeneration) onData(snapshot);
+      },
+      onError: (Object error) {
+        if (generation == _listenerGeneration) onError(error);
+      },
+    );
+  }
+
   void _listenToSchedule(
     FirebaseFirestore firestore,
     String? locationId,
@@ -415,9 +453,10 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     query = query.where('locationId', isEqualTo: locationId);
     if (publishedOnly) query = query.where('isActive', isEqualTo: true);
     PerformanceDiagnostics.mark('schedule_listener_started');
-    _scheduleSubscription = query
-        .snapshots(includeMetadataChanges: PerformanceDiagnostics.enabled)
-        .listen(_handleScheduleSnapshot, onError: _handleScheduleError);
+    _scheduleSubscription = _listenToQuery(
+      query, _handleScheduleSnapshot, _handleScheduleError,
+      includeMetadataChanges: PerformanceDiagnostics.enabled,
+    );
   }
 
   void _listenToAnnouncements(
@@ -438,23 +477,19 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .limit(memberAnnouncementLimit);
     }
     PerformanceDiagnostics.mark('announcements_listener_started');
-    _announcementsSubscription = query.snapshots().listen(
-      _handleAnnouncementsSnapshot,
-      onError: _handleAnnouncementsError,
+    _announcementsSubscription = _listenToQuery(
+      query, _handleAnnouncementsSnapshot, _handleAnnouncementsError,
     );
     if (publishedOnly && uid != null) {
       PerformanceDiagnostics.mark('targeted_announcements_listener_started');
-      _targetedAnnouncementsSubscription = firestore
-          .collection(FirestoreCollections.users)
-          .doc(uid)
-          .collection('announcementDeliveries')
-          .orderBy('publishedAt', descending: true)
-          .limit(memberAnnouncementLimit)
-          .snapshots()
-          .listen(
-            _handleTargetedAnnouncementsSnapshot,
-            onError: _handleTargetedAnnouncementsError,
-          );
+      _targetedAnnouncementsSubscription = _listenToQuery(
+        firestore.collection(FirestoreCollections.users).doc(uid)
+            .collection('announcementDeliveries')
+            .orderBy('publishedAt', descending: true)
+            .limit(memberAnnouncementLimit),
+        _handleTargetedAnnouncementsSnapshot,
+        _handleTargetedAnnouncementsError,
+      );
     }
   }
 
@@ -481,9 +516,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .limit(memberEventLimit);
     }
     PerformanceDiagnostics.mark('events_listener_started');
-    _eventsSubscription = query.snapshots().listen(
-      _handleEventsSnapshot,
-      onError: _handleEventsError,
+    _eventsSubscription = _listenToQuery(
+      query, _handleEventsSnapshot, _handleEventsError,
     );
   }
 
@@ -504,9 +538,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
           .limit(memberResourceLimit);
     }
     PerformanceDiagnostics.mark('resources_listener_started');
-    _resourcesSubscription = query.snapshots().listen(
-      _handleResourcesSnapshot,
-      onError: _handleResourcesError,
+    _resourcesSubscription = _listenToQuery(
+      query, _handleResourcesSnapshot, _handleResourcesError,
     );
   }
 
@@ -520,9 +553,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
     PerformanceDiagnostics.mark('admin_students_listener_started');
-    _adminStudentsSubscription = query.snapshots().listen(
-      _handleAdminStudentsSnapshot,
-      onError: _handleAdminStudentsError,
+    _adminStudentsSubscription = _listenToQuery(
+      query, _handleAdminStudentsSnapshot, _handleAdminStudentsError,
     );
   }
 
@@ -536,9 +568,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     );
     if (!superAdmin) query = query.where('locationId', isEqualTo: locationId);
     PerformanceDiagnostics.mark('admin_users_listener_started');
-    _adminUsersSubscription = query.snapshots().listen(
-      _handleAdminUsersSnapshot,
-      onError: _handleAdminUsersError,
+    _adminUsersSubscription = _listenToQuery(
+      query, _handleAdminUsersSnapshot, _handleAdminUsersError,
     );
   }
 
@@ -828,13 +859,15 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         : const <AcademyAnnouncement>[];
     if (firebaseSessionController.stage == SessionStage.member) {
       _rebuildMemberNotifications();
+      _announcementLoadState.resolve(AnnouncementSource.everyone);
+      _syncAnnouncementLoadState();
     } else {
       _notifications = const <NotificationItem>[];
+      _isAnnouncementsLoading = false;
+      _announcementsErrorMessage = null;
     }
     _syncNotificationReadListener();
     _isUsingFallbackData = false;
-    _isAnnouncementsLoading = false;
-    _announcementsErrorMessage = null;
     _reportInitialSnapshot('announcements');
     notifyListeners();
   }
@@ -853,8 +886,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
     _rebuildMemberNotifications();
     _syncNotificationReadListener();
     _isUsingFallbackData = false;
-    _isAnnouncementsLoading = false;
-    _announcementsErrorMessage = null;
+    _announcementLoadState.resolve(AnnouncementSource.targeted);
+    _syncAnnouncementLoadState();
     _reportInitialSnapshot('targeted_announcements');
     notifyListeners();
   }
@@ -877,6 +910,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
       everyone: everyoneItems,
       targeted: targetedItems,
     );
+  }
+
+  void _syncAnnouncementLoadState() {
+    _isAnnouncementsLoading = _announcementLoadState.isLoading;
+    _announcementsErrorMessage = _announcementLoadState.errorMessage;
   }
 
   void _listenToNotificationReads(FirebaseFirestore firestore, String uid) {
@@ -906,6 +944,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
         .snapshots()
         .listen(
           (snapshot) {
+            if (_notificationReadsUid != uid ||
+                _notificationReadIdsFingerprint != fingerprint) return;
             PerformanceDiagnostics.mark(
               'notification_reads_first_snapshot',
               fromCache: snapshot.metadata.isFromCache,
@@ -923,10 +963,20 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   }
 
   void _handleAnnouncementsError(Object error) {
-    _notifications = const <NotificationItem>[];
+    _latestAnnouncementsSnapshot = null;
     _adminAnnouncements = const <AcademyAnnouncement>[];
-    _isAnnouncementsLoading = false;
-    _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
+    if (firebaseSessionController.stage == SessionStage.member) {
+      _rebuildMemberNotifications();
+      _announcementLoadState.resolve(
+        AnnouncementSource.everyone,
+        error: 'Unable to load announcements from Firestore.',
+      );
+      _syncAnnouncementLoadState();
+    } else {
+      _notifications = const <NotificationItem>[];
+      _isAnnouncementsLoading = false;
+      _announcementsErrorMessage = 'Unable to load announcements from Firestore.';
+    }
     _debugFirebaseError('announcements', error);
     _reportInitialSnapshot('announcements_error');
     notifyListeners();
@@ -935,9 +985,11 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
   void _handleTargetedAnnouncementsError(Object error) {
     _latestTargetedAnnouncementsSnapshot = null;
     _rebuildMemberNotifications();
-    _isAnnouncementsLoading = false;
-    _announcementsErrorMessage =
-        'Unable to load targeted announcements from Firestore.';
+    _announcementLoadState.resolve(
+      AnnouncementSource.targeted,
+      error: 'Unable to load targeted announcements from Firestore.',
+    );
+    _syncAnnouncementLoadState();
     _debugFirebaseError('targeted announcements', error);
     notifyListeners();
   }
@@ -1095,6 +1147,8 @@ class FirebaseAppDataService extends ChangeNotifier implements AppDataService {
 
   @override
   void dispose() {
+    ++_listenerGeneration;
+    _clockTimer?.cancel();
     firebaseSessionController.removeListener(_handleSessionChanged);
     _adminLocations.removeListener(_handleAdminLocationsChanged);
     unawaited(_scheduleSubscription?.cancel());
@@ -1763,8 +1817,13 @@ bool shouldRestartAppDataListeners({
   required bool currentSuperAdmin,
   required String? nextLocationId,
   required bool nextSuperAdmin,
+  String? currentUid,
+  String? nextUid,
+  bool currentMember = false,
+  bool nextMember = false,
 }) =>
-    currentLocationId != nextLocationId || currentSuperAdmin != nextSuperAdmin;
+    currentLocationId != nextLocationId || currentSuperAdmin != nextSuperAdmin ||
+    currentUid != nextUid || currentMember != nextMember;
 
 List<T> mergeActiveLocationRecords<T>(
   Map<String, List<T>> recordsByLocation,
