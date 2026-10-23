@@ -7,6 +7,7 @@ import '../../services/app_data_service_provider.dart';
 import '../../services/location_time_service.dart';
 import '../../theme/ota_colors.dart';
 import '../../widgets/admin/admin_bottom_nav_bar.dart';
+import '../../widgets/app_issue_report_notice.dart';
 
 class AdminDashboardScreen extends StatelessWidget {
   const AdminDashboardScreen({super.key});
@@ -42,64 +43,71 @@ class AdminDashboardScreen extends StatelessWidget {
           title: 'Dashboard',
           subtitle:
               'Manage schedule changes, announcements, events, and student information.',
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final useTwoColumns = constraints.maxWidth >= 820;
-              final sections = <Widget>[
-                _SummarySection(
-                  title: "Today's Schedule",
-                  icon: Icons.today_outlined,
-                  isLoading: appDataService.isScheduleLoading,
-                  errorMessage: appDataService.scheduleErrorMessage,
-                  emptyMessage: 'No published classes are scheduled today.',
-                  rows: [for (final session in schedule) _scheduleRow(session)],
-                ),
-                _SummarySection(
-                  title: 'Active Announcements',
-                  icon: Icons.campaign_outlined,
-                  isLoading: appDataService.isAnnouncementsLoading,
-                  errorMessage: appDataService.announcementsErrorMessage,
-                  emptyMessage: 'No published announcements are active.',
-                  rows: [
-                    for (final announcement in announcements)
-                      _announcementRow(announcement),
-                  ],
-                ),
-                _SummarySection(
-                  title: 'Upcoming Events',
-                  icon: Icons.event_available_outlined,
-                  isLoading: appDataService.isEventsLoading,
-                  errorMessage: appDataService.eventsErrorMessage,
-                  emptyMessage: 'No upcoming events are available.',
-                  rows: [for (final event in events) _eventRow(event)],
-                ),
-              ];
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const AppIssueReportNotice(),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final useTwoColumns = constraints.maxWidth >= 820;
+                  final sections = <Widget>[
+                    _SummarySection(
+                      title: "Today's Schedule",
+                      icon: Icons.today_outlined,
+                      isLoading: appDataService.isScheduleLoading,
+                      errorMessage: appDataService.scheduleErrorMessage,
+                      emptyMessage: 'No published classes are scheduled today.',
+                      rows: [for (final session in schedule) _scheduleRow(session)],
+                    ),
+                    _SummarySection(
+                      title: 'Active Announcements',
+                      icon: Icons.campaign_outlined,
+                      isLoading: appDataService.isAnnouncementsLoading,
+                      errorMessage: appDataService.announcementsErrorMessage,
+                      emptyMessage: 'No published announcements are active.',
+                      rows: [
+                        for (final announcement in announcements)
+                          _announcementRow(announcement),
+                      ],
+                    ),
+                    _SummarySection(
+                      title: 'Upcoming Events',
+                      icon: Icons.event_available_outlined,
+                      isLoading: appDataService.isEventsLoading,
+                      errorMessage: appDataService.eventsErrorMessage,
+                      emptyMessage: 'No upcoming events are available.',
+                      rows: [for (final event in events) _eventRow(event)],
+                    ),
+                  ];
 
-              if (!useTwoColumns) {
-                return Column(
-                  children: [
-                    for (var index = 0; index < sections.length; index++) ...[
-                      sections[index],
-                      if (index != sections.length - 1)
-                        const SizedBox(height: 14),
-                    ],
-                  ],
-                );
-              }
+                  if (!useTwoColumns) {
+                    return Column(
+                      children: [
+                        for (var index = 0; index < sections.length; index++) ...[
+                          sections[index],
+                          if (index != sections.length - 1)
+                            const SizedBox(height: 14),
+                        ],
+                      ],
+                    );
+                  }
 
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: sections.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  mainAxisExtent: 198,
-                ),
-                itemBuilder: (context, index) => sections[index],
-              );
-            },
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: sections.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                      mainAxisExtent: 198,
+                    ),
+                    itemBuilder: (context, index) => sections[index],
+                  );
+                },
+              ),
+            ],
           ),
         );
       },

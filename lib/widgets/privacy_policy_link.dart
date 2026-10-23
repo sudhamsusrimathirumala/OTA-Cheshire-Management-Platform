@@ -54,9 +54,13 @@ Future<void> _openExternalLink(
   ExternalLinkLauncher? launcher,
 }) async {
   final uri = Uri.parse(url);
-  final opened =
-      await (launcher?.call(uri) ??
-          launchUrl(uri, mode: LaunchMode.externalApplication));
+  var opened = false;
+  try {
+    opened = await (launcher?.call(uri) ??
+        launchUrl(uri, mode: LaunchMode.externalApplication));
+  } catch (_) {
+    opened = false;
+  }
   if (!opened && context.mounted) {
     ScaffoldMessenger.of(
       context,

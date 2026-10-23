@@ -12,6 +12,7 @@ import '../services/location_time_service.dart';
 import '../services/performance_diagnostics.dart';
 import '../theme/ota_colors.dart';
 import '../widgets/ota_bottom_nav_bar.dart';
+import '../widgets/app_issue_report_notice.dart';
 
 enum DashboardNextClassState {
   loading,
@@ -93,6 +94,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               isSwitching: _switchingProfile,
                               onTap: _showProfileSwitcher,
                             ),
+                            const SizedBox(height: 16),
+                            const AppIssueReportNotice(),
                             const SizedBox(height: 22),
                             _NextClassCard(
                               nextClass: nextClass,

@@ -4,6 +4,7 @@ import 'package:ota_cheshire_management_platform/screens/admin/admin_profile_scr
 import 'package:ota_cheshire_management_platform/screens/profile_screen.dart';
 import 'package:ota_cheshire_management_platform/services/app_data_service_provider.dart';
 import 'package:ota_cheshire_management_platform/widgets/privacy_policy_link.dart';
+import 'package:ota_cheshire_management_platform/widgets/app_issue_report_notice.dart';
 
 void main() {
   test('feedback destination is the exact public responder link', () {
@@ -55,6 +56,38 @@ void main() {
     await tester.pump();
     expect(find.text('The feedback form could not be opened. Please try again.'),
         findsOneWidget);
+  });
+
+  testWidgets('dashboard report reminder wraps large text and opens the form', (tester) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Uri? destination;
+    await tester.pumpWidget(MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2.5)),
+        child: child!,
+      ),
+      home: Scaffold(body: AppIssueReportNotice(launcher: (uri) async {
+        destination = uri;
+        return true;
+      })),
+    ));
+    await tester.tap(find.text(AppIssueReportNotice.message));
+    await tester.pump();
+    expect(destination, Uri.parse(feedbackFormUrl));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed link launcher shows an error instead of escaping', (tester) async {
+    await tester.pumpWidget(MaterialApp(home: Scaffold(
+      body: AppIssueReportNotice(launcher: (_) async => throw StateError('Unavailable')),
+    )));
+    await tester.tap(find.text(AppIssueReportNotice.message));
+    await tester.pump();
+    expect(find.text('The feedback form could not be opened. Please try again.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('both member and admin profiles expose feedback action', (tester) async {
