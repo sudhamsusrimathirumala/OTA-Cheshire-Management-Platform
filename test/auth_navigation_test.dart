@@ -19,6 +19,8 @@ import 'package:ota_cheshire_management_platform/services/debug_view_controller.
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_authentication_service.dart';
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 
+import 'support/signup_date_picker.dart';
+
 void main() {
   Widget app({required String route, required Widget screen}) => MaterialApp(
     key: UniqueKey(),
@@ -474,11 +476,7 @@ void main() {
 }
 
 Future<void> _enterEligibleSignupDate(WidgetTester tester) async {
-  await tester.enterText(
-    find.widgetWithText(TextFormField, 'Date of birth (MM/DD/YYYY)'),
-    '01/01/2000',
-  );
-  await tester.pump();
+  await selectSignupBirthDate(tester, '01/01/2000');
 }
 
 class _TestUser implements User {

@@ -14,6 +14,8 @@ class OtaAuthTextField extends StatelessWidget {
     this.autofillHints,
     this.onFieldSubmitted,
     this.onChanged,
+    this.readOnly = false,
+    this.onTap,
     super.key,
   });
 
@@ -27,6 +29,8 @@ class OtaAuthTextField extends StatelessWidget {
   final Iterable<String>? autofillHints;
   final ValueChanged<String>? onFieldSubmitted;
   final ValueChanged<String>? onChanged;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +45,8 @@ class OtaAuthTextField extends StatelessWidget {
       autofillHints: autofillHints,
       onFieldSubmitted: onFieldSubmitted,
       onChanged: onChanged,
+      readOnly: readOnly,
+      onTap: onTap,
       style: const TextStyle(color: OtaColors.navy),
       decoration: InputDecoration(
         labelText: label,

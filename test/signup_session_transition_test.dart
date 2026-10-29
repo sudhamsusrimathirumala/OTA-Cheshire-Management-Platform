@@ -13,7 +13,81 @@ import 'package:ota_cheshire_management_platform/services/firebase/firebase_auth
 import 'package:ota_cheshire_management_platform/services/firebase/firebase_session_controller.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import 'support/signup_date_picker.dart';
+
 void main() {
+  testWidgets('signup birthday uses a calendar and retains its selected date', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_app(const SignupScreen()));
+    final field = find.widgetWithText(TextFormField, 'Date of birth');
+    expect(
+      tester.widget<TextField>(
+        find.descendant(of: field, matching: find.byType(TextField)),
+      ).readOnly,
+      isTrue,
+    );
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+
+    final dialog = tester.widget<DatePickerDialog>(
+      find.byType(DatePickerDialog),
+    );
+    expect(find.byType(YearPicker), findsOneWidget);
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(dialog.firstDate, DateTime(1900));
+    expect(dialog.lastDate, DateUtils.dateOnly(DateTime.now()));
+    await tester.scrollUntilVisible(
+      find.text('2000'),
+      -200,
+      scrollable: find.descendant(
+        of: find.byType(YearPicker),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.tap(find.text('2000'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15'));
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    final expected = DateTime(2000, dialog.initialDate!.month, 15);
+    final displayed =
+        '${expected.month.toString().padLeft(2, '0')}/15/2000';
+    expect(tester.widget<TextFormField>(field).controller!.text, displayed);
+    await tester.tap(find.byTooltip('Choose date of birth'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<DatePickerDialog>(find.byType(DatePickerDialog)).initialDate,
+      expected,
+    );
+    await tester.tap(find.text(RegExp(r'^cancel$', caseSensitive: false)));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextFormField>(field).controller!.text, displayed);
+  });
+
+  testWidgets('canceling the birthday picker does not supply an age', (
+    tester,
+  ) async {
+    var googleCalls = 0;
+    await tester.pumpWidget(
+      _app(SignupScreen(googleSignIn: () async => googleCalls++)),
+    );
+    final field = find.widgetWithText(TextFormField, 'Date of birth');
+    await tester.ensureVisible(field);
+    await tester.tap(field);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(RegExp(r'^cancel$', caseSensitive: false)));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
+    await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));
+    await tester.tap(find.text('CONTINUE WITH GOOGLE'));
+    await tester.pump();
+    expect(googleCalls, 0);
+    expect(find.text('Select your date of birth.'), findsOneWidget);
+  });
+
   for (final provider in ['email', 'google', 'apple']) {
     testWidgets('$provider signup carries name and birthday to profile setup', (
       tester,
@@ -242,10 +316,7 @@ void main() {
     );
     await tester.enterText(find.byType(TextFormField).at(1), 'password1');
     await tester.enterText(find.byType(TextFormField).at(2), 'password1');
-    await tester.enterText(
-      find.byType(TextFormField).at(3),
-      _under16DateOfBirth(),
-    );
+    await selectSignupBirthDate(tester, _under16DateOfBirth());
     await tester.ensureVisible(find.text('CREATE ACCOUNT'));
 
     await tester.tap(find.text('CREATE ACCOUNT'));
@@ -276,10 +347,7 @@ void main() {
         ),
       ),
     );
-    await tester.enterText(
-      find.widgetWithText(TextFormField, 'Date of birth (MM/DD/YYYY)'),
-      _under16DateOfBirth(),
-    );
+    await selectSignupBirthDate(tester, _under16DateOfBirth());
     await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));
 
     await tester.tap(find.text('CONTINUE WITH GOOGLE'));
@@ -359,7 +427,7 @@ Future<void> _enterValidSignup(WidgetTester tester) async {
   );
   await tester.enterText(find.byType(TextFormField).at(1), 'password1');
   await tester.enterText(find.byType(TextFormField).at(2), 'password1');
-  await tester.enterText(find.byType(TextFormField).at(3), '01/01/2000');
+  await selectSignupBirthDate(tester, '01/01/2000');
   await tester.ensureVisible(find.text('CREATE ACCOUNT'));
   await tester.pumpAndSettle();
 }

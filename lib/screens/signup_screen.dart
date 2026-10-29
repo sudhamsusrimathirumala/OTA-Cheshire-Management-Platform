@@ -120,9 +120,49 @@ class _SignupScreenState extends State<SignupScreen> {
     return firebaseSessionController.adoptAuthenticatedUserAfterSignup();
   }
 
+  String? _birthdayError(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Select your date of birth.';
+    }
+    return registrationDateOfBirthError(value);
+  }
+
+  Future<void> _pickDateOfBirth() async {
+    if (_loading) return;
+    FocusScope.of(context).unfocus();
+    final today = DateUtils.dateOnly(DateTime.now());
+    final firstDate = DateTime(1900);
+    final existingDate = parseRegistrationDateOfBirth(_dateOfBirth.text);
+    final initialDate = existingDate != null &&
+            !existingDate.isBefore(firstDate) &&
+            !existingDate.isAfter(today)
+        ? existingDate
+        : DateTime(
+            today.year - minimumIndependentRegistrationAge,
+            today.month,
+            today.day,
+          );
+    final selectedDate = await showDatePicker(
+      context: context,
+      helpText: 'Select your date of birth',
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: today,
+      initialDatePickerMode: DatePickerMode.year,
+    );
+    if (selectedDate == null || !mounted) return;
+    setState(() {
+      _dateOfBirth.text =
+          '${selectedDate.month.toString().padLeft(2, '0')}/'
+          '${selectedDate.day.toString().padLeft(2, '0')}/'
+          '${selectedDate.year}';
+      _error = null;
+    });
+  }
+
   Future<void> _run(Future<Object?> Function() action) async {
     if (_loading) return;
-    final eligibilityError = registrationDateOfBirthError(_dateOfBirth.text);
+    final eligibilityError = _birthdayError(_dateOfBirth.text);
     if (eligibilityError != null) {
       setState(() => _error = eligibilityError);
       return;
@@ -236,11 +276,16 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                   const SizedBox(height: 14),
                   OtaAuthTextField(
-                    label: 'Date of birth (MM/DD/YYYY)',
+                    label: 'Date of birth',
                     controller: _dateOfBirth,
-                    keyboardType: TextInputType.datetime,
-                    textInputAction: TextInputAction.done,
-                    validator: registrationDateOfBirthError,
+                    readOnly: true,
+                    onTap: _loading ? null : _pickDateOfBirth,
+                    suffixIcon: IconButton(
+                      tooltip: 'Choose date of birth',
+                      onPressed: _loading ? null : _pickDateOfBirth,
+                      icon: const Icon(Icons.calendar_month_rounded),
+                    ),
+                    validator: _birthdayError,
                   ),
                   const SizedBox(height: 14),
                   OtaAuthTextField(
