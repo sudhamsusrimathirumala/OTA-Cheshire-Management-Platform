@@ -62,7 +62,7 @@ void main() {
       tester.widget<DatePickerDialog>(find.byType(DatePickerDialog)).initialDate,
       expected,
     );
-    await tester.tap(find.text(RegExp(r'^cancel$', caseSensitive: false)));
+    await tester.tap(find.textContaining(RegExp(r'^cancel$', caseSensitive: false)));
     await tester.pumpAndSettle();
     expect(tester.widget<TextFormField>(field).controller!.text, displayed);
   });
@@ -78,7 +78,7 @@ void main() {
     await tester.ensureVisible(field);
     await tester.tap(field);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(RegExp(r'^cancel$', caseSensitive: false)));
+    await tester.tap(find.textContaining(RegExp(r'^cancel$', caseSensitive: false)));
     await tester.pumpAndSettle();
     expect(tester.widget<TextFormField>(field).controller!.text, isEmpty);
     await tester.ensureVisible(find.text('CONTINUE WITH GOOGLE'));
